@@ -65,6 +65,18 @@ export const settingsScenario: WalletScenario = {
       state: { currency: "USD", theme: "dark" },
     },
     {
+      content: () =>
+        walletDashboard({
+          preferences: { ...journeyPreferences, language: "zh-Hans" },
+          view: "language",
+        }),
+      id: "language",
+      label: "Language",
+      narrative:
+        "Follow the browser or pin a language; each language is named in its own script so a reader finds theirs in any UI language.",
+      state: { language: "zh-Hans" },
+    },
+    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "request-settings" }),
       id: "request-settings",
       label: "Wallet request behavior",
@@ -326,6 +338,7 @@ export const settingsScenario: WalletScenario = {
     "settings",
     "staking",
     "appearance",
+    "language",
     "request-settings",
     "privacy-unlock",
     "network",

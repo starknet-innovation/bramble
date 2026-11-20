@@ -8,6 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
@@ -30,7 +31,7 @@ const rerender = async (deps: TokensUiDeps): Promise<void> => {
 
 const suggestionsHtml = (suggestions: readonly TokenBalance[]): string =>
   suggestions.length === 0
-    ? emptyState("No new tokens found in this account.")
+    ? emptyState(t("portfolio.tokenDiscover.noneInAccount"))
     : `<ul class="token-list">${suggestions
         .map(
           (token) => `<li class="token-row">
@@ -41,7 +42,7 @@ const suggestionsHtml = (suggestions: readonly TokenBalance[]): string =>
             </div>
             ${button({
               attributes: { "data-detect-add": token.address },
-              label: "Add",
+              label: t("portfolio.tokens.add"),
               size: "small",
               variant: "secondary",
             })}
@@ -60,13 +61,13 @@ const bindAddToken = (deps: TokensUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet.addToken(address).then(
       async () => {
-        showToast("Token added", "success", form);
+        showToast(t("portfolio.tokens.added"), "success", form);
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Add token failed"), "error", form);
+        showToast(errorDetails(error, t("portfolio.tokens.addFailed")), "error", form);
         if (result) {
-          result.textContent = errorLine(error, "Add token failed");
+          result.textContent = errorLine(error, t("portfolio.tokens.addFailed"));
         }
         buttonBusy(submitButton, false);
       },
@@ -84,11 +85,11 @@ const bindDetectAdd = (deps: TokensUiDeps, container: Element | null | undefined
       buttonBusy(button, true);
       void deps.wallet.addToken(address).then(
         async () => {
-          showToast("Token added", "success", button);
+          showToast(t("portfolio.tokens.added"), "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Add token failed"), "error", button);
+          showToast(errorDetails(error, t("portfolio.tokens.addFailed")), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -111,14 +112,16 @@ const bindDetect = (deps: TokensUiDeps): void => {
         bindDetectAdd(deps, results);
         if (status) {
           status.textContent =
-            suggestions.length === 0 ? "No new tokens found." : `${suggestions.length} found.`;
+            suggestions.length === 0
+              ? t("portfolio.tokenDiscover.none")
+              : t("portfolio.tokenDiscover.found", { count: String(suggestions.length) });
         }
         buttonBusy(button, false);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Token detection failed"), "error", button);
+        showToast(errorDetails(error, t("portfolio.tokenDiscover.failed")), "error", button);
         if (status) {
-          status.textContent = errorLine(error, "Token detection failed");
+          status.textContent = errorLine(error, t("portfolio.tokenDiscover.failed"));
         }
         buttonBusy(button, false);
       },
@@ -137,11 +140,15 @@ const bindToggles = (deps: TokensUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setTokenHidden(tokenId, !hidden).then(
         async () => {
-          showToast(hidden ? "Token shown" : "Token hidden", "success", button);
+          showToast(
+            hidden ? t("portfolio.tokens.shown") : t("portfolio.tokens.hidden"),
+            "success",
+            button,
+          );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Token update failed"), "error", button);
+          showToast(errorDetails(error, t("portfolio.tokens.updateFailed")), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -161,11 +168,11 @@ const bindRemove = (deps: TokensUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeToken(tokenId).then(
         async () => {
-          showToast("Token removed", "success", deps.app);
+          showToast(t("portfolio.tokens.removed"), "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't remove that token"), "error", deps.app);
+          showToast(errorDetails(error, t("portfolio.tokens.removeFailed")), "error", deps.app);
           buttonBusy(button, false);
         },
       );

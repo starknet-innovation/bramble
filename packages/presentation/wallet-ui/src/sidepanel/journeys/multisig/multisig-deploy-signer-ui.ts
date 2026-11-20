@@ -1,4 +1,5 @@
 /** Compact deployment-signer disclosure binding. */
+import { t } from "../../../i18n/messages";
 
 const copyChildren = (source: Element, target: Element): void => {
   target.replaceChildren(...[...source.childNodes].map((child) => child.cloneNode(true)));
@@ -22,7 +23,7 @@ export const bindDeploymentSignerPicker = (
     avatar?.toggleAttribute("hidden", !nextAvatar);
     if (avatar && nextAvatar) copyChildren(nextAvatar, avatar);
     if (copy && nextCopy) copyChildren(nextCopy, copy);
-    else if (copy) copy.textContent = "No local signer available";
+    else if (copy) copy.textContent = t("multisig.deploy.noLocalSigner");
   };
   form.querySelectorAll<HTMLButtonElement>("[data-deployment-signer]").forEach((choice) => {
     choice.addEventListener("click", () => {

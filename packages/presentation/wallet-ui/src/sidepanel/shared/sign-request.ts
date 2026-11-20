@@ -19,6 +19,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { isRecord } from "@bramble/core/json";
 import { RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
+import { t, th } from "../../i18n/messages";
 import { decodeSignRequest } from "./sign-request-decode";
 import type { SignRequestRow, SignRequestSplit } from "./sign-request-rows";
 import { SIGN_ROW_LIMIT, signRawText, signValueText } from "./sign-request-text";
@@ -84,14 +85,13 @@ export const SIGN_REQUEST_STYLES = `
 /**
  * The one warning shown when the decoder could not establish what a payload's
  * signed hash would cover. The card renders it in place of the approve control,
- * so the two can never disagree about whether signing is on offer.
+ * so the two can never disagree about whether signing is on offer. Read per
+ * render, in the active language.
  */
-export const SIGN_REQUEST_UNCLASSIFIED_WARNING =
-  "This wallet could not work out which parts of this message would actually be signed, so it will not offer to sign it. Deny this request and ask the site to send a standard SNIP-12 message.";
+export const signRequestUnclassifiedWarning = (): string => t("signing.unclassified");
 
 /** Warning for the SNIP-9 capability shape used to authorize later calls. */
-export const OUTSIDE_EXECUTION_WARNING =
-  "This is an OutsideExecution capability. The site or another authorized caller may submit its signed calls later, without another wallet prompt, until the signed authorization expires.";
+export const outsideExecutionWarning = (): string => t("signing.outsideExecution");
 
 /**
  * Returns capability warnings derived only from explicit typed-data fields.
@@ -101,7 +101,7 @@ export const OUTSIDE_EXECUTION_WARNING =
  */
 export const signRequestWarnings = (typedData: unknown): readonly string[] =>
   isRecord(typedData) && typedData["primaryType"] === "OutsideExecution"
-    ? [OUTSIDE_EXECUTION_WARNING]
+    ? [outsideExecutionWarning()]
     : [];
 
 /**
@@ -125,7 +125,7 @@ const cappedRows = (entries: readonly SignRequestRow[]): string => {
   const hidden = entries.length - shown.length;
   const overflow =
     hidden > 0
-      ? `<div class="sign-row sign-more">${hidden} more values not shown — see Raw typed data</div>`
+      ? `<div class="sign-row sign-more">${th("signing.moreValues", { count: String(hidden) })}</div>`
       : "";
   return `${shown.map(row).join("")}${overflow}`;
 };
@@ -143,11 +143,7 @@ const section = (label: string, body: string, modifier = ""): string =>
     : `<p class="eyebrow">${escapeHtml(label)}</p><div class="sign-block${modifier}">${body}</div>`;
 
 const unsignedSection = (label: string, split: SignRequestSplit): string =>
-  section(
-    `${label} — shown by the site but NOT signed`,
-    cappedRows(split.unsigned),
-    " sign-unsigned",
-  );
+  section(label, cappedRows(split.unsigned), " sign-unsigned");
 
 /**
  * Renders the decoded domain, primary-type message fields, and a raw view of a
@@ -169,10 +165,10 @@ export const signRequestView = (typedData: unknown): SignRequestView => {
   return {
     classified: !decoded.domain.unclassified && !decoded.message.unclassified,
     html: `
-    ${section("Domain", signedRows(decoded.domain.signed))}
-    ${unsignedSection("Domain", decoded.domain)}
-    ${section("Message", signedRows(decoded.message.signed))}
-    ${unsignedSection("Message", decoded.message)}
-    <details class="sign-raw"><summary>Raw typed data</summary><pre>${raw}</pre></details>`,
+    ${section(t("signing.domain"), signedRows(decoded.domain.signed))}
+    ${unsignedSection(t("signing.domainUnsigned"), decoded.domain)}
+    ${section(t("signing.message"), signedRows(decoded.message.signed))}
+    ${unsignedSection(t("signing.messageUnsigned"), decoded.message)}
+    <details class="sign-raw"><summary>${th("signing.raw")}</summary><pre>${raw}</pre></details>`,
   };
 };

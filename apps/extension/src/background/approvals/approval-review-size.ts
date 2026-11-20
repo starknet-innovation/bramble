@@ -37,6 +37,8 @@ const AMOUNT_CHARACTERS = 78;
 const SYMBOL_CHARACTERS = 16;
 // Longer than any account id, chain id or payload digest.
 const CONTEXT_CHARACTERS = 96;
+// Longer than every review sentence id, and than every fact name.
+const MESSAGE_KEY_CHARACTERS = 48;
 
 // Wallet-written fields. The fee review fields are left out of the worst case:
 // they are covered by the fee headroom in `REVIEWABLE_APPROVAL_BUDGET`, which
@@ -59,14 +61,43 @@ const WALLET_FIELDS: ReadonlySet<string> = new Set([
   "requiresDeployment",
   "reviewAssets",
   "summaries",
+  "summaryTexts",
 ]);
 
 const filler = (characters: number): string => "x".repeat(characters);
 
+// The largest review-sentence reference a line of `characters` can carry.
+// Every fact is rendered verbatim into the English line, so a reference's fact
+// text never exceeds the line it renders. The shape is the most the panel
+// accepts (eight facts, one of them a nested reference with eight of its own)
+// under names as long as any real fact name, so it also bounds keys and nodes.
+const FACT_NAME_CHARACTERS = 24;
+const MAX_REFERENCE_FACTS = 8;
+const factName = (index: number): string => `f${index}`.padEnd(FACT_NAME_CHARACTERS, "x");
+const worstCaseFacts = (characters: number, nested: boolean): Record<string, unknown> =>
+  Object.fromEntries(
+    Array.from({ length: MAX_REFERENCE_FACTS }, (_, index) => [
+      factName(index),
+      index === 0
+        ? filler(characters)
+        : nested && index === MAX_REFERENCE_FACTS - 1
+          ? { facts: worstCaseFacts(1, false), key: filler(MESSAGE_KEY_CHARACTERS) }
+          : filler(1),
+    ]),
+  );
+const worstCaseText = (characters: number): Record<string, unknown> => ({
+  facts: worstCaseFacts(characters, true),
+  key: filler(MESSAGE_KEY_CHARACTERS),
+});
+
 // The approval with every wallet-written field replaced by the largest value
 // the panel would accept for the counts the site chose. Each real field is no
-// larger in any budget dimension: no longer strings, no more elements.
-const worstCaseReview = (approval: PendingApproval): Record<string, unknown> => {
+// larger in any budget dimension: no longer strings, no more elements. With
+// `references`, every line and flag also carries its largest review reference.
+const worstCaseReview = (
+  approval: PendingApproval,
+  references: boolean,
+): Record<string, unknown> => {
   const siteFields = Object.fromEntries(
     Object.entries(approval).filter(([key]) => !WALLET_FIELDS.has(key)),
   );
@@ -92,6 +123,7 @@ const worstCaseReview = (approval: PendingApproval): Record<string, unknown> => 
           flags: Array.from({ length: lines * FLAGS_PER_SUMMARY }, () => ({
             code: filler(FLAG_CODE_CHARACTERS),
             message: filler(PANEL_TEXT_CHARACTERS),
+            ...(references ? { text: worstCaseText(PANEL_TEXT_CHARACTERS) } : {}),
           })),
         }
       : {}),
@@ -112,6 +144,13 @@ const worstCaseReview = (approval: PendingApproval): Record<string, unknown> => 
     // A line already longer than the panel renders comes from the site's own
     // strings, not the user's data; it is measured as it is.
     summaries: summaries.map((line) => filler(Math.max(line.length, PANEL_TEXT_CHARACTERS))),
+    ...(references
+      ? {
+          summaryTexts: summaries.map((line) =>
+            worstCaseText(Math.max(line.length, PANEL_TEXT_CHARACTERS)),
+          ),
+        }
+      : {}),
   };
 };
 
@@ -126,5 +165,44 @@ const worstCaseReview = (approval: PendingApproval): Record<string, unknown> => 
  * bounds is refused here rather than queued with no card.
  */
 export const fitsSidePanel = (approval: PendingApproval): boolean =>
-  isJsonWithinBudget(worstCaseReview(approval), REVIEWABLE_APPROVAL_BUDGET) &&
+  isJsonWithinBudget(worstCaseReview(approval, false), REVIEWABLE_APPROVAL_BUDGET) &&
   isJsonWithinBudget(approval, JSON_BUDGETS.provider);
+
+/**
+ * Whether `approval` still fits the review budget with every line and flag
+ * carrying its largest review reference. References are display-only (the
+ * panel shows the English without them), so an approval that fits only
+ * without them is queued in English rather than refused. Decided from the
+ * site's input alone, like {@link fitsSidePanel}.
+ */
+export const referencesFitSidePanel = (approval: PendingApproval): boolean =>
+  isJsonWithinBudget(worstCaseReview(approval, true), REVIEWABLE_APPROVAL_BUDGET);
+
+/**
+ * The approval without its review references (`summaryTexts` and each flag's
+ * `text`): the same English lines and flags, rendered as written.
+ */
+export const withoutReviewReferences = <
+  T extends {
+    readonly flags?: readonly { readonly text?: unknown }[] | undefined;
+    readonly summaryTexts?: unknown;
+  },
+>(
+  approval: T,
+): T => {
+  const { summaryTexts: _texts, ...rest } = approval;
+  return (
+    approval.flags === undefined
+      ? rest
+      : { ...rest, flags: approval.flags.map(({ text: _text, ...flag }) => flag) }
+  ) as T;
+};
+
+/**
+ * `request` as queued: unchanged when its snapshot's references fit the
+ * review budget ({@link referencesFitSidePanel}), else without them.
+ */
+export const withReferencesThatFit = <T extends Parameters<typeof withoutReviewReferences>[0]>(
+  request: T,
+  snapshot: PendingApproval,
+): T => (referencesFitSidePanel(snapshot) ? request : withoutReviewReferences(request));

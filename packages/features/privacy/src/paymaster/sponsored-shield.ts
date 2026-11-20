@@ -25,6 +25,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import type { MessageRef } from "@bramble/core/i18n";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
@@ -40,6 +41,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import { type Call, CallData, hash } from "starknet";
+import { strk20English, strk20Text } from "../policy/review-messages";
 import type { SponsoredShieldConfig, Strk20SponsoredShieldPlan } from "../policy/submission-plan";
 import { formatStrk20PoolFee } from "../policy/summaries";
 import type { Strk20PreparedSubmissionInput } from "../service";
@@ -332,14 +334,26 @@ export const submitSponsoredShield = async (input: {
  * sponsorship never hides the charges it covers. Display-only; approval binds
  * the structured plan. `poolFeeFri` is the pool's current charge.
  */
+export const sponsoredShieldText = (
+  plan: Strk20SponsoredShieldPlan,
+  poolFeeFri: string,
+): MessageRef => {
+  const one = plan.authorization.publicCallCount === 1;
+  const facts = {
+    count: String(plan.authorization.publicCallCount),
+    fee: formatStrk20PoolFee(poolFeeFri),
+    sponsor: plan.sponsor,
+  };
+  return plan.estimatedNetworkFeeFri === undefined
+    ? strk20Text(one ? "strk20Review.sponsored.one" : "strk20Review.sponsored.many", facts)
+    : strk20Text(
+        one ? "strk20Review.sponsored.estimateOne" : "strk20Review.sponsored.estimateMany",
+        { ...facts, network: formatStrk20PoolFee(plan.estimatedNetworkFeeFri) },
+      );
+};
+
+/** The English of {@link sponsoredShieldText}, as the shield review has always shown it. */
 export const summarizeSponsoredShield = (
   plan: Strk20SponsoredShieldPlan,
   poolFeeFri: string,
-): string => {
-  const network =
-    plan.estimatedNetworkFeeFri === undefined
-      ? "network fee"
-      : `network fee (about ${formatStrk20PoolFee(plan.estimatedNetworkFeeFri)})`;
-  const calls = plan.authorization.publicCallCount;
-  return `${plan.sponsor} pays the pool fee ${formatStrk20PoolFee(poolFeeFri)} and the ${network}. Its payment is public and names this account · outside execution by its relay for ${calls} public approval call${calls === 1 ? "" : "s"}`;
-};
+): string => strk20English(sponsoredShieldText(plan, poolFeeFri));

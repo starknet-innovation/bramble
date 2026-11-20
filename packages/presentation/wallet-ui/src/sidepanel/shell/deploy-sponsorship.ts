@@ -11,12 +11,14 @@ import {
   SPONSORED_DEPLOY_SPONSOR,
 } from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { t } from "../../i18n/messages";
 import type { DeploySponsorship } from "../runtime/runtime-deploy";
 import { buttonBusy, renderFragment, scopedStatus } from "../shared/dom";
 import { formatFeeEstimate } from "../shared/review-render";
 
 /** The Cost line of a deploy the sponsor pays for. */
-export const SPONSORED_DEPLOY_COST = `Network fee: paid by the ${SPONSORED_DEPLOY_SPONSOR}`;
+export const sponsoredDeployCost = (): string =>
+  t("cost.deploy.sponsored", { sponsor: SPONSORED_DEPLOY_SPONSOR });
 
 /**
  * The Cost box line for `estimate` under `sponsorship`: the sponsor when it
@@ -27,8 +29,8 @@ export const deployCostLine = (
   sponsorship: DeploySponsorship | undefined,
 ): string =>
   sponsorship === "available"
-    ? SPONSORED_DEPLOY_COST
-    : `Maximum network fee: ${formatFeeEstimate(estimate)}`;
+    ? sponsoredDeployCost()
+    : t("cost.deploy.maxFee", { fee: formatFeeEstimate(estimate) });
 
 /**
  * Paints the deploying state over the screen, or takes it off again: the

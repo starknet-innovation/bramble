@@ -5,6 +5,7 @@
  */
 import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency } from "@bramble/settings/preferences";
+import { th } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFiat, portfolioDelta } from "../../shared/fiat";
 
@@ -30,6 +31,6 @@ export const heroChange = (
   const arrow = delta.direction === "up" ? "↑" : "↓";
   return `<p class="hero-change${delta.direction === "down" ? " down" : ""}${held ? ' is-held" aria-hidden="true' : ""}">
       <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
-      <span class="hero-change-win">Portfolio price · ${delta.percent.toFixed(2)}% · 24h</span>
+      <span class="hero-change-win">${th("portfolio.hero.change", { percent: delta.percent.toFixed(2) })}</span>
     </p>`;
 };

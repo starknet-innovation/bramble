@@ -2,9 +2,11 @@
  * Extension-owned STRK20 journeys keep discovery opt-in and commit
  * registration/deposit details before their one-time submission.
  */
+
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
 import { strk20WaitExceeded } from "@bramble/privacy/official-sdk-budget";
+import { strk20English } from "@bramble/privacy/review-messages";
 import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
@@ -205,6 +207,7 @@ describe("background wallet STRK20 operations", () => {
         readonly id: string;
         readonly poolFeeFri: string;
         readonly summaries: readonly string[];
+        readonly summaryTexts?: readonly import("@bramble/core/i18n").MessageRef[];
       };
     };
 
@@ -219,6 +222,9 @@ describe("background wallet STRK20 operations", () => {
     expect(prepared.strk20Preparation.summaries).toContain(
       "Approve and pay the reviewed 0.000000000000000001 STRK pool fee from this account",
     );
+    expect(prepared.strk20Preparation.summaryTexts?.map(strk20English)).toEqual([
+      ...prepared.strk20Preparation.summaries,
+    ]);
     const execute = {
       preparationId: prepared.strk20Preparation.id,
       type: "wallet.strk20Execute",

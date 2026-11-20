@@ -7,6 +7,7 @@
  */
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { t, th } from "../../../i18n/messages";
 
 /** Renders the finder; `hidden` keeps it closed until its surface offers it. */
 export const addressFinderFields = (
@@ -14,11 +15,11 @@ export const addressFinderFields = (
   options: { readonly hidden?: boolean } = {},
 ): string => `
       <details class="disclosure" data-recovery-address="${prefix}"${options.hidden ? " hidden" : ""}>
-        <summary>Can't find it? Paste the account address</summary>
+        <summary>${th("onboarding.address.summary")}</summary>
         <div class="disclosure-body onboarding-fields">
-          ${textField({ autocapitalize: "none", autocomplete: "off", label: "Address or explorer link", maxlength: 200, name: `${prefix}Address`, spellcheck: false })}
+          ${textField({ autocapitalize: "none", autocomplete: "off", label: t("onboarding.address.field"), maxlength: 200, name: `${prefix}Address`, spellcheck: false })}
           <p class="hint" data-recovery-address-network></p>
-          ${button({ attributes: { "data-recovery-address-search": true, id: `${prefix}-address-search` }, label: "Find account", variant: "secondary" })}
+          ${button({ attributes: { "data-recovery-address-search": true, id: `${prefix}-address-search` }, label: t("onboarding.address.find"), variant: "secondary" })}
           <p id="${prefix}-address-result" class="hint" role="status" data-recovery-address-result></p>
         </div>
       </details>`;

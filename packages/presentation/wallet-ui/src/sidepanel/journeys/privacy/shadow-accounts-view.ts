@@ -8,19 +8,19 @@ import { emptyState } from "@bramble/ui-kit/content";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen } from "../../shared/parts";
 import {
-  SHADOW_ACCOUNTS_LOADING,
-  SHADOW_ACCOUNTS_READ_REASON,
-  SHADOW_ACCOUNTS_TITLE,
+  shadowAccountsLoading,
+  shadowAccountsReadReason,
+  shadowAccountsTitle,
 } from "./shadow-accounts-copy";
 
 /** Renders the screen shell; `bindShadowAccounts` loads and fills the list. */
 export const shadowAccountsFlow = (status: WalletStatus): string =>
-  flowHeader(SHADOW_ACCOUNTS_TITLE, status) +
+  flowHeader(shadowAccountsTitle(), status) +
   flowScreen(
     "shadow-accounts",
     `<section class="section">
-      <p class="lede">${escapeHtml(SHADOW_ACCOUNTS_READ_REASON)}</p>
-      <div id="shadow-accounts-list">${emptyState(SHADOW_ACCOUNTS_LOADING)}</div>
+      <p class="lede">${escapeHtml(shadowAccountsReadReason())}</p>
+      <div id="shadow-accounts-list">${emptyState(shadowAccountsLoading())}</div>
       <p id="shadow-accounts-result" role="status"></p>
     </section>`,
   );

@@ -17,6 +17,7 @@ import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-d
 import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
 import { addressLabel, asFelt, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
+import { type ReviewText, reviewEnglish, reviewText, withReviewText } from "./review-messages";
 import {
   canonical,
   type DecodedCall,
@@ -65,8 +66,18 @@ export type RiskFlagCode =
  */
 export type RiskFlag = {
   readonly code: RiskFlagCode;
+  /** The English sentence, rendered from `text`; refusals and logs read it. */
   readonly message: string;
+  /** `message` as a key and facts for the UI; absent if a fact breaks the panel's bounds. */
+  readonly text?: ReviewText;
 };
+
+// A flag's sentence is decided once, as data; its English is derived from it.
+const riskFlag = (code: RiskFlagCode, text: ReviewText): RiskFlag => ({
+  code,
+  message: reviewEnglish(text),
+  ...withReviewText(text),
+});
 
 /**
  * Full pre-sign verification report.
@@ -157,27 +168,27 @@ export const isLookalikeAddress = (candidate: string, trusted: string): boolean 
 const unknownContractFlag = (call: Call, known: boolean): RiskFlag | null =>
   known
     ? null
-    : {
-        code: "unknown-contract",
-        message: `${addressLabel(call.contractAddress)} is not a token or contact this wallet knows. Verify the contract before continuing.`,
-      };
+    : riskFlag(
+        "unknown-contract",
+        reviewText("review.flag.unknownContract", {
+          contract: addressLabel(call.contractAddress),
+        }),
+      );
 
-const UNLIMITED_APPROVAL_FLAG: RiskFlag = {
-  code: "unlimited-approval",
-  message:
-    "This grants an effectively unlimited spending allowance. Approve only the amount you intend to spend.",
-};
+const UNLIMITED_APPROVAL_FLAG: RiskFlag = riskFlag(
+  "unlimited-approval",
+  reviewText("review.flag.unlimitedApproval"),
+);
 
 // An operator approval is the widest grant a token contract can express: it is
 // not capped by an amount at all, it covers items the account does not even own
 // yet, and it stands until it is explicitly revoked. It therefore gets its own
 // flag rather than reusing the unlimited-approval wording, which talks about an
 // amount the user could have chosen differently.
-const OPERATOR_APPROVAL_FLAG: RiskFlag = {
-  code: "operator-approval",
-  message:
-    "This lets one address transfer EVERY item you own in this collection, including ones you acquire later, until you revoke it. Grant it only to a marketplace you trust.",
-};
+const OPERATOR_APPROVAL_FLAG: RiskFlag = riskFlag(
+  "operator-approval",
+  reviewText("review.flag.operatorApproval"),
+);
 
 // Which calls hand out authority so wide that no amount bounds it. Decided from
 // the decoded kind and the `approved` flag in calldata, never from the
@@ -310,13 +321,13 @@ const unlimitedApprovalCallIndexes = (
 
 const selfTransferFlag = (recipient: string, context: VerificationContext): RiskFlag | null =>
   recipient && sameFelt(recipient, context.account.address)
-    ? { code: "self-transfer", message: "The recipient is this wallet's own address." }
+    ? riskFlag("self-transfer", reviewText("review.flag.selfTransfer"))
     : null;
 
-const TOKEN_CONTRACT_RECIPIENT_FLAG: RiskFlag = {
-  code: "token-contract-recipient",
-  message: "This is a token contract, not a wallet. Tokens sent here are usually lost.",
-};
+const TOKEN_CONTRACT_RECIPIENT_FLAG: RiskFlag = riskFlag(
+  "token-contract-recipient",
+  reviewText("review.flag.tokenContractRecipient"),
+);
 
 // A payment whose recipient is a token contract the wallet knows (STRK, a
 // curated token on this network, or one this account tracks) almost always
@@ -352,11 +363,7 @@ const addressPoisoningFlag = (recipient: string, context: VerificationContext): 
     ...(context.recentRecipients ?? []),
   ];
   return trusted.some((known) => isLookalikeAddress(recipient, known))
-    ? {
-        code: "address-poisoning",
-        message:
-          "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
-      }
+    ? riskFlag("address-poisoning", reviewText("review.flag.addressPoisoning"))
     : null;
 };
 
@@ -369,17 +376,18 @@ const foreignBeneficiaryFlag = (
   context: VerificationContext,
 ): RiskFlag | null =>
   beneficiary && !sameFelt(beneficiary, context.account.address)
-    ? {
-        code: "foreign-beneficiary",
-        message: `This swap pays its proceeds to ${addressLabel(beneficiary)}, not to this account. Reject it unless you meant to send them there.`,
-      }
+    ? riskFlag(
+        "foreign-beneficiary",
+        reviewText("review.flag.foreignBeneficiary", {
+          payee: addressLabel(beneficiary),
+        }),
+      )
     : null;
 
-const UNDECODED_SWAP_FLAG: RiskFlag = {
-  code: "undecoded-swap",
-  message:
-    "The wallet could not read this swap's payee or minimum output. Reject it unless you trust this site.",
-};
+const UNDECODED_SWAP_FLAG: RiskFlag = riskFlag(
+  "undecoded-swap",
+  reviewText("review.flag.undecodedSwap"),
+);
 
 // The payee rules for one call. A swap into the signing account is the ordinary
 // case, so on the swap selector the self-send note gives way to the

@@ -13,6 +13,7 @@
 import { sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { estimatedFeeText } from "../../shared/review-render";
 import { finitePositive } from "./send-model";
@@ -32,14 +33,14 @@ import type { TransferReview } from "./transfer-submit";
 export const COMPOSE_FEE_DEBOUNCE_MS = 400;
 
 // Copy used when the network fee could not be read. Named, never a made-up figure.
-const FEE_UNAVAILABLE = "Estimated fee unavailable";
+const feeUnavailable = (): string => t("send.fee.unavailable");
 // A STRK shield at Max holds back the pool fee only: its network fee is not
 // known until the deposit is proved, and it is paid from the same STRK.
-const SHIELD_GAS_NOTE = "Leave enough STRK for the network fee.";
+const shieldGasNote = (): string => t("send.fee.leaveStrk");
 // A shield of any other token still pays its network fee in public STRK, which
 // the pool fee line alone does not say (issue 665). No figure: the fee is not
 // known until the deposit is proved.
-const SHIELD_GAS_IN_STRK = "The network fee is also paid in public STRK.";
+const shieldGasInStrk = (): string => t("send.fee.alsoInStrk");
 
 /** The composed send an Amount-screen estimate applies to. */
 export type ComposeFeeTarget = {
@@ -88,10 +89,10 @@ export const composeFeeTarget = (context: TransferRouteContext): ComposeFeeTarge
 const networkFeeText = (estimate: ComposeFeeEstimate): string | null => {
   const { failed, review } = estimate;
   if (review === null) {
-    return failed ? FEE_UNAVAILABLE : null;
+    return failed ? feeUnavailable() : null;
   }
   if (review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true) {
-    return FEE_UNAVAILABLE;
+    return feeUnavailable();
   }
   if (review.requiresDeployment) {
     const total =
@@ -119,9 +120,9 @@ export const composeFeeLines = (
     lines.push(poolFeeText(target.route.feeBucket, target.poolFee));
   }
   if (target.leavesNoGas) {
-    lines.push(SHIELD_GAS_NOTE);
+    lines.push(shieldGasNote());
   } else if (target.gasInStrk) {
-    lines.push(SHIELD_GAS_IN_STRK);
+    lines.push(shieldGasInStrk());
   }
   // Only a plain public transfer's network fee can be estimated before the route
   // prepares; every other route's gas is sponsored or priced at review.

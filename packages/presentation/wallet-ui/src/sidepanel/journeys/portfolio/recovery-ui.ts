@@ -10,6 +10,7 @@
  * network or view change discards it with the markup). The submit sends back
  * exactly what the panel showed; the background re-checks all of it.
  */
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RecoveryReview } from "../../../popup/responses/responses-recovery";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
@@ -46,11 +47,13 @@ export type RecoveryUiDeps = {
 };
 
 const submittedCopy = (kind: "argent" | "braavos", review: RecoveryReview): string =>
-  kind === "braavos"
-    ? "2FA removal started."
-    : review.step === "complete"
-      ? "Guardian removed."
-      : "Guardian removal started.";
+  t(
+    kind === "braavos"
+      ? "review.recovery.braavos.started"
+      : review.step === "complete"
+        ? "review.recovery.guardianRemoved"
+        : "review.recovery.removalStarted",
+  );
 
 /**
  * Binds the recover-account action on the read-only Home flag. Safe to call

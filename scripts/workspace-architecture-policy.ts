@@ -26,7 +26,15 @@ export const STRUCTURED_SOURCE_ROOTS: Readonly<Record<string, readonly string[]>
  */
 export const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>> = {
   content: ["@bramble/wallet-protocol"],
-  "ledger-grant": ["@bramble/ledger-browser", "@bramble/ledger-protocol", "@bramble/ui-kit"],
+  // `@bramble/core` gives the grant tab its message catalog and language
+  // matching (`core/i18n`); it is pure foundation code the Ledger packages
+  // above already depend on, so no other surface's behaviour comes with it.
+  "ledger-grant": [
+    "@bramble/core",
+    "@bramble/ledger-browser",
+    "@bramble/ledger-protocol",
+    "@bramble/ui-kit",
+  ],
   provider: ["@bramble/wallet-protocol"],
   sandbox: [],
   sidepanel: ["@bramble/ledger-browser", "@bramble/wallet-ui"],
@@ -88,3 +96,7 @@ export const EXCLUDED_DIRECTORIES = new Set([
   "test-results",
   "vendor",
 ]);
+
+/** Whether a dependency spec pins one exact version (or the workspace itself). */
+export const isExactVersion = (version: string): boolean =>
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) || version === "workspace:*";
