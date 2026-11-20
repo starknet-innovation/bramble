@@ -31,7 +31,7 @@ import {
   classifyLedgerTransportError,
   ledgerTransportRejection,
 } from "@bramble/ledger-protocol/transport-error";
-import { browserLedgerLocks, isLedgerPanelLockLive } from "./panel-presence";
+import { browserLedgerLocks, isLedgerGrantTabOrphaned } from "./panel-presence";
 
 type NavigatorWithLedgerTransport = {
   readonly bluetooth?: unknown;
@@ -73,9 +73,9 @@ const extensionGlobal = (): ExtensionGlobal | undefined => {
 };
 
 /**
- * Closes this extension's orphaned hardware tabs: those whose side panel no
- * longer holds the session's panel lock (it crashed, reloaded, or closed).
- * A tab another live panel is using keeps its lock and is left alone. Returns
+ * Closes a hardware tab only when its shared wait shows the panel held the
+ * lock and let it go. A tab with no lock is left alone: the panel may have
+ * failed to take the lock and still be using it. Returns
  * true when at least one tab was closed, so the caller may retry an open that
  * failed because that tab still held the device. With no extension API or no
  * Web Locks it closes nothing and the caller shows the busy error.
@@ -93,8 +93,8 @@ const releaseOrphanLedgerGrantTabs = async (): Promise<boolean> => {
     if (typeof context.tabId !== "number" || !url?.startsWith(prefix)) continue;
     const sessionId = ledgerBrokerSessionFromHash(url.slice(prefix.length));
     if (!sessionId) continue;
-    const live = await isLedgerPanelLockLive(locks, sessionId).catch(() => true);
-    if (live) continue;
+    const orphaned = await isLedgerGrantTabOrphaned(locks, sessionId).catch(() => false);
+    if (!orphaned) continue;
     const removed = await remove(context.tabId).then(
       () => true,
       () => false,
@@ -128,28 +128,31 @@ const finalRejection = (error: unknown): LedgerRejection => {
 const mayBeGrantTabHold = (failure: ReturnType<typeof classifyLedgerTransportError>): boolean =>
   failure.code === "device-busy" || failure.causeName === "NotAllowedError";
 
-const openConnectedOnce = async (deviceId?: string): Promise<LedgerTransport | null> => {
+const openOrHold = async (
+  deviceId?: string,
+): Promise<{ readonly transport: LedgerTransport | null } | { readonly hold: unknown }> => {
   try {
-    return await openConnectedTransportRaw(deviceId);
+    return { transport: await openConnectedTransportRaw(deviceId) };
   } catch (error) {
-    const failure = classifyLedgerTransportError(error);
-    if (!mayBeGrantTabHold(failure)) throw finalRejection(error);
-    const released = await releaseOrphanLedgerGrantTabs();
-    if (!released) throw finalRejection(error);
-    try {
-      return await openConnectedTransportRaw(deviceId);
-    } catch (retryError) {
-      if (!mayBeGrantTabHold(classifyLedgerTransportError(retryError))) {
-        throw finalRejection(retryError);
-      }
-    }
-    await settle();
-    try {
-      return await openConnectedTransportRaw(deviceId);
-    } catch (lastError) {
-      throw finalRejection(lastError);
-    }
+    if (!mayBeGrantTabHold(classifyLedgerTransportError(error))) throw finalRejection(error);
+    return { hold: error };
   }
+};
+
+const openConnectedOnce = async (deviceId?: string): Promise<LedgerTransport | null> => {
+  const first = await openOrHold(deviceId);
+  if (!("hold" in first)) return first.transport;
+  const released = await releaseOrphanLedgerGrantTabs();
+  if (released) {
+    const second = await openOrHold(deviceId);
+    if (!("hold" in second)) return second.transport;
+  }
+  // The grant tab may already be gone from the extension contexts while its
+  // document is still releasing the USB or HID claim.
+  await settle();
+  const last = await openOrHold(deviceId);
+  if (!("hold" in last)) return last.transport;
+  throw finalRejection(last.hold);
 };
 
 /**

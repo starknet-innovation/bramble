@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   holdLedgerPanelLock,
+  isLedgerGrantTabOrphaned,
   isLedgerPanelLockLive,
   type LedgerLockManager,
   ledgerPanelLockName,
@@ -127,6 +128,28 @@ describe("ledger panel lock", () => {
     // The grant tab's shared wait is pending or briefly held. That is not the panel.
     expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(false);
     await watching;
+  });
+
+  test("no lock at all is not an orphan, a shared wait after the panel leaves is", async () => {
+    const fake = manager();
+    expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(false);
+    const release = await holdLedgerPanelLock(fake.locks, SESSION);
+    let finish = (): void => undefined;
+    const waiting = fake.locks.request(
+      ledgerPanelLockName(SESSION),
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      "shared",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(false);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(true);
+    finish();
+    await waiting;
   });
 
   test("a missing lock manager does not block the caller", async () => {

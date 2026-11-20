@@ -115,6 +115,27 @@ export const isLedgerPanelLockLive = async (
 };
 
 /**
+ * True when the grant tab's shared wait shows the panel held this lock and
+ * has let it go. No lock at all is not evidence: {@link holdLedgerPanelLock}
+ * can fail open and the panel can still be using the tab. A manager that
+ * cannot be queried answers false, so nothing is closed on a guess.
+ */
+export const isLedgerGrantTabOrphaned = async (
+  locks: LedgerLockManager,
+  sessionId: string,
+): Promise<boolean> => {
+  if (!locks.query) return false;
+  const name = ledgerPanelLockName(sessionId);
+  const state = await locks.query();
+  const held = (state.held ?? []).filter((lock) => lock.name === name);
+  if (held.some((lock) => lock.mode !== "shared")) return false;
+  const pending = (state.pending ?? []).filter((lock) => lock.name === name);
+  return (
+    held.some((lock) => lock.mode === "shared") || pending.some((lock) => lock.mode === "shared")
+  );
+};
+
+/**
  * Resolves true once the panel lock is released, which means the panel is
  * gone. The panel takes the lock before it creates the grant tab, so one
  * query is enough: when no lock is there (no Web Locks in the panel, or its

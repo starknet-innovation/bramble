@@ -126,6 +126,15 @@ const LIVE = "00000000-0000-4000-8000-0000000000bb";
 const PREFIX = "chrome-extension://bramble/ledger-grant.html";
 
 // Web Locks seen from the panel: only the sessions listed still have a panel.
+// The grant tab is waiting shared because the panel held the lock and let it go.
+const locksPanelLeft = (session: string) => ({
+  query: async () => ({
+    held: [],
+    pending: [{ mode: "shared" as const, name: `bramble-ledger-panel:${session}` }],
+  }),
+  request: async () => undefined,
+});
+
 const locksHolding = (...sessions: string[]) => ({
   query: async () => ({
     held: sessions.map((id) => ({
@@ -187,7 +196,7 @@ describe("cable reconnect stale handles", () => {
     const device = new FakeHIDDevice(true);
     scope.window = globalThis;
     setNav("hid", hidApi(device));
-    setNav("locks", locksHolding());
+    setNav("locks", locksPanelLeft(ORPHAN));
     scope.chrome = {
       runtime: {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 11 }],
@@ -224,7 +233,7 @@ describe("cable reconnect stale handles", () => {
     await grant.claimInterface();
     const panel = new FakeUSBDevice(host);
     setNav("usb", usbApi(panel));
-    setNav("locks", locksHolding());
+    setNav("locks", locksPanelLeft(ORPHAN));
     scope.chrome = {
       runtime: {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 7 }],
@@ -265,9 +274,9 @@ describe("cable reconnect stale handles", () => {
         causeName: "TransportInterfaceNotAvailable",
         code: "device-busy",
       });
-      // The side-panel device fails once. Nothing of ours was holding it, so
-      // there is no second attempt.
-      expect(claims).toBe(1);
+      // Nothing of ours was holding it. The open still waits once for a claim
+      // that may already be draining, then reports the other holder.
+      expect(claims).toBe(2);
     } finally {
       FakeUSBDevice.prototype.claimInterface = original;
     }
@@ -306,6 +315,33 @@ describe("cable reconnect stale handles", () => {
     await session?.close();
   });
 
+  test("a grant tab with no panel lock is left alone", async () => {
+    const host = new UsbHost();
+    const grant = new FakeUSBDevice(host);
+    await grant.open();
+    await grant.claimInterface();
+    setNav("usb", usbApi(new FakeUSBDevice(host)));
+    setNav("locks", locksHolding());
+    const removed: number[] = [];
+    scope.chrome = {
+      runtime: {
+        getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 12 }],
+        getURL: (path: string) => `chrome-extension://bramble/${path}`,
+      },
+      tabs: {
+        remove: async (tabId: number) => {
+          removed.push(tabId);
+          await grant.releaseInterface();
+        },
+      },
+    };
+
+    const error = await ledgerConnector.openConnected().catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "device-busy" });
+    expect(removed).toEqual([]);
+    expect(grant.claimed).toBe(true);
+  });
+
   test("a hardware tab whose panel is still alive is not closed", async () => {
     const host = new UsbHost();
     const grant = new FakeUSBDevice(host);
@@ -338,7 +374,7 @@ describe("cable reconnect stale handles", () => {
     await grant.open();
     await grant.claimInterface();
     setNav("usb", usbApi(new FakeUSBDevice(host)));
-    setNav("locks", locksHolding());
+    setNav("locks", locksPanelLeft(ORPHAN));
     let claims = 0;
     const original = FakeUSBDevice.prototype.claimInterface;
     FakeUSBDevice.prototype.claimInterface = async function claim() {
@@ -360,7 +396,7 @@ describe("cable reconnect stale handles", () => {
     try {
       const error = await ledgerConnector.openConnected().catch((caught: unknown) => caught);
       expect(error).toMatchObject({ code: "device-busy" });
-      expect(claims).toBe(1);
+      expect(claims).toBe(2);
     } finally {
       FakeUSBDevice.prototype.claimInterface = original;
     }
