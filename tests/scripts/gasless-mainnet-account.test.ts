@@ -273,6 +273,23 @@ describe("gasless mainnet receipt", () => {
     expect(receiptSucceeded(1)).toBe(false);
     expect(transferredAmount(1, token, from, to)).toBe(0n);
   });
+
+  test("runs no getter on a receipt or its events", () => {
+    let ran = false;
+    const trap = {
+      enumerable: true,
+      get() {
+        ran = true;
+        return "SUCCEEDED";
+      },
+    };
+    const receipt = Object.defineProperty({}, "execution_status", trap);
+    const event = Object.defineProperty({ data: ["0x1", "0x0"], keys: [] }, "from_address", trap);
+    expect(receiptSucceeded(receipt)).toBe(false);
+    expect(receiptSucceeded({ receipt })).toBe(false);
+    expect(transferredAmount({ events: [event] }, "0x1", "0x2", "0x3")).toBe(0n);
+    expect(ran).toBe(false);
+  });
 });
 
 describe("gasless mainnet docs", () => {

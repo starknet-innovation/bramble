@@ -4,47 +4,35 @@
  */
 
 import { hash } from "starknet";
-import { isRecord } from "../packages/foundation/core/src/json";
 import { sameFelt, uint256Felts } from "../packages/foundation/wallet-model/src/networks/networks";
-import { receiptRecord } from "../packages/platform/starknet/src/rpc/receipt-record";
+import { ownField } from "../packages/platform/starknet/src/rpc/receipt-record";
 
 const TRANSFER = hash.getSelectorFromName("Transfer");
 
 const strings = (value: unknown): readonly string[] | null =>
   Array.isArray(value) && value.every((item) => typeof item === "string") ? value : null;
 
-const eventsOf = (receipt: unknown): readonly Record<string, unknown>[] => {
-  const body = receiptRecord(receipt);
-  if (body === undefined) return [];
-  const direct = body["events"];
-  const inner = isRecord(body["receipt"]) ? body["receipt"]["events"] : undefined;
-  const events = Array.isArray(direct) ? direct : inner;
-  if (!Array.isArray(events)) return [];
-  return events.filter(isRecord);
+// A body field, or the same field on a nested `receipt`. Reads no getters.
+const field = (receipt: unknown, key: string): unknown =>
+  ownField(receipt, key) ?? ownField(ownField(receipt, "receipt"), key);
+
+const eventsOf = (receipt: unknown): readonly unknown[] => {
+  const events = field(receipt, "events");
+  return Array.isArray(events) ? events : [];
 };
 
 /**
  * Whether a receipt says the transaction executed successfully.
  * Accepts the JSON-RPC body and starknet.js's ReceiptTx.
  */
-export const receiptSucceeded = (receipt: unknown): boolean => {
-  const body = receiptRecord(receipt);
-  if (body === undefined) return false;
-  if (body["execution_status"] === "SUCCEEDED") return true;
-  const inner = body["receipt"];
-  return isRecord(inner) && inner["execution_status"] === "SUCCEEDED";
-};
+export const receiptSucceeded = (receipt: unknown): boolean =>
+  field(receipt, "execution_status") === "SUCCEEDED";
 
 /**
  * Whether a receipt says the transaction reverted. Pending receipts are neither.
  */
-export const receiptReverted = (receipt: unknown): boolean => {
-  const body = receiptRecord(receipt);
-  if (body === undefined) return false;
-  if (body["execution_status"] === "REVERTED") return true;
-  const inner = body["receipt"];
-  return isRecord(inner) && inner["execution_status"] === "REVERTED";
-};
+export const receiptReverted = (receipt: unknown): boolean =>
+  field(receipt, "execution_status") === "REVERTED";
 
 /**
  * Sum of ERC-20 Transfer amounts from `from` to `to` on `token` in one receipt.
@@ -59,9 +47,9 @@ export const transferredAmount = (
   let total = 0n;
   let matched = false;
   for (const event of eventsOf(receipt)) {
-    const contract = event["from_address"];
-    const keys = strings(event["keys"]);
-    const data = strings(event["data"]);
+    const contract = ownField(event, "from_address");
+    const keys = strings(ownField(event, "keys"));
+    const data = strings(ownField(event, "data"));
     if (typeof contract !== "string" || keys === null || data === null) continue;
     if (!sameFelt(contract, token) || !sameFelt(keys[0] ?? "", TRANSFER)) continue;
     if (!sameFelt(keys[1] ?? "", from) || !sameFelt(keys[2] ?? "", to)) continue;

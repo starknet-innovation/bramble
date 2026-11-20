@@ -67,6 +67,41 @@ describe("readReceiptFee", () => {
     expect(readReceiptFee(constructed)).toEqual({ amount: "0x64", unit: "FRI" });
   });
 
+  test("reads a ReceiptTx with an unknown status, and drops one whose body is gone", () => {
+    const body = {
+      actual_fee: { amount: "0x9", unit: "FRI" },
+      execution_status: "SOMETHING_NEW",
+      finality_status: "ACCEPTED_ON_L2",
+      transaction_hash: "0x1",
+      type: "INVOKE",
+    } as unknown as Parameters<typeof createTransactionReceipt>[0];
+    const constructed = new ReceiptTx(body);
+    const provided = createTransactionReceipt(body);
+    expect(constructed.isError()).toBe(true);
+    expect(readReceiptFee(constructed)).toEqual({ amount: "0x9", unit: "FRI" });
+    // starknet.js keeps none of the body on this branch, so there is nothing to read.
+    expect(provided.isError()).toBe(true);
+    expect(readReceiptFee(provided)).toBeUndefined();
+  });
+
+  test("runs no getter anywhere in the fee path", () => {
+    let ran = 0;
+    const getter = (value: unknown) => ({
+      enumerable: true,
+      get() {
+        ran += 1;
+        return value;
+      },
+    });
+    const onFee = Object.defineProperty({}, "actual_fee", getter({ amount: "0x1", unit: "FRI" }));
+    const amount = Object.defineProperty({ unit: "FRI" }, "amount", getter("0x1"));
+    const unit = Object.defineProperty({ amount: "0x1" }, "unit", getter("FRI"));
+    expect(readReceiptFee(onFee)).toBeUndefined();
+    expect(readReceiptFee({ actual_fee: amount })).toBeUndefined();
+    expect(readReceiptFee({ actual_fee: unit })).toBeUndefined();
+    expect(ran).toBe(0);
+  });
+
   test("does not run a getter to recover a wrapped receipt", () => {
     let ran = false;
     const hostile: object = Object.create({ wrapped: true });

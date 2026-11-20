@@ -1,37 +1,26 @@
 /**
- * The JSON body of a Starknet transaction receipt, plain or wrapped by
- * starknet.js. Fee reads and the mainnet receipt checks share this so neither
+ * Field reads from an untrusted Starknet transaction receipt, plain or wrapped
+ * by starknet.js. Fee reads and the mainnet receipt checks share this so neither
  * grows its own copy of how a ReceiptTx is opened.
  */
-import { isRecord } from "@bramble/core/json";
-
-// Not `isOwnDataProperty`: that helper also requires the field to be
-// enumerable, and the `ReceiptTx` constructor defines `value` as
-// non-enumerable. A getter's descriptor has no `value` field, which is the
-// check that stops untrusted input from running code.
-const dataProperty = (value: object, key: string): unknown => {
-  const descriptor = Object.getOwnPropertyDescriptor(value, key);
-  return descriptor !== undefined && "value" in descriptor ? descriptor.value : undefined;
-};
+import { isOwnDataProperty } from "@bramble/core/json";
 
 /**
- * Returns the JSON-RPC receipt body, or undefined when `receipt` is not one.
+ * Returns `value[key]` when it is an own enumerable data property of an
+ * object, otherwise undefined. A getter never runs, so a hostile receipt cannot
+ * run code or answer differently on a second read.
  *
- * A plain record is returned unchanged. starknet.js 10's
- * `getTransactionReceipt` returns a `ReceiptTx` whose prototype is not
- * `Object.prototype`, so {@link isRecord} refuses it; the node body sits on
- * the own data property `value`. Only that data property is read, so a getter
- * cannot supply the body. `value` may be non-enumerable: the provider result
- * leaves it enumerable and `new ReceiptTx` hides it. A missing or non-record
- * `value`, or a non-object, is undefined and the caller drops the read.
+ * Receipt bodies need no unwrapping: starknet.js 10's `createTransactionReceipt`
+ * (what `getTransactionReceipt` returns) spreads the body onto the `ReceiptTx`,
+ * and `new ReceiptTx` copies it with `Object.assign`, both as own enumerable
+ * fields. `new ReceiptTx` keeps them for an unknown `execution_status` too;
+ * `createTransactionReceipt` drops the body in that case, so every read is
+ * undefined and the caller drops it.
  */
-export const receiptRecord = (receipt: unknown): Record<string, unknown> | undefined => {
-  if (isRecord(receipt)) {
-    return receipt;
-  }
-  if (typeof receipt !== "object" || receipt === null) {
+export const ownField = (value: unknown, key: string): unknown => {
+  if (typeof value !== "object" || value === null) {
     return undefined;
   }
-  const body = dataProperty(receipt, "value");
-  return isRecord(body) ? body : undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return isOwnDataProperty(descriptor) ? descriptor.value : undefined;
 };
