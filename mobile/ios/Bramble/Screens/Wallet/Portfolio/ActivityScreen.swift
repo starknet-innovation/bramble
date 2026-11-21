@@ -68,6 +68,12 @@ struct ActivityScreen: View {
         }
     }
 
+    /// The stored entries behind one day's rows, row for row.
+    private func entries(ofGroup index: Int) -> [ActivityEntry] {
+        let all = store.portfolio.groupEntries
+        return all.indices.contains(index) ? all[index] : []
+    }
+
     /// The feed grouped by UTC day, each day under its heading.
     private var days: some View {
         ForEach(Array(store.portfolio.groups.enumerated()), id: \.offset) { index, group in
@@ -78,7 +84,9 @@ struct ActivityScreen: View {
                     .padding(.horizontal, BrambleSpace.lg)
                     .accessibilityAddTraits(.isHeader)
                 VStack(spacing: BrambleSpace.xs) {
-                    ForEach(group.rows, id: \.hash) { row in ActivityRowView(row: row) }
+                    ForEach(Array(zip(group.rows, entries(ofGroup: index))), id: \.0.hash) { row, entry in
+                        ActivityRowView(row: row, entry: entry)
+                    }
                 }
             }
             .padding(.top, index == 0 ? 0 : BrambleSpace.lg)
