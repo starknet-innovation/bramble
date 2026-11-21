@@ -14,6 +14,8 @@ struct ActivityRowView: View {
     @Environment(\.skin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: ActivityRow
+    /// The stored record `row` was built from.
+    let entry: ActivityEntry
     @State private var open = false
 
     private enum Layout {
@@ -143,17 +145,11 @@ struct ActivityRowView: View {
             .lineLimit(1)
     }
 
-    /// The stored record this row was built from: the feed's entry with the row's hash.
-    private var entry: ActivityEntry? {
-        store.portfolio.activityView?.entries.first { $0.hash == row.hash }
-    }
-
     /// The expansion (`.request-detail`): the counterparty or the detail line, the record's
     /// network and token contract, the submission time, and the provisional hint, each only when
     /// recorded.
     private var facts: some View {
-        let record = entry
-        let network = record.map { store.networkName(of: $0.network) } ?? ""
+        let network = store.networkName(of: entry.network)
         return VStack(spacing: 0) {
             if let counterparty = row.counterparty {
                 fact(counterparty.role) {
@@ -165,7 +161,7 @@ struct ActivityRowView: View {
             if !network.isEmpty {
                 fact(FactLabel.network) { factText(network) }
             }
-            if let contract = record?.tokenAddress {
+            if let contract = entry.tokenAddress {
                 fact(FactLabel.tokenContract) {
                     identifier(contract, copies: contract, label: FactLabel.copyTokenContract)
                 }

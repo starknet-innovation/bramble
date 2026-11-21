@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import org.bramble.core.AccountRecord
 import org.bramble.core.ActivityBook
 import org.bramble.core.ActivityDayGroup
+import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityView
 import org.bramble.core.BalanceHealth
 import org.bramble.core.BalanceOutcome
@@ -110,6 +111,13 @@ class PortfolioStore(
 
     /** [activityView]'s entries grouped by UTC day, as the core renders the rows (no fiat figure). */
     var groups by mutableStateOf(emptyList<ActivityDayGroup>())
+        private set
+
+    /**
+     * The stored entry behind each row of [groups], in the same shape. A row cannot be found by its
+     * hash: a swap's legs are separate entries that share one.
+     */
+    var groupEntries by mutableStateOf(emptyList<List<ActivityEntry>>())
         private set
 
     /** True while an Activity history read is in flight; the Activity header shows a spinner. */
@@ -304,6 +312,7 @@ class PortfolioStore(
         hero = PortfolioHero(null, null, null)
         activityView = null
         groups = emptyList()
+        groupEntries = emptyList()
         historyLoading = false
     }
 
@@ -353,12 +362,11 @@ class PortfolioStore(
                 emptyList()
             }
         hero = portfolioHero(home?.let { unified.map { it.balance } }, view, scope != null)
-        groups =
-            if (current != null && activityView != null) {
-                activityGroups(activityView!!.entries, tracked.map { it.token }, clock())
-            } else {
-                emptyList()
-            }
+        val entries = if (current != null) activityView?.entries.orEmpty() else emptyList()
+        groups = if (entries.isEmpty()) emptyList() else activityGroups(entries, tracked.map { it.token }, clock())
+        // `activity_groups` builds one row per entry, in order, and only splits them by day.
+        var taken = 0
+        groupEntries = groups.map { group -> entries.drop(taken).take(group.rows.size).also { taken += it.size } }
     }
 }
 
