@@ -4,10 +4,13 @@ import SwiftUI
 /// `transactionRow` (`home-tabs.ts`): a disclosure. The summary is the kind glyph, the heading that
 /// joins the verb and the amount ("Received 1.5 STRK"), the status word for a row that is not
 /// accepted, the token mark, and the truncated hash (linked to the explorer when the network has
-/// one) with its copy control. Opening it lists the counterparty (or a detail line), when it was
-/// submitted, and the provisional-status hint. No fiat figure: a value computed from today's price
-/// is not what the transaction was worth. Every value is the core's (`ActivityRow`).
+/// one) with its copy control. Opening it lists the counterparty (or a detail line), the network and
+/// the token's contract (`activityRecordFacts` in `activity-detail.ts`), when it was submitted, and
+/// the provisional-status hint. No fiat figure: a value computed from today's price is not what the
+/// transaction was worth. Every value is the core's: `ActivityRow`, and for the network and the
+/// token contract the stored `ActivityEntry` the row was built from.
 struct ActivityRowView: View {
+    @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: ActivityRow
@@ -29,6 +32,9 @@ struct ActivityRowView: View {
     /// The expansion's fact labels (`request-detail`); no generated table carries them.
     private enum FactLabel {
         static let detail = "Detail"
+        static let network = "Network"
+        static let tokenContract = "Token contract"
+        static let copyTokenContract = "Copy token contract address"
         static let submitted = "Submitted"
         static let status = "Status"
     }
@@ -137,22 +143,32 @@ struct ActivityRowView: View {
             .lineLimit(1)
     }
 
-    /// The expansion (`.request-detail`): the counterparty or the detail line, the submission
-    /// time, and the provisional hint, each only when the core has one.
+    /// The stored record this row was built from: the feed's entry with the row's hash.
+    private var entry: ActivityEntry? {
+        store.portfolio.activityView?.entries.first { $0.hash == row.hash }
+    }
+
+    /// The expansion (`.request-detail`): the counterparty or the detail line, the record's
+    /// network and token contract, the submission time, and the provisional hint, each only when
+    /// recorded.
     private var facts: some View {
-        VStack(spacing: 0) {
+        let record = entry
+        let network = record.map { store.networkName(of: $0.network) } ?? ""
+        return VStack(spacing: 0) {
             if let counterparty = row.counterparty {
                 fact(counterparty.role) {
-                    HStack(spacing: Layout.copyGap) {
-                        Text(counterparty.addressLabel)
-                            .brambleText(BrambleTypeScale.caption, mono: true)
-                            .foregroundStyle(skin.text)
-                            .accessibilityValue(counterparty.address)
-                        CopyButton(value: counterparty.address, label: counterparty.copyLabel)
-                    }
+                    identifier(counterparty.addressLabel, copies: counterparty.address, label: counterparty.copyLabel)
                 }
             } else if let detail = row.detail {
                 fact(FactLabel.detail) { factText(detail) }
+            }
+            if !network.isEmpty {
+                fact(FactLabel.network) { factText(network) }
+            }
+            if let contract = record?.tokenAddress {
+                fact(FactLabel.tokenContract) {
+                    identifier(contract, copies: contract, label: FactLabel.copyTokenContract)
+                }
             }
             if let submitted = row.submitted {
                 fact(FactLabel.submitted) { factText(submitted) }
@@ -173,6 +189,18 @@ struct ActivityRowView: View {
         }
         .frame(minHeight: BrambleControl.hit)
         .accessibilityElement(children: .contain)
+    }
+
+    /// A whole address with the control that copies it (`identifier` in `activity-detail.ts`).
+    /// The one clipboard path: a public address only, local-only and expiring.
+    private func identifier(_ shown: String, copies value: String, label: String) -> some View {
+        HStack(spacing: Layout.copyGap) {
+            Text(shown)
+                .brambleText(BrambleTypeScale.caption, mono: true)
+                .foregroundStyle(skin.text)
+                .accessibilityValue(value)
+            CopyButton(value: value, label: label)
+        }
     }
 
     private func factText(_ text: String) -> some View {

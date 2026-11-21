@@ -1,8 +1,13 @@
 package org.bramble.wallet
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityKind
@@ -19,8 +24,9 @@ import org.junit.runner.RunWith
 /**
  * The Activity dock reads the core's one activity store: a row the core holds for the active
  * account renders under its day, with its explorer link, and the link is the core's transaction
- * URL for this network. The row is written through the store's own lane (`scanApply`, the RPC
- * scan's path), so nothing here restates the core's rules.
+ * URL for this network. Opened, the row lists the network and token contract its entry records.
+ * The row is written through the store's own lane (`scanApply`, the RPC scan's path), so nothing
+ * here restates the core's rules.
  */
 @RunWith(AndroidJUnit4::class)
 class ActivityScreenTest {
@@ -50,6 +56,7 @@ class ActivityScreenTest {
                 submittedAt = System.currentTimeMillis().toULong(),
                 summary = "Sent 1 STRK",
                 token = STRK,
+                tokenAddress = STRK,
             )
         r.onMain {
             walletCore.activityBook().scanApply(
@@ -64,11 +71,22 @@ class ActivityScreenTest {
         r.tapDescribed("Activity")
         r.waitFor(hasTestTag("activity-row-$HASH"), TIMEOUT_MS)
         r.waitFor(hasTestTag("activity-link-$HASH") and hasClickAction())
-        r.snapshot("activity")
         val row = r.onMain { portfolio.groups.flatMap { it.rows }.firstOrNull { it.hash == HASH } }
         assertNotNull("the core's row reaches the Activity list", row)
         assertEquals(explorerTransactionUrl(NetworkId.MAINNET, HASH), row?.explorerUrl)
         assertNotNull("mainnet has an explorer", row?.explorerUrl)
+
+        // Open the disclosure through its own action: a touch at the row's centre could land on
+        // the explorer link instead.
+        rule
+            .onNode(hasStateDescription("Collapsed") and hasAnyAncestor(hasTestTag("activity-row-$HASH")))
+            .performSemanticsAction(SemanticsActions.OnClick)
+        r.waitForText("Token contract")
+        r.waitForText(STRK)
+        r.waitFor(hasContentDescription("Copy token contract address") and hasClickAction())
+        r.waitForText("Network")
+        r.waitForText("Starknet Mainnet")
+        r.snapshot("activity")
     }
 
     private companion object {

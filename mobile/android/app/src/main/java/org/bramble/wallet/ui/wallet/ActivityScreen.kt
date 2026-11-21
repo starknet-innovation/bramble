@@ -55,6 +55,7 @@ import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.networkName
 import org.bramble.wallet.refreshSendState
 import org.bramble.wallet.send.SendCopy
 import org.bramble.wallet.ui.CopyButton
@@ -153,8 +154,8 @@ internal fun ActivityFeed(
  * tone the status), the heading that joins verb and amount, the truncated hash (a link to the
  * explorer in the system browser when there is one) with its copy control, the status word for a
  * row that is not accepted, the token mark, and the disclosure chevron. The expansion: the
- * counterparty (or the Detail fact), then Submitted and Status. No fiat figure: a value from
- * today's price is not what the transaction was worth.
+ * counterparty (or the Detail fact), the record's Network and Token contract, then Submitted and
+ * Status. No fiat figure: a value from today's price is not what the transaction was worth.
  */
 @Composable
 private fun ActivityRowItem(
@@ -254,7 +255,9 @@ private fun ActivityHash(
 
 /**
  * The expansion's facts: the counterparty (its role, the 6…4 address and a copy control carrying
- * the full one), or the Detail fact; then Submitted and Status, each only when the row has it.
+ * the full one), or the Detail fact; the network and token contract of the stored entry the row
+ * was built from (`activityRecordFacts` in `activity-detail.ts`); then Submitted and Status. Each
+ * only when recorded.
  */
 @Composable
 private fun ActivityFacts(
@@ -273,6 +276,17 @@ private fun ActivityFacts(
             }
         } else {
             row.detail?.let { ActivityFact(DETAIL_LABEL, it) }
+        }
+        val entry =
+            store.portfolio.activityView
+                ?.entries
+                ?.firstOrNull { it.hash == row.hash }
+        val network = entry?.let { networkName(it.network) }.orEmpty()
+        if (network.isNotEmpty()) ActivityFact(NETWORK_LABEL, network)
+        entry?.tokenAddress?.let { contract ->
+            ActivityFact(TOKEN_CONTRACT_LABEL, contract, mono = true) {
+                CopyButton(store, contract, COPY_TOKEN_CONTRACT_LABEL)
+            }
         }
         row.submitted?.let { ActivityFact(SUBMITTED_LABEL, it) }
         row.statusHint?.let { ActivityFact(STATUS_LABEL, it) }
@@ -305,6 +319,9 @@ private fun ActivityFact(
 
 /** The expansion's fixed fact labels (`transactionRow`'s `dt`s). */
 private const val DETAIL_LABEL = "Detail"
+private const val NETWORK_LABEL = "Network"
+private const val TOKEN_CONTRACT_LABEL = "Token contract"
+private const val COPY_TOKEN_CONTRACT_LABEL = "Copy token contract address"
 private const val SUBMITTED_LABEL = "Submitted"
 private const val STATUS_LABEL = "Status"
 
