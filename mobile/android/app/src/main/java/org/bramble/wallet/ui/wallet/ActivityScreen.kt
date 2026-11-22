@@ -82,7 +82,9 @@ fun ActivityScreen(store: WalletStore) {
     val portfolio = store.portfolio
     val contacts = store.activityContacts()
     LaunchedEffect(portfolio.scope?.accountId) { store.coordination.refresh() }
-    LaunchedEffect(contacts) { portfolio.refilter(contacts = contacts) }
+    // Keyed on the scope too: a switch locks the portfolio (dropping the feed's names) before it
+    // loads, and the names themselves are often unchanged.
+    LaunchedEffect(portfolio.scope, contacts) { portfolio.refilter(contacts = contacts) }
     LaunchedEffect(portfolio.scope?.accountId) {
         while (true) {
             portfolio.refreshActivity(force = false)
