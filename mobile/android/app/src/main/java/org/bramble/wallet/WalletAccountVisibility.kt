@@ -1,8 +1,10 @@
 package org.bramble.wallet
 
+import kotlinx.coroutines.CancellationException
 import org.bramble.core.AccountRecord
+import org.bramble.core.UnusableAccount
 
-// Hidden accounts over the core (docs/accounts.md §2.4a), split from WalletAccounts.kt;
+// Hidden and kept accounts over the core (docs/accounts.md §2.4a), split from WalletAccounts.kt;
 // twin of the visibility half of iOS WalletStore+Accounts.swift. The core owns every rule.
 
 /** This network's accounts the drawer, Send and Manage list (hidden ones left out). */
@@ -23,3 +25,16 @@ suspend fun WalletStore.setHidden(
     accountCall { it.setAccountHidden(accountId, hidden) }
     showNotice(if (hidden) "Account hidden" else "Account shown")
 }
+
+/**
+ * The accounts the vault holds that mobile keeps but does not operate, for Manage's read-only
+ * section; empty when the read fails (the list only explains, it never gates anything).
+ */
+suspend fun WalletStore.unusableAccounts(): List<UnusableAccount> =
+    try {
+        accountCall(reload = false) { it.unusableAccounts() }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        emptyList()
+    }

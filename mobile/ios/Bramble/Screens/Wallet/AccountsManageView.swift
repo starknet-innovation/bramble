@@ -2,8 +2,9 @@ import BrambleCore
 import SwiftUI
 
 /// "Accounts & groups" (`accountFlow` in `flows.ts`): pick an account (each row with its inline
-/// address copy and Hide), add one, show hidden ones again, organise groups, then name the active
-/// account and inspect its identifiers as a receipt with copy controls, top to bottom: pick → organise → inspect.
+/// address copy and Hide), add one, show hidden ones again, see the ones mobile keeps unused,
+/// organise groups, then name the active account and inspect its
+/// identifiers as a receipt with copy controls, top to bottom: pick → organise → inspect.
 struct AccountsManageView: View {
     private enum Layout {
         /// Vertical gap between the name and address lines of an account row.
@@ -19,6 +20,7 @@ struct AccountsManageView: View {
     @State private var choosing = false
     @State private var label = ""
     @State private var labelResult: String?
+    @State private var unusable: [UnusableAccount] = []
 
     var body: some View {
         ScrollView {
@@ -32,6 +34,7 @@ struct AccountsManageView: View {
                     StatusLine(text: "No accounts on this network yet. Add one below.")
                 }
                 HiddenAccountsSection()
+                UnusableAccountsSection(accounts: unusable)
                 GroupsSection()
                 if let active = store.activeRecord { activeSection(active) }
             }
@@ -54,6 +57,7 @@ struct AccountsManageView: View {
             .environment(store)
         }
         .onAppear { label = store.activeRecord?.label ?? "" }
+        .task { unusable = await store.unusableAccounts() }
         .onChange(of: store.activeRecord?.id) { _, _ in
             label = store.activeRecord?.label ?? ""
             labelResult = nil

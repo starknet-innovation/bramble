@@ -104,7 +104,7 @@ extension-side decision first.
 Copying the signer public key and the class hash needs the SCOPE.md clipboard amendment in §2.8,
 which this workstream makes.
 
-### 2.4a Hidden accounts (M15c, wallet-core `v0.6.0`)
+### 2.4a Hidden and kept accounts (M15c, wallet-core `v0.6.0`)
 
 The core decides every state here; the apps render it.
 
@@ -124,9 +124,19 @@ signs. Manage, as `account-names.ts` does:
   words, shown as the error toast), and moves the active account to the network's first visible
   one before hiding it. The apps do not re-check either rule.
 
+**Kept accounts (P7).** `unusable_accounts()` lists the records the vault holds that mobile keeps
+but does not operate. Manage shows them read-only under "Not usable on this device", with the
+hint "These accounts stay in your wallet. Use them in the Bramble extension." and one line per
+`UnusableReason`: "Ledger account. Ledger isn't on mobile yet." / "From another recovery phrase." /
+"On <network id>, which mobile doesn't support." / "Mobile can't derive this account's key." The
+extension has no counterpart (it operates them all), so this wording is mobile's own. The section
+is absent when the list is empty.
+
 Tests: iOS `BrambleTests/AccountVisibilityTests` (hide, show, Send's picker, the core's refusal and
-the active-account move over a real core); Android `AccountVisibilityTest` (JVM: the list split
-and the refusal's wording).
+the active-account move over a real core; the kept lines); Android `AccountVisibilityTest` (JVM:
+the list split, the refusal's wording, the kept lines). No test opens a vault holding kept
+records: the bindings have no hook to seal one, so they rest on wallet-core's
+`tests/vault_match.rs` and the apps' rendering rules.
 
 ### 2.5 Receive (`ReceiveView.swift`)
 

@@ -3,7 +3,7 @@ import BrambleCore
 import XCTest
 
 /// Hidden accounts through a real core (the store's `setHidden`, `visibleRecords`,
-/// `hiddenRecords`).
+/// `hiddenRecords`), the kept-accounts copy.
 final class AccountVisibilityTests: XCTestCase {
     /// The published parity phrase the accounts fixtures use; public, never a real wallet.
     private func phrase() throws -> String {
@@ -68,5 +68,28 @@ final class AccountVisibilityTests: XCTestCase {
         await store.setHidden(true, for: active.id)
         XCTAssertNotEqual(store.activeRecord?.id, active.id)
         XCTAssertEqual(store.hiddenRecords.map(\.id), [active.id])
+    }
+
+    @MainActor
+    func testANewWalletKeepsNoUnusableAccounts() async throws {
+        let store = try await twoAccountStore()
+        let kept = await store.unusableAccounts()
+        XCTAssertTrue(kept.isEmpty)
+    }
+
+    func testEveryKeptReasonHasItsOwnLine() {
+        let reasons: [UnusableReason] = [.ledger, .importedPhrase, .otherNetwork, .notDerivedHere]
+        let lines = reasons.map { reason in
+            unusableReasonText(UnusableAccount(
+                id: "SN_DEVNET:0x1",
+                networkId: "SN_DEVNET",
+                address: "0x1",
+                shortAddress: "0x1…0x1",
+                reason: reason
+            ))
+        }
+        XCTAssertEqual(Set(lines).count, reasons.count)
+        XCTAssertTrue(lines.allSatisfy { !$0.isEmpty })
+        XCTAssertTrue(lines[2].contains("SN_DEVNET"), "names the network mobile lacks")
     }
 }

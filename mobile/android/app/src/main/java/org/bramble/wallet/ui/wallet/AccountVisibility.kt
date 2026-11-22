@@ -8,11 +8,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
+import org.bramble.core.UnusableAccount
 import org.bramble.core.friendlyAccountName
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.AccountAvatar
@@ -29,8 +35,10 @@ import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.hiddenRecords
 import org.bramble.wallet.setHidden
+import org.bramble.wallet.unusableAccounts
+import org.bramble.wallet.unusableReasonText
 
-// Manage's hidden accounts (docs/accounts.md §2.4a),
+// Manage's hidden and kept accounts (docs/accounts.md §2.4a),
 // twin of the iOS sections of the same names. The core decides every state; these only render it.
 
 /** A row's Hide control (`accountNameRow`): the account keeps its key and comes back from "Hidden accounts". */
@@ -62,6 +70,19 @@ internal fun HiddenAccountsSection(store: WalletStore) {
                 }
             }
         }
+    }
+}
+
+/** The accounts the vault holds that mobile keeps unused (`unusableAccounts`), read-only, each with why. */
+@Composable
+internal fun UnusableAccountsSection(store: WalletStore) {
+    var accounts by remember { mutableStateOf(emptyList<UnusableAccount>()) }
+    LaunchedEffect(store.records) { accounts = store.unusableAccounts() }
+    if (accounts.isEmpty()) return
+    Eyebrow("Not usable on this device")
+    StatusLine("These accounts stay in your wallet. Use them in the Bramble extension.")
+    Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+        accounts.forEach { account -> KeptRow(account.address, account.shortAddress, unusableReasonText(account)) }
     }
 }
 

@@ -61,7 +61,7 @@ private const val NAME_LIMIT = 64
  * "Accounts & groups" (`accountFlow`, `docs/accounts.md` §2.4), port of the iOS
  * `AccountsManageView`: the active account's name form and receipt (address, signer public key,
  * class hash, each copied in full), this network's accounts with an inline copy and Hide, the
- * hidden ones with Show, and the groups
+ * hidden ones with Show, the ones mobile keeps unused (read-only), and the groups
  * (create, rename, change icon, membership, delete). Every rule is the core's; fields are the flat
  * design-system field. "Add account" opens the same chooser as the drawer.
  */
@@ -84,6 +84,7 @@ fun ManageAccountsScreen(
             AccountList(store)
             PillButton("Add account", kind = PillKind.SECONDARY, icon = BrambleIconName.PLUS) { choosing = true }
             HiddenAccountsSection(store)
+            UnusableAccountsSection(store)
             Eyebrow("Groups")
             NewGroupForm(store)
             store.groups.forEach { group -> GroupEditor(store, group) }

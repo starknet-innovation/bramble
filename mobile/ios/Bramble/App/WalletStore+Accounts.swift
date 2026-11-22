@@ -46,6 +46,13 @@ extension WalletStore {
         } catch { toast = describe(error) }
     }
 
+    /// The accounts the vault holds that mobile keeps but does not operate, for Manage's read-only
+    /// section; empty when the read fails (the list only explains, it never gates anything).
+    func unusableAccounts() async -> [UnusableAccount] {
+        let core = core
+        return (try? await work { try core.unusableAccounts() }) ?? []
+    }
+
     /// Switches the active account (the drawer row is the switch control).
     func select(id: String) async {
         let core = core
