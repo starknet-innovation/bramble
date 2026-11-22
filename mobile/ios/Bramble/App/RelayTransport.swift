@@ -10,15 +10,19 @@ protocol RelayTransport: Sendable {
 
 private struct RelayTimeout: Error {}
 
-/// Runs `body`, failing with `RelayTimeout` once `milliseconds` pass.
+/// Runs `body`, failing with `RelayTimeout` once `milliseconds` pass. The group waits for `body`
+/// to return even when cancelled, and a socket's `send`/`receive` ignore task cancellation, so
+/// `onTimeout` (cancelling the socket) is what ends a hung one.
 private func withTimeout<T: Sendable>(
     _ milliseconds: UInt32,
+    onTimeout: @escaping @Sendable () -> Void,
     _ body: @escaping @Sendable () async throws -> T
 ) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
         group.addTask { try await body() }
         group.addTask {
             try await Task.sleep(for: .milliseconds(Int(milliseconds)))
+            onTimeout()
             throw RelayTimeout()
         }
         defer { group.cancelAll() }
@@ -83,20 +87,23 @@ struct WebSocketRelayTransport: RelayTransport {
         }
         do {
             let open = plan.openFrame(relay: relay)
-            try await withTimeout(policy.connectTimeoutMs) { try await task.send(.string(open)) }
+            let abandon: @Sendable () -> Void = { task.cancel(with: .goingAway, reason: nil) }
+            try await withTimeout(policy.connectTimeoutMs, onTimeout: abandon) { try await task.send(.string(open)) }
             // Each page's request has its own timeout, as each extension subscription does.
             var deadline = ContinuousClock.now + .milliseconds(Int(policy.requestTimeoutMs))
             while true {
                 let remaining = ContinuousClock.now.duration(to: deadline)
                 guard remaining > .zero else { throw RelayTimeout() }
                 let millis = UInt32(max(1, (remaining / .milliseconds(1)).rounded(.up)))
-                let message = try await withTimeout(millis) { try await task.receive() }
+                let message = try await withTimeout(millis, onTimeout: abandon) { try await task.receive() }
                 // The extension reads text frames only; binary frames are ignored.
                 guard case .string(let text) = message else { continue }
                 let step = plan.acceptFrame(relay: relay, frame: text)
                 // A send that never completes ends the relay rather than holding the sync open.
                 let read = try await follow(step) { frame in
-                    try await withTimeout(policy.requestTimeoutMs) { try await task.send(.string(frame)) }
+                    try await withTimeout(policy.requestTimeoutMs, onTimeout: abandon) {
+                        try await task.send(.string(frame))
+                    }
                 }
                 switch read {
                 case .keepReading:
