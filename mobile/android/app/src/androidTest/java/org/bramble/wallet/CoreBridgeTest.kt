@@ -8,6 +8,7 @@ import org.bramble.core.NetworkId
 import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
+import org.bramble.core.redactEndpoints
 import org.bramble.core.supportedNetworks
 import org.bramble.wallet.security.DeviceClock
 import org.json.JSONObject
@@ -113,4 +114,27 @@ class CoreBridgeTest {
         assertEquals("0x534e5f5345504f4c4941", sepolia.chainId)
         assertTrue(sepolia.tokens.any { it.symbol == "STRK" })
     }
+
+    @Test
+    fun rpcOverrideFirstAndRedacted() {
+        val core = core()
+        core.createWallet("a strong password", 12u)
+        val override = "https://rpc.example/v0_10/KEY"
+        val bundled = supportedNetworks().first { it.network == NetworkId.SEPOLIA }.rpcUrls
+        assertEquals(override, core.setRpcOverride(NetworkId.SEPOLIA, " $override "))
+        assertEquals(listOf(override) + bundled, endpointNetwork(NetworkId.SEPOLIA, core).rpcUrls)
+        assertEquals("Mobile RPC endpoints must use https", setOverrideRefusal(core, "http://rpc.example"))
+        assertEquals("failed: [endpoint]", redactEndpoints("failed: $override"))
+        assertFalse(describe(CoreException.InvalidInput("node at $override refused")).contains("KEY"))
+        core.lock()
+        assertEquals("locked: the bundled list", bundled, endpointNetwork(NetworkId.SEPOLIA, core).rpcUrls)
+    }
+
+    private fun setOverrideRefusal(
+        core: WalletCore,
+        url: String,
+    ): String =
+        describe(
+            assertThrows(CoreException.InvalidInput::class.java) { core.setRpcOverride(NetworkId.SEPOLIA, url) },
+        )
 }

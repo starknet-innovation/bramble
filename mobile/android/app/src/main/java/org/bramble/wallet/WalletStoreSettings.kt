@@ -20,3 +20,15 @@ fun WalletStore.setTheme(choice: ThemeChoice) {
     theme = choice
     prefs.edit().putString(ThemeChoice.STORAGE_KEY, choice.stored).apply()
 }
+
+/** The selected network's RPC override, for the settings field; "" for the defaults or while locked. */
+fun WalletStore.rpcOverride(): String = runCatching { walletCore.rpcOverride(network) }.getOrNull().orEmpty()
+
+/**
+ * `setRpcOverride` for [target]: the core trims [raw], clears the override when it is empty, and
+ * refuses anything but a plain `https` URL (thrown as its `InvalidInput`). Returns what is stored.
+ */
+suspend fun WalletStore.saveRpcOverride(
+    target: NetworkId,
+    raw: String,
+): String? = calls.work(session.ticket()) { walletCore.setRpcOverride(target, raw) }

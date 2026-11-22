@@ -102,12 +102,8 @@ final class WalletStore {
         toast = message
     }
 
-    var networkInfo: NetworkInfo {
-        guard let info = supportedNetworks().first(where: { $0.network == network }) else {
-            preconditionFailure("the core supports every NetworkId")
-        }
-        return info
-    }
+    /// The selected network with the wallet's RPC override first (`endpointNetwork`).
+    var networkInfo: NetworkInfo { endpointNetwork(network, wallet: core) }
 
     /// The header's network label, as the side panel's `.account-network-label`.
     var networkLabel: String { network == .mainnet ? "Starknet" : "Sepolia" }
@@ -426,7 +422,9 @@ final class WalletStore {
     var activity: [ActivityEntry] { portfolio.activityView?.entries ?? [] }
 }
 
-/// User-facing text for a core error, in the extension's wording. Never includes input.
+/// User-facing text for a core error, in the extension's wording. Never includes input. The one
+/// pass-through text (a core refusal) goes through `redactEndpoints`, as every failure text does
+/// before it is shown, logged or reported: an RPC override URL may carry an API key.
 func describe(_ error: Error) -> String {
     switch error as? CoreError {
     case .WrongPassword:
@@ -439,7 +437,7 @@ func describe(_ error: Error) -> String {
         BrambleCopy.biometricInvalidated.replacingOccurrences(of: "{biometry}", with: BiometricKeychain.name)
 
     case .InvalidInput(let reason):
-        reason.prefix(1).uppercased() + reason.dropFirst()
+        redactEndpoints(text: reason.prefix(1).uppercased() + reason.dropFirst())
 
     case .WalletExists:
         "A wallet already exists on this device"

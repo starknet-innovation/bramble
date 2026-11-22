@@ -81,6 +81,11 @@ final class MockNode: RpcTransport, @unchecked Sendable {
     var unreachable: Set<URL> = []
     var wrongChain: Set<URL> = []
     var pendingHash: () -> String? = { nil }
+    /// What `starknet_call` answers when set (a balance's limbs, a Starknet name's address); empty
+    /// keeps the default reply.
+    var callResult: [String] = []
+    /// Runs before a `starknet_call` is answered, e.g. to edit the field while a name resolves.
+    var onCall: (@Sendable () async -> Void)?
     /// Runs before a write is answered, e.g. to background the app while the write is in flight.
     var onWrite: (@Sendable () async -> Void)?
 
@@ -94,6 +99,7 @@ final class MockNode: RpcTransport, @unchecked Sendable {
         if unreachable.contains(url) { throw RpcTransportFailure.unreachable }
         if write, failWrites { throw RpcTransportFailure.unreachable }
         if write, let onWrite { await onWrite() }
+        if method == "starknet_call", let onCall { await onCall() }
         let notFound: [String: Any] = ["error": ["code": Self.contractNotFoundCode, "message": "Contract not found"]]
         let answer: [String: Any]
         switch method {
@@ -105,6 +111,9 @@ final class MockNode: RpcTransport, @unchecked Sendable {
 
         case "starknet_getNonce":
             answer = deployed ? ["result": "0x5"] : notFound
+
+        case "starknet_call" where !callResult.isEmpty:
+            answer = ["result": callResult]
 
         case "starknet_estimateFee" where failEstimate:
             answer = ["error": ["code": Self.executionErrorCode, "message": "Transaction execution error"]]
