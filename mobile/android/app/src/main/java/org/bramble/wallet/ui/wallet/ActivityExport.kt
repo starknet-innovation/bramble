@@ -69,6 +69,11 @@ internal fun writeActivityCsv(
         }
     }.getOrNull()
 
+/** Removes the export, which holds the account's whole history, with the wallet. */
+internal fun deleteActivityExports(context: Context) {
+    File(context.cacheDir, EXPORT_DIRECTORY).deleteRecursively()
+}
+
 /** The cache folder the export is written to; `res/xml/export_paths.xml` names the same one. */
 private const val EXPORT_DIRECTORY = "exports"
 

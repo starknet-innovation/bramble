@@ -281,5 +281,9 @@ final class ActivityFeedTests: XCTestCase {
         XCTAssertEqual(text, activityCsv(entries: store.activityEntries))
         XCTAssertEqual(store.activityEntries.count, 3)
         XCTAssertTrue(text.hasPrefix("datetimeUtc,networkId,accountAddress,"))
+
+        // The export holds the whole history: it goes with the wallet.
+        store.deleteFiles()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 }

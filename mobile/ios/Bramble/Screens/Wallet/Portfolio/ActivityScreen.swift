@@ -50,6 +50,7 @@ struct ActivityScreen: View {
         .sheet(item: $export) { file in
             ActivityShareSheet(export: file) { completed in
                 export = nil
+                PortfolioStore.removeActivityCsvFile()
                 if completed { store.activityExported() }
             }
         }

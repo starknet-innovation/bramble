@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.deleteWallet
@@ -109,6 +110,7 @@ fun RemoveWalletScreen(
 ) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var passphrase by remember { mutableStateOf("") }
     Column(
         Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg),
@@ -127,7 +129,11 @@ fun RemoveWalletScreen(
         PillButton("Remove wallet", kind = PillKind.DANGER, busy = store.busy, enabled = passphrase.isNotEmpty()) {
             val attempt = passphrase
             passphrase = ""
-            scope.launch { runCatching { store.deleteWallet(attempt) }.onFailure(store::showError) }
+            scope.launch {
+                runCatching { store.deleteWallet(attempt) }
+                    .onSuccess { deleteActivityExports(context) }
+                    .onFailure(store::showError)
+            }
         }
     }
 }

@@ -14,8 +14,10 @@ import org.bramble.core.TxStatus
 import org.bramble.core.activityCsv
 import org.bramble.wallet.portfolio.ALL_ACTIVITY
 import org.bramble.wallet.portfolio.activityFeedState
+import org.bramble.wallet.ui.wallet.deleteActivityExports
 import org.bramble.wallet.ui.wallet.writeActivityCsv
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -118,14 +120,18 @@ class ActivityFeedTest {
 
     @Test
     fun exportWritesTheWholeFeedAsCsv() {
-        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
-        val file = writeActivityCsv(cache, feed)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = writeActivityCsv(context.cacheDir, feed)
         assertNotNull(file)
         assertEquals("bramble-activity.csv", file?.name)
         assertEquals("exports", file?.parentFile?.name)
         val text = file?.readText().orEmpty()
         assertEquals(activityCsv(feed), text)
         assertTrue(text.startsWith("datetimeUtc,networkId,accountAddress,"))
+
+        // The export holds the whole history: it goes with the wallet.
+        deleteActivityExports(context)
+        assertFalse(file?.exists() ?: true)
     }
 
     private companion object {

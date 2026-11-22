@@ -77,13 +77,23 @@ extension PortfolioStore {
     func activityCsvFile() -> URL? {
         let entries = activityEntries
         guard !entries.isEmpty else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(activityCsvFileName())
+        let url = Self.activityCsvURL
         do {
             try Data(activityCsv(entries: entries).utf8).write(to: url, options: [.atomic, .completeFileProtection])
         } catch {
             return nil
         }
         return url
+    }
+
+    /// Removes the export, which holds the account's whole history: once the share sheet closes,
+    /// and with the wallet.
+    static func removeActivityCsvFile() {
+        try? FileManager.default.removeItem(at: activityCsvURL)
+    }
+
+    private static var activityCsvURL: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(activityCsvFileName())
     }
 
     // The explorer lane: an answering page is authoritative; any failure falls through silently.

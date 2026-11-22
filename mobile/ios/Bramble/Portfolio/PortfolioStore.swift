@@ -257,6 +257,7 @@ final class PortfolioStore {
     func deleteFiles() {
         lock()
         files.removeAll()
+        Self.removeActivityCsvFile()
         preferences = TokenPreferences(persisted: nil)
         prices = PriceBook(persisted: nil)
         snapshots = BalanceSnapshots(persisted: nil)
