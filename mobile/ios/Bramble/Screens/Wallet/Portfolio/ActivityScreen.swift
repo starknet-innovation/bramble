@@ -68,10 +68,16 @@ struct ActivityScreen: View {
         }
     }
 
-    /// The stored entries behind one day's rows, row for row.
-    private func entries(ofGroup index: Int) -> [ActivityEntry] {
+    /// One day's rows, each with the stored entry behind it and an identity of its own.
+    ///
+    /// A swap's legs share one hash, so the identity is the hash plus what the core tells legs
+    /// apart by: token, token contract, counterparty and amount.
+    private func legs(of group: ActivityDayGroup, at index: Int) -> [Leg] {
         let all = store.portfolio.groupEntries
-        return all.indices.contains(index) ? all[index] : []
+        return zip(group.rows, all.indices.contains(index) ? all[index] : []).map { row, entry in
+            let leg: [String?] = [entry.hash, entry.token, entry.tokenAddress, entry.counterparty, entry.amount]
+            return Leg(id: leg.map { $0 ?? "" }.joined(separator: "\u{0}"), row: row, entry: entry)
+        }
     }
 
     /// The feed grouped by UTC day, each day under its heading.
@@ -84,12 +90,19 @@ struct ActivityScreen: View {
                     .padding(.horizontal, BrambleSpace.lg)
                     .accessibilityAddTraits(.isHeader)
                 VStack(spacing: BrambleSpace.xs) {
-                    ForEach(Array(zip(group.rows, entries(ofGroup: index))), id: \.0.hash) { row, entry in
-                        ActivityRowView(row: row, entry: entry)
+                    ForEach(legs(of: group, at: index)) { leg in
+                        ActivityRowView(row: leg.row, entry: leg.entry)
                     }
                 }
             }
             .padding(.top, index == 0 ? 0 : BrambleSpace.lg)
         }
     }
+}
+
+/// One activity row with the stored entry behind it.
+private struct Leg: Identifiable {
+    let id: String
+    let row: ActivityRow
+    let entry: ActivityEntry
 }
