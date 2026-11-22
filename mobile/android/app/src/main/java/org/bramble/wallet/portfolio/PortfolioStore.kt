@@ -18,9 +18,9 @@ import org.bramble.core.BalanceSnapshots
 import org.bramble.core.BalanceView
 import org.bramble.core.DisplayCurrency
 import org.bramble.core.HomeRows
+import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
 import org.bramble.core.PortfolioHero
-import org.bramble.core.NetworkId
 import org.bramble.core.PriceBook
 import org.bramble.core.PriceOutcome
 import org.bramble.core.PricePlan

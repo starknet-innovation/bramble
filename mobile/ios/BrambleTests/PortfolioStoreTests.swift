@@ -87,6 +87,9 @@ final class PortfolioStoreTests: XCTestCase {
         )
     }
 
+    /// No wallet here, so no RPC override: the explorer lane is allowed, as the wallet answers then.
+    private let allowExplorer: (NetworkId, TokenPreferences) -> Bool = { _, _ in true }
+
     private func store(
         _ scenario: String,
         transport: StubTransport? = nil,
@@ -94,7 +97,7 @@ final class PortfolioStoreTests: XCTestCase {
     ) throws -> PortfolioStore {
         PortfolioStore(
             activity: try book(PortfolioFiles(directory: directory)),
-            explorerAllowed: { _, _ in true },
+            explorerAllowed: allowExplorer,
             files: PortfolioFiles(directory: directory),
             transport: transport ?? StubTransport(scenario: scenario)
         ) { now }
@@ -104,7 +107,7 @@ final class PortfolioStoreTests: XCTestCase {
     private func store(_ scenario: String, in subdirectory: String) throws -> PortfolioStore {
         PortfolioStore(
             activity: try book(PortfolioFiles(directory: directory.appendingPathComponent(subdirectory))),
-            explorerAllowed: { _, _ in true },
+            explorerAllowed: allowExplorer,
             files: PortfolioFiles(directory: directory.appendingPathComponent(subdirectory)),
             transport: StubTransport(scenario: scenario)
         )
