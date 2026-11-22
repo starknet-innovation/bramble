@@ -4,11 +4,12 @@ import SwiftUI
 /// `transactionRow` (`home-tabs.ts`): a disclosure. The summary is the kind glyph, the heading that
 /// joins the verb and the amount ("Received 1.5 STRK"), the status word for a row that is not
 /// accepted, the token mark, and the truncated hash (linked to the explorer when the network has
-/// one) with its copy control. Opening it lists the counterparty (or a detail line), the network and
-/// the token's contract (`activityRecordFacts` in `activity-detail.ts`), when it was submitted, and
-/// the provisional-status hint. No fiat figure: a value computed from today's price is not what the
-/// transaction was worth. Every value is the core's: `ActivityRow`, and for the network and the
-/// token contract the stored `ActivityEntry` the row was built from.
+/// one) with its copy control. Opening it lists the counterparty (or a detail line), the value at
+/// submission, the network fee, the network and the token's contract (`activityRecordFacts` in
+/// `activity-detail.ts`), when it was submitted, and the provisional-status hint. The only fiat
+/// figure is the one priced when the send was submitted: a value from today's price is not what the
+/// transaction was worth. Every value is the core's: `ActivityRow`, and for the record facts the
+/// stored `ActivityEntry` the row was built from.
 struct ActivityRowView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -34,6 +35,8 @@ struct ActivityRowView: View {
     /// The expansion's fact labels (`request-detail`); no generated table carries them.
     private enum FactLabel {
         static let detail = "Detail"
+        static let valueAtSubmission = "Value at submission"
+        static let networkFee = "Network fee"
         static let network = "Network"
         static let tokenContract = "Token contract"
         static let copyTokenContract = "Copy token contract address"
@@ -145,9 +148,8 @@ struct ActivityRowView: View {
             .lineLimit(1)
     }
 
-    /// The expansion (`.request-detail`): the counterparty or the detail line, the record's
-    /// network and token contract, the submission time, and the provisional hint, each only when
-    /// recorded.
+    /// The expansion (`.request-detail`): the counterparty or the detail line, the record facts
+    /// and token contract, the submission time, and the provisional hint, each only when recorded.
     private var facts: some View {
         let network = store.networkName(of: entry.network)
         return VStack(spacing: 0) {
@@ -158,8 +160,8 @@ struct ActivityRowView: View {
             } else if let detail = row.detail {
                 fact(FactLabel.detail) { factText(detail) }
             }
-            if !network.isEmpty {
-                fact(FactLabel.network) { factText(network) }
+            ForEach(Self.recordFacts(of: entry, network: network), id: \.label) { item in
+                fact(item.label) { factText(item.value) }
             }
             if let contract = entry.tokenAddress {
                 fact(FactLabel.tokenContract) {
@@ -173,6 +175,18 @@ struct ActivityRowView: View {
                 fact(FactLabel.status) { factText(hint) }
             }
         }
+    }
+
+    /// `activityRecordFacts` up to the token contract, in its order: the value at submission
+    /// (`activityValueText`, at the price captured when it was sent), the network fee
+    /// (`activityFeeText`, the receipt's), and the network, each only when the record holds it.
+    static func recordFacts(of entry: ActivityEntry, network: String) -> [(label: String, value: String)] {
+        let recorded: [(label: String, value: String)?] = [
+            activityValueText(entry: entry).map { (FactLabel.valueAtSubmission, $0) },
+            activityFeeText(entry: entry).map { (FactLabel.networkFee, $0) },
+            network.isEmpty ? nil : (FactLabel.network, network)
+        ]
+        return recorded.compactMap(\.self)
     }
 
     private func fact<Value: View>(_ label: String, @ViewBuilder value: () -> Value) -> some View {

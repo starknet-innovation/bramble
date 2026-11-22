@@ -40,7 +40,9 @@ import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityRow
 import org.bramble.core.ActivityTone
 import org.bramble.core.activityEmptyCopy
+import org.bramble.core.activityFeeText
 import org.bramble.core.activityUnavailableNotice
+import org.bramble.core.activityValueText
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleControl
 import org.bramble.wallet.design.BrambleIcon
@@ -160,8 +162,9 @@ internal fun ActivityFeed(
  * tone the status), the heading that joins verb and amount, the truncated hash (a link to the
  * explorer in the system browser when there is one) with its copy control, the status word for a
  * row that is not accepted, the token mark, and the disclosure chevron. The expansion: the
- * counterparty (or the Detail fact), the record's Network and Token contract, then Submitted and
- * Status. No fiat figure: a value from today's price is not what the transaction was worth.
+ * counterparty (or the Detail fact), the record's Value at submission, Network fee, Network and
+ * Token contract, then Submitted and Status. The only fiat figure is the one priced when the send
+ * was submitted: a value from today's price is not what the transaction was worth.
  */
 @Composable
 private fun ActivityRowItem(
@@ -262,9 +265,9 @@ private fun ActivityHash(
 
 /**
  * The expansion's facts: the counterparty (its role, the 6…4 address and a copy control carrying
- * the full one), or the Detail fact; the network and token contract of [entry], the stored
- * record the row was built from (`activityRecordFacts` in `activity-detail.ts`); then Submitted
- * and Status. Each only when recorded.
+ * the full one), or the Detail fact; the record facts ([recordFacts]) and token contract of
+ * [entry], the stored record the row was built from (`activityRecordFacts` in
+ * `activity-detail.ts`); then Submitted and Status. Each only when recorded.
  */
 @Composable
 private fun ActivityFacts(
@@ -285,8 +288,8 @@ private fun ActivityFacts(
         } else {
             row.detail?.let { ActivityFact(DETAIL_LABEL, it) }
         }
-        val network = entry?.let { networkName(it.network) }.orEmpty()
-        if (network.isNotEmpty()) ActivityFact(NETWORK_LABEL, network)
+        val facts = entry?.let { recordFacts(it, networkName(it.network)) }.orEmpty()
+        facts.forEach { (label, value) -> ActivityFact(label, value) }
         entry?.tokenAddress?.let { contract ->
             ActivityFact(TOKEN_CONTRACT_LABEL, contract, mono = true) {
                 CopyButton(store, contract, COPY_TOKEN_CONTRACT_LABEL)
@@ -296,6 +299,21 @@ private fun ActivityFacts(
         row.statusHint?.let { ActivityFact(STATUS_LABEL, it) }
     }
 }
+
+/**
+ * `activityRecordFacts` up to the token contract, in its order: the value at submission
+ * (`activityValueText`, at the price captured when it was sent), the network fee
+ * (`activityFeeText`, the receipt's), and the network, each only when [entry] holds it.
+ */
+internal fun recordFacts(
+    entry: ActivityEntry,
+    network: String,
+): List<Pair<String, String>> =
+    listOfNotNull(
+        activityValueText(entry)?.let { VALUE_AT_SUBMISSION_LABEL to it },
+        activityFeeText(entry)?.let { NETWORK_FEE_LABEL to it },
+        network.takeIf { it.isNotEmpty() }?.let { NETWORK_LABEL to it },
+    )
 
 /** One `dt`/`dd` pair of the expansion, with an optional trailing control. */
 @Composable
@@ -323,6 +341,8 @@ private fun ActivityFact(
 
 /** The expansion's fixed fact labels (`transactionRow`'s `dt`s). */
 private const val DETAIL_LABEL = "Detail"
+private const val VALUE_AT_SUBMISSION_LABEL = "Value at submission"
+private const val NETWORK_FEE_LABEL = "Network fee"
 private const val NETWORK_LABEL = "Network"
 private const val TOKEN_CONTRACT_LABEL = "Token contract"
 private const val COPY_TOKEN_CONTRACT_LABEL = "Copy token contract address"
