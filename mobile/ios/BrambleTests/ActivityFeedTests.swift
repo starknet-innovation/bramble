@@ -137,17 +137,10 @@ final class ActivityFeedTests: XCTestCase {
     private let denyExplorer: (NetworkId, TokenPreferences) -> Bool = { _, _ in false }
 
     /// A store on the fixture network, entered on the published Mainnet account, holding `rows`.
-    private func store(holding rows: (String) -> [ActivityEntry]) async throws -> PortfolioStore {
-        let files = PortfolioFiles(directory: directory)
-        let core = try WalletCore(dataDir: directory.appendingPathComponent("core").path, clock: DeviceClock())
-        let store = PortfolioStore(
-            activity: try core.activityBook(),
-            explorerAllowed: denyExplorer,
-            files: files,
-            transport: StubTransport(scenario: "ready")
-        ) { 1_790_251_200_000 }
+    /// The stub responder's Mainnet account, as the store's scope names it.
+    private func mainnetAccount() throws -> AccountRecord {
         let address = PortfolioStubResponder.account
-        let account = AccountRecord(
+        return AccountRecord(
             id: try activityAccountId(network: .mainnet, address: address),
             network: .mainnet,
             family: .openZeppelin,
@@ -167,6 +160,18 @@ final class ActivityFeedTests: XCTestCase {
             imported: false,
             preFixReadyKey: false
         )
+    }
+
+    private func store(holding rows: (String) -> [ActivityEntry]) async throws -> PortfolioStore {
+        let files = PortfolioFiles(directory: directory)
+        let core = try WalletCore(dataDir: directory.appendingPathComponent("core").path, clock: DeviceClock())
+        let store = PortfolioStore(
+            activity: try core.activityBook(),
+            explorerAllowed: denyExplorer,
+            files: files,
+            transport: StubTransport(scenario: "ready")
+        ) { 1_790_251_200_000 }
+        let account = try mainnetAccount()
         let network = try XCTUnwrap(supportedNetworks().first { $0.network == .mainnet })
         await store.load(account: account, network: network)
         store.activityView = store.activity.scanApply(
@@ -267,6 +272,16 @@ final class ActivityFeedTests: XCTestCase {
         XCTAssertTrue(summary.body.hasPrefix("2 transactions · "), summary.body)
         XCTAssertTrue(summary.body.contains("Sent 1.5 STRK"), summary.body)
         XCTAssertTrue(summary.body.contains("Received 2 STRK"), summary.body)
+
+        // Entering a scope again (an account switch, or this account over a new endpoint list)
+        // keeps the names the search resolves: the screen sends them only when they change.
+        var moved = try XCTUnwrap(store.scope).network
+        moved.rpcUrls.insert("https://rpc.example", at: 0)
+        await store.load(account: try mainnetAccount(), network: moved)
+        XCTAssertEqual(store.feed.contacts, [ActivityContact(address: Self.alice, label: "Alice")])
+        // Locking drops them with everything else shown.
+        store.lock()
+        XCTAssertEqual(store.feed.contacts, [])
     }
 
     /// The export is the whole feed, not the filtered view, as the core's CSV under its file name.

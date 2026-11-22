@@ -117,7 +117,11 @@ final class PortfolioStore {
         let accountId = account.id
         let next = Scope(accountId: accountId, address: account.address, network: network)
         if scope != next {
+            // The names the search resolves belong to the network's address book, not the scope,
+            // and the screen sends them only when they change: they outlive the reset.
+            let contacts = feed.contacts
             clearView()
+            feed.contacts = contacts
             scope = next
         }
         tracked = preferences.tracked(network: network.network)
@@ -242,6 +246,7 @@ final class PortfolioStore {
     func lock() {
         clearView()
         scope = nil
+        Self.removeActivityCsvFile()
     }
 
     /// Re-reads the scope's activity from the core's log (after the send journey recorded or

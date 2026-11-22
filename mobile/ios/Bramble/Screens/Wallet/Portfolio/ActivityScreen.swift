@@ -47,7 +47,8 @@ struct ActivityScreen: View {
                 StatusLine(text: portfolio.feed.result)
             }
         }
-        .sheet(item: $export) { file in
+        // A sheet dismissed without the share controller (a swipe, a lock) still removes the file.
+        .sheet(item: $export, onDismiss: PortfolioStore.removeActivityCsvFile) { file in
             ActivityShareSheet(export: file) { completed in
                 export = nil
                 PortfolioStore.removeActivityCsvFile()

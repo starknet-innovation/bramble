@@ -13,6 +13,7 @@ import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
 import java.io.File
+import java.util.UUID
 
 /** The Activity header's "Export CSV" control, disabled while the feed is empty. */
 @Composable
@@ -56,15 +57,18 @@ internal fun shareActivityCsv(
 }
 
 /**
- * Writes [entries] as the core's CSV (`activityCsv`) to `exports/activityCsvFileName()` under
- * [cacheDir], replacing the last export; null when the file cannot be written.
+ * Writes [entries] as the core's CSV (`activityCsv`) as `activityCsvFileName()` in a fresh folder
+ * under the cache's `exports/`, first removing every earlier export; null when the file cannot be
+ * written. The fresh folder gives each export its own content URI, so an app granted an earlier
+ * one cannot read a later export through it.
  */
 internal fun writeActivityCsv(
     cacheDir: File,
     entries: List<ActivityEntry>,
 ): File? =
     runCatching {
-        File(cacheDir, EXPORT_DIRECTORY).apply { mkdirs() }.resolve(activityCsvFileName()).apply {
+        val exports = File(cacheDir, EXPORT_DIRECTORY).apply { deleteRecursively() }
+        File(exports, UUID.randomUUID().toString()).apply { mkdirs() }.resolve(activityCsvFileName()).apply {
             writeText(activityCsv(entries))
         }
     }.getOrNull()

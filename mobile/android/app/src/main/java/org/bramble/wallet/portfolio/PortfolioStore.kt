@@ -211,7 +211,11 @@ class PortfolioStore(
         val id = account.id
         val next = Scope(id, account.address, network)
         if (scope != next) {
+            // The names the search resolves belong to the network's address book, not the scope,
+            // and the screen sends them only when they change: they outlive the reset.
+            val contacts = feed.contacts
             lock()
+            feed = ActivityFeedState(contacts = contacts)
             scope = next
         }
         (snapshots.plan(id, network.network, clock(), true, false) as? BalancePlan.Serve)?.let { balances = it.view }

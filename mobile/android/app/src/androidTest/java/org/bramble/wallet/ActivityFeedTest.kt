@@ -18,6 +18,7 @@ import org.bramble.wallet.ui.wallet.deleteActivityExports
 import org.bramble.wallet.ui.wallet.writeActivityCsv
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -124,14 +125,19 @@ class ActivityFeedTest {
         val file = writeActivityCsv(context.cacheDir, feed)
         assertNotNull(file)
         assertEquals("bramble-activity.csv", file?.name)
-        assertEquals("exports", file?.parentFile?.name)
+        assertEquals("exports", file?.parentFile?.parentFile?.name)
         val text = file?.readText().orEmpty()
         assertEquals(activityCsv(feed), text)
         assertTrue(text.startsWith("datetimeUtc,networkId,accountAddress,"))
 
+        // Each export has its own folder, so its own content URI; the earlier one is gone.
+        val next = writeActivityCsv(context.cacheDir, feed)
+        assertNotEquals(file?.parentFile, next?.parentFile)
+        assertFalse(file?.exists() ?: true)
+
         // The export holds the whole history: it goes with the wallet.
         deleteActivityExports(context)
-        assertFalse(file?.exists() ?: true)
+        assertFalse(next?.exists() ?: true)
     }
 
     private companion object {
