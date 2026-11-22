@@ -10,16 +10,20 @@
  * Only `nightly.yml` may name either, each exactly twice: once as a boolean
  * saying whether it is configured, and once in the environment of its own live
  * step. All four steps are pinned as text, the live steps whole, `run:`
- * included and nothing after it: they write the secret to a file, and an added
- * line could copy it past the `trap` or hand it to later steps. The send step's
- * job runs one at a time (`concurrency`), so two runs never race for nonces.
+ * included: they write the secret to a file, and an added line could copy it
+ * past the `trap` or hand it to later steps. The live steps are also read from
+ * the parsed YAML (`workflow-sepolia-document.ts`), so no key can be added to
+ * them however it is spelled, and the nightly job must run one at a time
+ * (`concurrency`), so two runs never race for nonces.
  * Every workflow is also refused the forms that hand every secret on at once,
  * and recording a Sepolia tape (network traffic not fit for a public
  * repository). The secrets context ignores case and accepts bracket access, so
  * references are matched in every spelling. This catches drift and careless
  * edits; a determined hostile edit of the workflow is a review matter.
  */
+
 import { requireText, workflowPath } from "./workflow-policy-text";
+import { type PinnedStep, sepoliaDocumentFailures } from "./workflow-sepolia-document";
 
 const GITHUB_EXPRESSION = "$" + "{{";
 // Expression functions and keys ignore case, and spacing is free.
@@ -32,17 +36,20 @@ const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
 /** One confined secret: how it is referenced, its two pinned steps, and how failures name it. */
 type Confined = {
   readonly reference: RegExp;
+  /** The live step's `id:`, as the parsed check finds it. */
+  readonly liveId: string;
   readonly configuredStep: string;
   readonly liveStep: string;
   readonly what: string;
   readonly step: string;
-  /** The job's concurrency line, when two runs must never overlap. */
-  readonly concurrency?: string;
+  /** True when two runs of the job holding this secret must never overlap. */
+  readonly oneAtATime?: boolean;
 };
 
 const CONFINED: readonly Confined[] = [
   {
     reference: /secrets\s*(?:\.|\[\s*['"])\s*bramble_sepolia_seeds\b/gi,
+    liveId: "sepolia",
     configuredStep: `      - name: Sepolia seeds configured
         id: sepolia_seeds
         env:
@@ -97,6 +104,7 @@ const CONFINED: readonly Confined[] = [
   },
   {
     reference: /secrets\s*(?:\.|\[\s*['"])\s*bramble_sepolia_txn_seed\b/gi,
+    liveId: "sepolia_txn",
     configuredStep: `      - name: Sepolia send seed configured
         id: sepolia_txn_seed
         env:
@@ -130,7 +138,7 @@ const CONFINED: readonly Confined[] = [
 `,
     what: "the Sepolia send seed secret",
     step: "the Sepolia send seed",
-    concurrency: "    concurrency: { group: sepolia-tx, cancel-in-progress: false }",
+    oneAtATime: true,
   },
 ];
 
@@ -152,19 +160,17 @@ const confinedFailures = (path: string, source: string, secret: Confined): strin
     `${path} must scope ${secret.step} to its live Sepolia step`,
   );
   if (uses !== 2) failures.push(`${path} must reference ${secret.what} exactly twice`);
-  // The pin is a substring match, so a line added after it would still run:
-  // the step runs on to the first line indented less than its own keys.
-  const at = source.indexOf(secret.liveStep);
-  const rest = at < 0 ? "" : source.slice(at);
-  const end = rest.search(/\n(?! {8}|\n)/);
-  if (at >= 0 && rest.slice(0, end < 0 ? undefined : end).trimEnd() !== secret.liveStep.trimEnd()) {
-    failures.push(`${path} must not add to the live step holding ${secret.step}`);
-  }
-  if (secret.concurrency && !source.includes(secret.concurrency)) {
-    failures.push(`${path} must run the job holding ${secret.step} one at a time`);
-  }
   return failures;
 };
+
+const pinnedStep = (path: string, secret: Confined): PinnedStep => ({
+  added: `${path} must not add to the live step holding ${secret.step}`,
+  id: secret.liveId,
+  text: secret.liveStep,
+  ...(secret.oneAtATime
+    ? { overlap: `${path} must run the job holding ${secret.step} one at a time` }
+    : {}),
+});
 
 /**
  * Returns the Sepolia-secret policy violations in one workflow's source. Pure:
@@ -177,5 +183,14 @@ export const sepoliaSeedsFailures = (name: string, source: string): string[] => 
       ([label]) => `${path} must not use ${label}`,
     ),
     ...CONFINED.flatMap((secret) => confinedFailures(path, source, secret)),
+    ...(path === workflowPath("nightly.yml")
+      ? sepoliaDocumentFailures(
+          path,
+          source,
+          CONFINED.filter((secret) => (source.match(secret.reference)?.length ?? 0) > 0).map(
+            (secret) => pinnedStep(path, secret),
+          ),
+        )
+      : []),
   ];
 };

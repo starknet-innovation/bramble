@@ -3,7 +3,8 @@
  * as one secret, and only the nightly's matching live step may see it
  * (scripts/workflow-sepolia-policy.ts).
  * Each case mutates one control in the real workflows and expects the policy to
- * name it.
+ * name it. The live steps are also judged on the parsed YAML, so the spellings
+ * below that keep the pinned text in place still fail.
  */
 import { describe, expect, test } from "bun:test";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
@@ -192,6 +193,54 @@ describe("Sepolia seed secret policy", () => {
       "",
       ".github/workflows/nightly.yml must run the job holding the Sepolia send seed one at a time",
     ],
+    [
+      "a comment line before an added key",
+      '            bun tools/vendor-dataset/verify-sepolia.ts "$@"\n',
+      '            bun tools/vendor-dataset/verify-sepolia.ts "$@"\n    # note\n        shell: bash wrapper.sh {0}\n',
+      ".github/workflows/nightly.yml must not add to the live step holding the Sepolia seeds",
+    ],
+    [
+      "a blank line before an added key",
+      '          exit "$status"\n',
+      '          exit "$status"\n\n        working-directory: elsewhere\n',
+      ".github/workflows/nightly.yml must not add to the live step holding the Sepolia send seed",
+    ],
+    [
+      "commenting out the send job's concurrency",
+      "    concurrency: { group: sepolia-tx, cancel-in-progress: false }",
+      "    # concurrency: { group: sepolia-tx, cancel-in-progress: false }",
+      ".github/workflows/nightly.yml must run the job holding the Sepolia send seed one at a time",
+    ],
+    [
+      "cancelling a running send for a newer one",
+      "    concurrency: { group: sepolia-tx, cancel-in-progress: false }",
+      "    concurrency: { group: sepolia-tx, cancel-in-progress: true }\n    # concurrency: { group: sepolia-tx, cancel-in-progress: false }",
+      ".github/workflows/nightly.yml must run the job holding the Sepolia send seed one at a time",
+    ],
+    [
+      "setting the nightly job's run defaults",
+      "    permissions:\n      contents: read\n    outputs:",
+      "    defaults:\n      run:\n        shell: bash wrapper.sh {0}\n    permissions:\n      contents: read\n    outputs:",
+      ".github/workflows/nightly.yml must run the nightly job only with its reviewed keys and runner",
+    ],
+    [
+      "setting a shell start-up file for the job",
+      "    permissions:\n      contents: read\n    outputs:",
+      "    env:\n      BASH_ENV: start-up.sh\n    permissions:\n      contents: read\n    outputs:",
+      ".github/workflows/nightly.yml must run the nightly job only with its reviewed keys and runner",
+    ],
+    [
+      "running the nightly job in a container",
+      "    permissions:\n      contents: read\n    outputs:",
+      "    container: some/image:1\n    permissions:\n      contents: read\n    outputs:",
+      ".github/workflows/nightly.yml must run the nightly job only with its reviewed keys and runner",
+    ],
+    [
+      "setting a workflow-wide shell option",
+      "\njobs:\n",
+      "\nenv:\n  SHELLOPTS: noexec\njobs:\n",
+      ".github/workflows/nightly.yml must carry only its reviewed top-level keys",
+    ],
   ] as const) {
     test(`${label} in a live step fails`, async () => {
       const sources = await readWorkflowSources();
@@ -202,4 +251,28 @@ describe("Sepolia seed secret policy", () => {
       );
     });
   }
+
+  test("a second step with a live step's id fails", async () => {
+    const sources = await readWorkflowSources();
+    const nightly = (sources["nightly.yml"] ?? "").replace(
+      "      - name: Build extension\n",
+      "      - name: Decoy\n        id: sepolia_txn\n        run: echo decoy\n      - name: Build extension\n",
+    );
+    expect(nightly).not.toBe(sources["nightly.yml"]);
+    expect(workflowSecurityPolicyFailures({ ...sources, "nightly.yml": nightly })).toContain(
+      ".github/workflows/nightly.yml must not add to the live step holding the Sepolia send seed",
+    );
+  });
+
+  test("moving the send job's concurrency to another job fails", async () => {
+    const sources = await readWorkflowSources();
+    const line = "    concurrency: { group: sepolia-tx, cancel-in-progress: false }";
+    const nightly = (sources["nightly.yml"] ?? "")
+      .replace(`${line} # no overlap racing for S-TXN nonces\n`, "")
+      .replace("  report:\n", `  report:\n${line}\n`);
+    expect(nightly).toContain(`  report:\n${line}\n`);
+    expect(workflowSecurityPolicyFailures({ ...sources, "nightly.yml": nightly })).toContain(
+      ".github/workflows/nightly.yml must run the job holding the Sepolia send seed one at a time",
+    );
+  });
 });
