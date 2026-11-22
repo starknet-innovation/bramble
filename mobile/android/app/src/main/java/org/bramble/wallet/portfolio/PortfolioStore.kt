@@ -20,6 +20,7 @@ import org.bramble.core.DisplayCurrency
 import org.bramble.core.HomeRows
 import org.bramble.core.NetworkInfo
 import org.bramble.core.PortfolioHero
+import org.bramble.core.NetworkId
 import org.bramble.core.PriceBook
 import org.bramble.core.PriceOutcome
 import org.bramble.core.PricePlan
@@ -55,6 +56,11 @@ class PortfolioStore(
     internal val directory: File,
     /** The core's `activityBook()`: the one activity log. */
     private val activity: ActivityBook,
+    /**
+     * The wallet's `explorerFallbackAllowed`: it knows the RPC override, which turns the explorer
+     * lane off, and answers false while locked.
+     */
+    private val explorerAllowed: (NetworkId, TokenPreferences) -> Boolean,
     private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
     /**
@@ -272,7 +278,9 @@ class PortfolioStore(
         historyLoading = true
         val view =
             try {
-                reads.activityView(activity, preferences, target) { gen == generation }
+                reads.activityView(activity, explorerAllowed(current.network.network, preferences), target) {
+                    gen == generation
+                }
             } finally {
                 if (gen == generation) historyLoading = false
             }

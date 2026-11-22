@@ -38,6 +38,9 @@ final class PortfolioStore {
     let transport: any PortfolioTransport
     let endpoints: PortfolioEndpoints
     let clock: @Sendable () -> Double
+    /// The wallet's `explorerFallbackAllowed`: it knows the RPC override, which turns the explorer
+    /// lane off, and answers false while locked.
+    let explorerAllowed: (NetworkId, TokenPreferences) -> Bool
 
     private(set) var scope: Scope?
     private(set) var balances: PortfolioBalances = .loading
@@ -60,6 +63,7 @@ final class PortfolioStore {
 
     init(
         activity: ActivityBook,
+        explorerAllowed: @escaping (NetworkId, TokenPreferences) -> Bool,
         files: PortfolioFiles = .standard(),
         transport: any PortfolioTransport = BoundedHttp.shared,
         // Whole epoch milliseconds, as JavaScript's `Date.now()`: the core's stored timestamps
@@ -71,6 +75,7 @@ final class PortfolioStore {
         self.files = files
         self.transport = transport
         self.clock = clock
+        self.explorerAllowed = explorerAllowed
         endpoints = PortfolioEndpoints(transport: transport)
         let saved = TokenPreferences(persisted: files.read(.preferences))
         preferences = saved

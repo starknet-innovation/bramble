@@ -17,7 +17,6 @@ import org.bramble.core.RpcReply
 import org.bramble.core.RpcRequest
 import org.bramble.core.ScanStep
 import org.bramble.core.TokenConfig
-import org.bramble.core.TokenPreferences
 import org.bramble.core.balanceJudge
 import org.bramble.core.balanceRequests
 import org.bramble.core.rpcChainIdRequest
@@ -72,7 +71,7 @@ internal class PortfolioReads(
      */
     suspend fun activityView(
         book: ActivityBook,
-        preferences: TokenPreferences,
+        explorerAllowed: Boolean,
         target: ActivityTarget,
         current: () -> Boolean,
     ): ActivityView? {
@@ -82,7 +81,7 @@ internal class PortfolioReads(
                 target.accountId,
                 net,
                 target.tokens,
-                preferences.explorerFallbackAllowed(net),
+                explorerAllowed,
                 target.now,
             )
         val lane =

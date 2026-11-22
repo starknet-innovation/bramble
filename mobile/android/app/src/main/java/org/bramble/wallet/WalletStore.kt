@@ -62,7 +62,7 @@ class WalletStore(
      */
     val portfolio =
         org.bramble.wallet.portfolio
-            .PortfolioStore(portfolioDirectory, core.activityBook())
+            .PortfolioStore(portfolioDirectory, core.activityBook(), core::explorerFallbackAllowed)
 
     /** For the discovery scan's sans-IO steps (`RecoveryScanDriver`); restoring goes through [accountCall]. */
     internal val walletCore: WalletCore get() = core

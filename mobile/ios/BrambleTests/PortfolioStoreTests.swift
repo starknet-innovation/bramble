@@ -80,7 +80,10 @@ final class PortfolioStoreTests: XCTestCase {
             typeLabel: nil,
             authorizationShape: "stark-pair",
             groupId: nil,
-            active: true
+            active: true,
+            hidden: false,
+            imported: false,
+            preFixReadyKey: false
         )
     }
 
@@ -91,6 +94,7 @@ final class PortfolioStoreTests: XCTestCase {
     ) throws -> PortfolioStore {
         PortfolioStore(
             activity: try book(PortfolioFiles(directory: directory)),
+            explorerAllowed: { _, _ in true },
             files: PortfolioFiles(directory: directory),
             transport: transport ?? StubTransport(scenario: scenario)
         ) { now }
@@ -100,6 +104,7 @@ final class PortfolioStoreTests: XCTestCase {
     private func store(_ scenario: String, in subdirectory: String) throws -> PortfolioStore {
         PortfolioStore(
             activity: try book(PortfolioFiles(directory: directory.appendingPathComponent(subdirectory))),
+            explorerAllowed: { _, _ in true },
             files: PortfolioFiles(directory: directory.appendingPathComponent(subdirectory)),
             transport: StubTransport(scenario: scenario)
         )
