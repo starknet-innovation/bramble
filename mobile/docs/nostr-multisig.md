@@ -202,7 +202,9 @@ constants come from `core/generated/multisig.json` (§6.1).
     pub local_signer_account_ids: Vec<String> }
 #[derive(uniffi::Record)] pub struct RpcRequest { pub id: u64, pub body: String }
 #[derive(uniffi::Enum)] pub enum RelayStep {
-    Continue, Finish { close_frame: Option<String> } }   // send close_frame if any, then close the socket
+    Continue,
+    Finish { close_frame: Option<String> },                  // send close_frame if any, then close the socket
+    NextPage { close_frame: String, request: String } }      // send both, in order, on the same socket
 #[derive(uniffi::Record)] pub struct CoordinationSyncOutcome {
     pub received: u32, pub trusted: u32, pub held: u32, pub imported: u32 }
 #[derive(uniffi::Record)] pub struct RelayPolicy {
@@ -295,10 +297,12 @@ are skipped **before** the round-robin bound of 50, then candidates sort by `cre
 and the core opens them itself (§4). Every relay failed → "Nostr relays are unavailable" (the core's
 messages, as the extension's), shown as "Secure co-signer updates are unavailable".
 
-**[mobile] One page per relay until 2.7.** The core pages (an `until` cursor below the oldest wrap, up
-to 4 pages) through a third `RelayStep`, `NextPage`; the UniFFI enum cannot gain it before the bindings
-regenerate, so mobile runs the core's judge with a page cap of 1, where `NextPage` never occurs (mapped
-to `Finish` as a fail-safe). A burst of newer wraps can therefore still hide an older one from mobile.
+**Paging (since wallet-core `v0.6.0`, M15).** The core pages (an `until` cursor below the oldest wrap,
+up to 4 pages) through `NextPage`: each app's relay loop sends its close frame, then the older page's
+request, on the same socket and keeps reading, with a fresh request timeout per page, as each of the
+extension's subscriptions has its own (`followRelayStep` on Android, `WebSocketRelayTransport.follow`
+on iOS; `RelayStepTest`, `RelayStepTests`). Before `v0.6.0` mobile read one page per relay, so a
+burst of newer wraps could hide an older one.
 
 Publishing (`publish_many_nostr_gift_wraps`: batch validation, `OK` judging where a false ack whose
 message starts with `duplicate:` counts as accepted, the counts) is the core's too, wrapped with mobile's

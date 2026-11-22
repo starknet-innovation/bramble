@@ -43,6 +43,31 @@ struct WebSocketRelayTransport: RelayTransport {
         }
     }
 
+    /// What the read loop does next, once `follow` has sent what the core's step asks for.
+    enum RelayRead: Equatable {
+        case keepReading
+        case pageRequested
+        case finished
+    }
+
+    /// Sends the frames `step` asks for, in order. A next page closes the full subscription and
+    /// opens the older one on the same socket; a failed close at the end is not an error.
+    static func follow(_ step: RelayStep, send: (String) async throws -> Void) async throws -> RelayRead {
+        switch step {
+        case .continue:
+            return .keepReading
+
+        case let .nextPage(closeFrame, request):
+            try await send(closeFrame)
+            try await send(request)
+            return .pageRequested
+
+        case let .finish(closeFrame):
+            if let closeFrame { try? await send(closeFrame) }
+            return .finished
+        }
+    }
+
     private static func run(_ plan: NostrSyncPlan, relay: UInt32, url raw: String, policy: RelayPolicy) async {
         guard let url = URL(string: raw), url.scheme?.lowercased() == "wss" else {
             plan.relayEnded(relay: relay)
@@ -59,7 +84,8 @@ struct WebSocketRelayTransport: RelayTransport {
         do {
             let open = plan.openFrame(relay: relay)
             try await withTimeout(policy.connectTimeoutMs) { try await task.send(.string(open)) }
-            let deadline = ContinuousClock.now + .milliseconds(Int(policy.requestTimeoutMs))
+            // Each page's request has its own timeout, as each extension subscription does.
+            var deadline = ContinuousClock.now + .milliseconds(Int(policy.requestTimeoutMs))
             while true {
                 let remaining = ContinuousClock.now.duration(to: deadline)
                 guard remaining > .zero else { throw RelayTimeout() }
@@ -67,8 +93,16 @@ struct WebSocketRelayTransport: RelayTransport {
                 let message = try await withTimeout(millis) { try await task.receive() }
                 // The extension reads text frames only; binary frames are ignored.
                 guard case .string(let text) = message else { continue }
-                if case .finish(let closeFrame) = plan.acceptFrame(relay: relay, frame: text) {
-                    if let closeFrame { try? await task.send(.string(closeFrame)) }
+                let step = plan.acceptFrame(relay: relay, frame: text)
+                let read = try await follow(step) { try await task.send(.string($0)) }
+                switch read {
+                case .keepReading:
+                    continue
+
+                case .pageRequested:
+                    deadline = ContinuousClock.now + .milliseconds(Int(policy.requestTimeoutMs))
+
+                case .finished:
                     return
                 }
             }

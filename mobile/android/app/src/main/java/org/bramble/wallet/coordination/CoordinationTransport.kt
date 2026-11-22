@@ -19,6 +19,7 @@ import org.bramble.core.RelayStep
 import org.bramble.wallet.RpcClient
 import java.net.URL
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 // The byte-moving half of [CoordinationStore]: chain reads through [RpcClient.post] and one OkHttp
 // WebSocket per relay. The core plans every request, judges every response, and decides when a
@@ -101,6 +102,34 @@ private fun drive(
     }
 }
 
+/** What the read loop does next, once [followRelayStep] has sent what the core's step asks for. */
+internal enum class RelayRead { KEEP_READING, PAGE_REQUESTED, FINISHED }
+
+/**
+ * Sends the frames [step] asks for, in order. A next page closes the full subscription and opens
+ * the older one on the same socket.
+ */
+internal fun followRelayStep(
+    step: RelayStep,
+    send: (String) -> Unit,
+): RelayRead =
+    when (step) {
+        RelayStep.Continue -> {
+            RelayRead.KEEP_READING
+        }
+
+        is RelayStep.NextPage -> {
+            send(step.closeFrame)
+            send(step.request)
+            RelayRead.PAGE_REQUESTED
+        }
+
+        is RelayStep.Finish -> {
+            step.closeFrame?.let(send)
+            RelayRead.FINISHED
+        }
+    }
+
 /** One wss socket per relay; the core decides when it is finished. Timeouts end the relay. */
 internal suspend fun runRelay(
     plan: NostrSyncPlan,
@@ -110,6 +139,11 @@ internal suspend fun runRelay(
 ) {
     if (!url.startsWith("wss://", ignoreCase = true)) return plan.relayEnded(relay)
     val done = CompletableDeferred<Unit>()
+    // Each page's request has its own timeout, as each extension subscription does: a next page
+    // moves the deadline (monotonic nanoseconds) on.
+    val requestNanos = TimeUnit.MILLISECONDS.toNanos(policy.requestTimeoutMs.toLong())
+    val deadline =
+        AtomicLong(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(policy.connectTimeoutMs.toLong()) + requestNanos)
     val client =
         OkHttpClient
             .Builder()
@@ -131,11 +165,17 @@ internal suspend fun runRelay(
                     webSocket: WebSocket,
                     text: String,
                 ) {
-                    val step = plan.acceptFrame(relay, text)
-                    if (step is RelayStep.Finish) {
-                        step.closeFrame?.let(webSocket::send)
-                        webSocket.close(NORMAL_CLOSURE, null)
-                        done.complete(Unit)
+                    when (followRelayStep(plan.acceptFrame(relay, text)) { webSocket.send(it) }) {
+                        RelayRead.KEEP_READING -> {}
+
+                        RelayRead.PAGE_REQUESTED -> {
+                            deadline.set(System.nanoTime() + requestNanos)
+                        }
+
+                        RelayRead.FINISHED -> {
+                            webSocket.close(NORMAL_CLOSURE, null)
+                            done.complete(Unit)
+                        }
                     }
                 }
 
@@ -158,9 +198,15 @@ internal suspend fun runRelay(
                 }
             },
         )
-    val total = policy.connectTimeoutMs.toLong() + policy.requestTimeoutMs.toLong()
     try {
-        if (withTimeoutOrNull(total) { done.await() } == null) plan.relayEnded(relay)
+        while (!done.isCompleted) {
+            val left = TimeUnit.NANOSECONDS.toMillis(deadline.get() - System.nanoTime())
+            if (left <= 0) {
+                plan.relayEnded(relay)
+                break
+            }
+            withTimeoutOrNull(left) { done.await() }
+        }
     } finally {
         socket.cancel()
         client.dispatcher.executorService.shutdown()
