@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -20,6 +21,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.launch
 import org.bramble.core.validateRecipient
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.amount
@@ -182,6 +184,9 @@ internal fun RecipientStage(
             validateRecipient(model.recipientInput.trim())?.takeIf { book.labelFor(it) == null }
         }
     val pick = { row: RecipientRow -> model.useRecipient(row.address, row.label) }
+    // An address, a listed name, or a Starknet name (`continueWithTyped`).
+    val scope = rememberCoroutineScope()
+    val proceed = { scope.launch { model.continueWithTyped(book) { store.network } } }
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg)) {
         OriginAccount(store, model)
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
@@ -195,9 +200,10 @@ internal fun RecipientStage(
                 onValueChange = model::updateRecipient,
                 kind = SecretKind.ADDRESS,
                 invalid = model.recipientError != null,
-                onSubmit = { model.continueWithRecipient(book::labelFor) },
+                onSubmit = { proceed() },
             )
             StatusLine(model.recipientError, StatusTone.DANGER)
+            StatusLine(model.recipientNote)
         }
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
             ListHeading(BrambleIconName.BOOK, SendCopy.addressBook)
@@ -225,8 +231,8 @@ internal fun RecipientStage(
         }
         PillButton(
             SendCopy.continueWithAddress,
-            enabled = model.recipientInput.isNotBlank(),
-        ) { model.continueWithRecipient(book::labelFor) }
+            enabled = model.recipientInput.isNotBlank() && !model.resolvingName,
+        ) { proceed() }
     }
 }
 

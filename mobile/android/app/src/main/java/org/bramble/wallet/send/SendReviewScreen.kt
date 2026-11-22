@@ -66,7 +66,7 @@ internal fun ReviewStage(
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         ReviewFactsList(store, model, review)
         CostBox(reviewCost(review), retry)
-        RisksPanel(reviewRisks(review))
+        RisksPanel(reviewRisks(review, newResolvedRecipient = model.resolvedName?.isNew == true))
         StatusLine(model.reviewBlock, StatusTone.DANGER)
         PillButton(SendCopy.confirmLabel, icon = BrambleIconName.CHECK, enabled = review.canConfirm, onClick = confirm)
     }
@@ -85,7 +85,14 @@ private fun ReviewFactsList(
             FactValue(model.account.displayName, model.account.shortAddress)
         }
         Hairline()
-        Fact(SendCopy.toRowLabel, SendCopy.showFullRecipient to review.recipient) {
+        // A recipient resolved from a Starknet name shows the full address it resolved to, and where
+        // it came from, since the name alone does not carry what the reader must check.
+        val resolved = model.resolvedName != null
+        Fact(
+            SendCopy.toRowLabel,
+            (SendCopy.showFullRecipient to review.recipient).takeUnless { resolved },
+            footer = { if (resolved) ResolvedAddress(review.recipient) },
+        ) {
             FactValue(
                 model.recipientLabel ?: review.recipientShort,
                 review.recipientShort.takeIf {
@@ -128,6 +135,7 @@ private fun ReviewFactsList(
 private fun Fact(
     label: String,
     reveal: Pair<String, String>? = null,
+    footer: @Composable () -> Unit = {},
     value: @Composable RowScope.() -> Unit,
 ) {
     val skin = LocalSkin.current
@@ -142,6 +150,28 @@ private fun Fact(
         }
         // An empty address has nothing to check character by character (iOS omits the disclosure).
         reveal?.takeIf { it.second.isNotEmpty() }?.let { (summary, address) -> AddressReveal(summary, address) }
+        footer()
+    }
+}
+
+/** A name-resolved recipient's full address, wrapping and selectable, over its source line. */
+@Composable
+private fun ResolvedAddress(address: String) {
+    val skin = LocalSkin.current
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap),
+    ) {
+        SelectionContainer(Modifier.fillMaxWidth()) {
+            Text(
+                address,
+                color = skin.text,
+                textAlign = TextAlign.End,
+                style = textStyle(BrambleTypeScale.caption, mono = true),
+            )
+        }
+        Text(RESOLVED_SOURCE, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
     }
 }
 
