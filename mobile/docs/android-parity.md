@@ -248,7 +248,8 @@ The footer shows "Bramble core {v} · Krusty KMS {v}" from `core_info()`.
 
 Network: "Network" / "Choose where the wallet operates"; rows from `supported_networks()` show the
 name and the chain id in code ("SN_MAIN", "SN_SEPOLIA"), selected on accentSoft with a check; hint
-"Switching selects or derives an account on the target network.".
+"Switching selects or derives an account on the target network."; then "RPC endpoint" and the
+relay ([endpoints-and-names.md](endpoints-and-names.md)).
 
 Appearance: "Appearance" / "How the wallet looks"; eyebrow "Theme" over a Dark/Light segmented
 control (sunken track, 4dp inset, selected panel capsule with shadow `xs`). Dark is the default, no
