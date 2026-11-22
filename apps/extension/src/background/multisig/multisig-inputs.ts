@@ -305,18 +305,25 @@ export const sortedArgentMultisigSignatures = (
 
 /**
  * Merges a re-import of the same frozen hash without regressing local state.
- * Terminal local outcomes remain authoritative; open intents gain only new,
- * already-validated signer fragments. The stored summary is kept: it is local
- * display text that a token or contact added since would word differently,
- * and the frozen hash already pins what is signed (Sherlock 178).
+ * Terminal local outcomes remain authoritative. An open intent keeps every
+ * local signature and fills any remaining slots from the incoming fragments,
+ * in incoming order, until the local threshold. The result is then sorted
+ * into Argent's signer order and becomes ready once it reaches that
+ * threshold. The stored config is kept with it, so the cap and the config
+ * saved beside it always agree. The stored summary is kept: it is local display text that a
+ * token or contact added since would word differently, and the frozen hash
+ * already pins what is signed (Sherlock 178). This projection never throws
+ * and does not re-check fragments the caller has already accepted.
  */
 export const mergeImportedArgentMultisigIntent = (
   current: ArgentMultisigSigningIntent,
   incoming: ArgentMultisigSigningIntent,
 ): ArgentMultisigSigningIntent => {
   if (current.state !== "collecting" && current.state !== "ready") return current;
+  const threshold = current.configSnapshot.threshold;
   const signatures = [...current.signatures];
   for (const signature of incoming.signatures) {
+    if (signatures.length >= threshold) break;
     if (!signatures.some((stored) => stored.publicKey === signature.publicKey)) {
       signatures.push(signature);
     }
@@ -324,8 +331,9 @@ export const mergeImportedArgentMultisigIntent = (
   const sorted = sortedArgentMultisigSignatures(signatures);
   return {
     ...incoming,
+    configSnapshot: current.configSnapshot,
     signatures: sorted,
-    state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+    state: sorted.length === threshold ? "ready" : "collecting",
     summary: current.summary,
   };
 };
