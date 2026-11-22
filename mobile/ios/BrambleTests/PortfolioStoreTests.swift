@@ -230,6 +230,26 @@ final class PortfolioStoreTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path), "no cache is rewritten after delete")
     }
 
+    /// The wallet decides the explorer lane (an RPC override turns it off, and it is off while
+    /// locked): when it says no, history comes from the RPC scan and Starkscan is never asked.
+    func testTheExplorerIsNotAskedWhenTheWalletSaysNo() async throws {
+        let transport = StubTransport(scenario: "ready")
+        var asked: [NetworkId] = []
+        let store = PortfolioStore(
+            activity: try book(PortfolioFiles(directory: directory)),
+            explorerAllowed: { network, _ in
+                asked.append(network)
+                return false
+            },
+            files: PortfolioFiles(directory: directory),
+            transport: transport
+        )
+        try await store.load(account: account(.mainnet), network: network(.mainnet))
+        await store.refreshActivity(force: false)
+        XCTAssertEqual(asked, [.mainnet], "the wallet is asked about the scope's network")
+        XCTAssertFalse(transport.requested.contains { $0.contains("starkscan") }, "\(transport.requested)")
+    }
+
     func testActivityFromTheExplorerAndUnavailableHistory() async throws {
         let store = try store("ready")
         try await store.load(account: account(.mainnet), network: network(.mainnet))

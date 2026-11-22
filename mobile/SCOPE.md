@@ -28,7 +28,7 @@ instead of its WASM build. Native UI per platform (SwiftUI, Jetpack Compose); on
      send/       → wallet-core's sans-IO JSON-RPC and send Plan: core builds requests and judges responses; host moves bytes
      recovery_scan.rs → wallet-core's account addresses and sans-IO discovery scan; Bramble's catalog, rules and wording stay here
      argent_multisig.rs, multisig_rpc.rs, class_declared.rs → wallet-core's multisig account and reads, on Bramble's pinned class; the registry file stays here
-     nostr_relay.rs, coordination.rs → wallet-core's relay grammar, judges and sync window, read one page per relay until 2.7; the wss-only rule, the coordination file and the trust judgement stay here
+     nostr_relay.rs, coordination.rs → wallet-core's relay grammar, judges, sync window and paging (as the extension's, since `v0.6.0`); the wss-only rule, the coordination file and the trust judgement stay here
 ```
 
 Since M13 the core's sources and Rust tests (every `.rs` file named below) live in wallet-core's

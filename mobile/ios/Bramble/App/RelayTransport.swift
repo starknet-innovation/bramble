@@ -94,7 +94,10 @@ struct WebSocketRelayTransport: RelayTransport {
                 // The extension reads text frames only; binary frames are ignored.
                 guard case .string(let text) = message else { continue }
                 let step = plan.acceptFrame(relay: relay, frame: text)
-                let read = try await follow(step) { try await task.send(.string($0)) }
+                // A send that never completes ends the relay rather than holding the sync open.
+                let read = try await follow(step) { frame in
+                    try await withTimeout(policy.requestTimeoutMs) { try await task.send(.string(frame)) }
+                }
                 switch read {
                 case .keepReading:
                     continue
