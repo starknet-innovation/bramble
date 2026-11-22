@@ -150,6 +150,7 @@ const phaseBody = (view: LedgerSignView): string => {
     </div>`;
   }
   return `<p class="review-flag" role="alert">${escapeHtml(phase.message)}</p>
+    ${phase.supportCode ? `<p class="hint">${escapeHtml(phase.supportCode)}</p>` : ""}
     <div class="ledger-phase-actions">
       ${button({
         attributes: { "data-ledger-retry": true },

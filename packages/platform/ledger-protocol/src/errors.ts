@@ -57,7 +57,7 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "deploy-unfunded":
     "This account isn't deployed yet and has no STRK for the first transaction. Add STRK, then try again.",
   "device-busy":
-    "Another app is using your Ledger. Close Ledger Live and any other tab using it, then try again.",
+    "Something else is using your Ledger. Close other wallet apps and Bramble windows, unplug and replug it, then try again.",
   "device-locked": "Unlock your Ledger, then try again.",
   "disconnected-mid-sign": "Your Ledger disconnected. Nothing was submitted.",
   "locked-mid-sign":
@@ -84,7 +84,7 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "signature-verify-failed":
     "Couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
   "unexpected-device-error":
-    "Something went wrong talking to your Ledger. Open the Starknet app, close other apps using it, then try again.",
+    "Something went wrong talking to your Ledger. Unlock it, open the Starknet app, close other wallets and Bramble windows, then unplug it and try again.",
   "unsupported-ledger-device":
     "This Ledger device or firmware isn't supported yet. Update it in Ledger Live, then reconnect and open the Starknet app.",
   "webhid-unavailable": "Ledger support needs a Chromium-based browser (Chrome, Brave, or Edge).",
@@ -94,18 +94,66 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
 };
 
 /**
+ * Optional detail carried beside a catalog code. `causeName` is the thrown
+ * error's class name (a short token, never its message) so a support line can
+ * tell two failures with the same sentence apart. `ownStale` marks a failure
+ * of this page's own handle; callers may close and retry once, and it never
+ * authorizes a second signature.
+ */
+export type LedgerRejectionDetail = {
+  readonly causeName?: string;
+  readonly ownStale?: boolean;
+};
+
+// A support line may name an error class. Messages, paths, and device text
+// fail this and are dropped.
+const CAUSE_NAME = /^[A-Za-z][A-Za-z0-9_]{0,48}$/;
+const OPAQUE_CAUSE = new Set(["DOMException", "Error", "LedgerRejection"]);
+
+const causeFrom = (value: string | undefined): string | undefined =>
+  value !== undefined && CAUSE_NAME.test(value) && !OPAQUE_CAUSE.has(value) ? value : undefined;
+
+/**
+ * True when `value` is a short error-class token safe to show in a support
+ * line or to cross the hardware-tab channel. Rejects messages and opaque
+ * built-in names.
+ */
+export const isLedgerCauseToken = (value: unknown): value is string =>
+  typeof value === "string" && causeFrom(value) === value;
+
+/**
+ * The thrown error's class name when it is safe to show, or undefined for a
+ * message, a non-error, or an opaque name like `Error`.
+ */
+export const ledgerCauseName = (error: unknown): string | undefined =>
+  error instanceof LedgerRejection
+    ? error.causeName
+    : error instanceof Error
+      ? causeFrom(error.name)
+      : undefined;
+
+/**
  * A typed Ledger rejection. `code` selects the catalog entry; `statusWord` is an
  * optional APDU status word for a support-facing detail line, never the headline.
+ * `causeName` is the underlying error class, also never the headline.
  */
 export class LedgerRejection extends Error {
+  public readonly causeName: string | undefined;
   public readonly code: LedgerRejectionCode;
+  public readonly ownStale: boolean;
   public readonly statusWord: number | undefined;
 
-  public constructor(code: LedgerRejectionCode, statusWord?: number) {
+  public constructor(
+    code: LedgerRejectionCode,
+    statusWord?: number,
+    detail?: LedgerRejectionDetail,
+  ) {
     super(code);
     this.name = "LedgerRejection";
     this.code = code;
     this.statusWord = statusWord;
+    this.causeName = causeFrom(detail?.causeName);
+    this.ownStale = detail?.ownStale === true;
   }
 }
 
@@ -123,9 +171,45 @@ export const isLedgerRejectionCode = (value: unknown): value is LedgerRejectionC
   typeof value === "string" && Object.hasOwn(LEDGER_MESSAGES, value);
 
 /**
+ * Support line for an ambiguous device failure. Present for `device-busy`,
+ * `unexpected-device-error`, and any rejection that carries a cause name, so a
+ * report can tell those screens apart. Other catalog sentences already name
+ * the failure and stay without a second line.
+ */
+export const ledgerErrorSupportCode = (rejection: LedgerRejection): string | undefined => {
+  if (
+    rejection.causeName === undefined &&
+    rejection.code !== "device-busy" &&
+    rejection.code !== "unexpected-device-error"
+  ) {
+    return undefined;
+  }
+  return rejection.causeName
+    ? `Support code · ${rejection.code} · ${rejection.causeName}`
+    : `Support code · ${rejection.code}`;
+};
+
+/**
+ * Appends a safe cause name to a support line that already identifies the
+ * stage. The cause is omitted when the error has no class name worth showing.
+ */
+export const appendLedgerCause = (line: string, error: unknown): string => {
+  const cause = ledgerCauseName(error);
+  return cause ? `${line} · ${cause}` : line;
+};
+
+/**
  * Narrows an unknown thrown value to a {@link LedgerRejection}, or wraps it as
  * `unexpected-device-error`. Use at the UI boundary so a raw error is never
  * surfaced. Fails closed: anything unrecognized becomes the default rejection.
+ * A safe class name is kept for the support line; the message is not.
  */
-export const asLedgerRejection = (error: unknown): LedgerRejection =>
-  error instanceof LedgerRejection ? error : new LedgerRejection("unexpected-device-error");
+export const asLedgerRejection = (error: unknown): LedgerRejection => {
+  if (error instanceof LedgerRejection) return error;
+  const causeName = ledgerCauseName(error);
+  return new LedgerRejection(
+    "unexpected-device-error",
+    undefined,
+    causeName ? { causeName } : undefined,
+  );
+};
