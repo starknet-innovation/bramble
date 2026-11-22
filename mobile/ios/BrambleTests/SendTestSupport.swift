@@ -80,6 +80,8 @@ final class MockNode: RpcTransport, @unchecked Sendable {
     var failWrites = false
     var unreachable: Set<URL> = []
     var wrongChain: Set<URL> = []
+    /// The chain every endpoint not in `wrongChain` proves: Sepolia unless a test sends on Mainnet.
+    var chainId = "0x534e5f5345504f4c4941"
     var pendingHash: () -> String? = { nil }
     /// Runs before a write is answered, e.g. to background the app while the write is in flight.
     var onWrite: (@Sendable () async -> Void)?
@@ -98,7 +100,7 @@ final class MockNode: RpcTransport, @unchecked Sendable {
         let answer: [String: Any]
         switch method {
         case "starknet_chainId":
-            answer = ["result": wrongChain.contains(url) ? "0x534e5f4d41494e" : "0x534e5f5345504f4c4941"]
+            answer = ["result": wrongChain.contains(url) ? "0x534e5f4d41494e" : chainId]
 
         case "starknet_getClassHashAt":
             answer = deployed ? ["result": Self.classHash] : notFound
