@@ -13,8 +13,9 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [0.10.11] - Unreleased
 
-A Krusty upgrade that fixes Ready restores, padded addresses everywhere, a
-Forgot password? guide, remote kill switches, and fixes from user reports.
+A Krusty upgrade that fixes Ready restores, Simplified Chinese, padded
+addresses everywhere, a Forgot password? guide, remote kill switches,
+multisig private balances that work on Mainnet, and fixes from user reports.
 
 > This release updates how the wallet stores your data. Older versions of
 > Bramble can't open it after you unlock this one.
@@ -29,6 +30,11 @@ Forgot password? guide, remote kill switches, and fixes from user reports.
 > (#956, #962, #968).
 
 ### Added
+- Simplified Chinese. Settings → Language follows the browser or picks a
+  language. Review and signing lines are translated only from reviewed
+  references; a line without one shows in English (#930–#946, #996, #997).
+- Connected sites lists the accounts each site can see. Disconnect one
+  account or the whole site (#972, #987).
 - A Forgot password? guide on the unlock screen. It explains that the
   password can't be reset, how to reinstall and restore from your recovery
   phrase, and what the phrase doesn't bring back. Nothing on it resets the
@@ -71,6 +77,17 @@ Forgot password? guide, remote kill switches, and fixes from user reports.
 - Settings rows are no longer hidden behind the bottom navigation, and the
   connection approval's Cancel button no longer stretches on wide windows
   (#950, #904, #958, #960).
+- Multisig private balances work on Mainnet. Co-owners can authorize a
+  private action, real proofs are stored, and a transfer right after a
+  deposit sees the deposit (#826, #988).
+- Private-balance requests from a site show what will happen alongside the
+  calls, instead of one or the other (#995).
+- "Something else is using your Ledger" no longer appears when the only
+  thing holding the device is Bramble's own Ledger tab, after closing the
+  side panel or pressing Connect then Cancel quickly (#994).
+- Activity rows show the network fee again (#1002, #1004).
+- Importing a co-signer's completed multisig transaction works when this
+  wallet already holds a different signature (#1003, #1005).
 
 ## [0.10.10] - Unreleased
 
