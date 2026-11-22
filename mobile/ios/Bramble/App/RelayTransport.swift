@@ -8,20 +8,47 @@ protocol RelayTransport: Sendable {
     func sync(_ plan: NostrSyncPlan, policy: RelayPolicy) async
 }
 
-private struct RelayTimeout: Error {}
+struct RelayTimeout: Error {}
+
+/// Which of `withTimeout`'s two children finished first.
+private final class Settled: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+
+    /// True for the first caller only.
+    func claim() -> Bool {
+        lock.withLock {
+            defer { done = true }
+            return !done
+        }
+    }
+}
 
 /// Runs `body`, failing with `RelayTimeout` once `milliseconds` pass. The group waits for `body`
 /// to return even when cancelled, and a socket's `send`/`receive` ignore task cancellation, so
-/// `onTimeout` (cancelling the socket) is what ends a hung one.
-private func withTimeout<T: Sendable>(
+/// `onTimeout` (cancelling the socket) is what ends a hung one. It runs only when the timer wins:
+/// a `body` that finishes at the deadline keeps its socket and its result, and one that finishes
+/// after the timer won still fails with `RelayTimeout`.
+func withTimeout<T: Sendable>(
     _ milliseconds: UInt32,
     onTimeout: @escaping @Sendable () -> Void,
     _ body: @escaping @Sendable () async throws -> T
 ) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask { try await body() }
+    let settled = Settled()
+    return try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask {
+            let result: Result<T, Error>
+            do { result = try .success(await body()) } catch { result = .failure(error) }
+            guard settled.claim() else { throw RelayTimeout() }
+            return try result.get()
+        }
         group.addTask {
             try await Task.sleep(for: .milliseconds(Int(milliseconds)))
+            guard settled.claim() else {
+                // `body` won and is returning; wait to be cancelled rather than race its result.
+                try await Task.sleep(for: .milliseconds(Int(milliseconds)))
+                throw RelayTimeout()
+            }
             onTimeout()
             throw RelayTimeout()
         }
