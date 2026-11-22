@@ -135,11 +135,12 @@ is absent when the list is empty.
 **Pre-fix Ready key (#98).** `AccountRecord.pre_fix_ready_key` marks a Ready account whose sealed
 key Krusty 2.0 or earlier derived; Argent X and a fresh restore do not find it from the phrase.
 Home shows the extension's notice (`ready-key-notice.ts`, `release/v0.10.11`) for the active
-account: "Back up this account's key" / "Restoring your phrase won't find this account. Keep its
-private key, or move its funds to another account." with "Move funds", which opens Send.
-**Decision:** the extension's "Back up key" (private-key reveal) and "Don't show again" are left
-out: mobile has no private-key export (krusty-kms#257) and the core keeps no dismissed-notice
-preference yet.
+account, worded for the one action mobile offers: "Move this account's funds" / "Restoring your
+phrase won't find this account. Move its funds to another account." with "Move funds", which opens
+Send. **Decision:** the extension's "Back up key" (private-key reveal) and "Don't show again" are
+left out, and with them its advice to keep the private key: mobile has no private-key export
+(krusty-kms#257) and the core keeps no dismissed-notice preference yet. When the export lands, take
+the extension's title ("Back up this account's key") and body back with the control.
 
 Tests: iOS `BrambleTests/AccountVisibilityTests` (hide, show, Send's picker, the core's refusal and
 the active-account move over a real core; the kept lines; the notice rule); Android
