@@ -12,7 +12,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,9 +51,10 @@ internal fun HideAccountButton(
     accountId: String,
     address: String,
 ) {
-    val scope = rememberCoroutineScope()
+    // The app's scope: hiding removes this row, which would cancel a composition-bound job after
+    // the portfolio was cleared and before the next account's balances load.
     IconButton(BrambleIconName.EYE_OFF, "Hide ${friendlyAccountName(address)}") {
-        scope.launch { runCatching { store.setHidden(accountId, true) }.onFailure(store::showError) }
+        store.appScope.launch { runCatching { store.setHidden(accountId, true) }.onFailure(store::showError) }
     }
 }
 
@@ -63,14 +63,15 @@ internal fun HideAccountButton(
 internal fun HiddenAccountsSection(store: WalletStore) {
     val hidden = store.hiddenRecords
     if (hidden.isEmpty()) return
-    val scope = rememberCoroutineScope()
     Eyebrow("Hidden accounts")
     StatusLine("Hidden accounts stay in the wallet, out of the drawer and send pickers.")
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
         hidden.forEach { record ->
             KeptRow(record.address, record.displayName, record.shortAddress) {
                 IconButton(BrambleIconName.EYE, "Show ${friendlyAccountName(record.address)}") {
-                    scope.launch { runCatching { store.setHidden(record.id, false) }.onFailure(store::showError) }
+                    store.appScope.launch {
+                        runCatching { store.setHidden(record.id, false) }.onFailure(store::showError)
+                    }
                 }
             }
         }
