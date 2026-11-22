@@ -73,7 +73,7 @@ private const val ACTIVITY_POLL_MS = 60_000L
  * transactions and on-chain history, grouped by UTC day). Opening the tab reads history when due
  * and settles pending records; the refresh control forces a read; while visible the feed re-checks
  * every 60 s. Above the feed: the search, the filters and the sort ([ActivityToolbar]), and the
- * counterparty summary while a search resolves one party. Export CSV is not offered yet.
+ * counterparty summary while a search resolves one party; Export CSV shares the whole feed.
  */
 @Composable
 fun ActivityScreen(store: WalletStore) {
@@ -116,6 +116,7 @@ fun ActivityScreen(store: WalletStore) {
                     scope.launch { portfolio.refreshActivity(force = true) }
                 }
             }
+            ExportCsvButton(store)
         }
         if (unavailable) StatusLine(activityUnavailableNotice())
         val feed = portfolio.feed

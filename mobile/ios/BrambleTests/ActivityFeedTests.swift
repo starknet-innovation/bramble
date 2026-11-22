@@ -4,7 +4,7 @@ import XCTest
 
 /// The Activity screen's wiring of the core's P2 and P10 exports: the expanded row's fee and value
 /// when sent, in the extension's order; a send priced at submission from the wallet's price cache;
-/// and the feed's filter, sort and counterparty summary through the store.
+/// the feed's filter, sort and counterparty summary through the store; and the CSV export file.
 @MainActor
 final class ActivityFeedTests: XCTestCase {
     private static let strk = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
@@ -267,5 +267,19 @@ final class ActivityFeedTests: XCTestCase {
         XCTAssertTrue(summary.body.hasPrefix("2 transactions · "), summary.body)
         XCTAssertTrue(summary.body.contains("Sent 1.5 STRK"), summary.body)
         XCTAssertTrue(summary.body.contains("Received 2 STRK"), summary.body)
+    }
+
+    /// The export is the whole feed, not the filtered view, as the core's CSV under its file name.
+    func testExportWritesTheWholeFeedAsCsv() async throws {
+        let store = try await store(holding: feed)
+        var filter = ActivityFeedState.all
+        filter.query = "nobody"
+        store.refilter(filter)
+        let url = try XCTUnwrap(store.activityCsvFile())
+        XCTAssertEqual(url.lastPathComponent, "bramble-activity.csv")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(text, activityCsv(entries: store.activityEntries))
+        XCTAssertEqual(store.activityEntries.count, 3)
+        XCTAssertTrue(text.hasPrefix("datetimeUtc,networkId,accountAddress,"))
     }
 }

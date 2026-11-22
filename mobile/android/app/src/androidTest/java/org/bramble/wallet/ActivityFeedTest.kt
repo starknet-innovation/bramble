@@ -1,6 +1,7 @@
 package org.bramble.wallet
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.bramble.core.ActivityContact
 import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityFilter
@@ -10,8 +11,10 @@ import org.bramble.core.NetworkId
 import org.bramble.core.TokenPreferences
 import org.bramble.core.TransferDirection
 import org.bramble.core.TxStatus
+import org.bramble.core.activityCsv
 import org.bramble.wallet.portfolio.ALL_ACTIVITY
 import org.bramble.wallet.portfolio.activityFeedState
+import org.bramble.wallet.ui.wallet.writeActivityCsv
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -20,10 +23,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The Activity feed's filter, sort and counterparty summary, port of the iOS `ActivityFeedTests`:
- * the controls offer only what the feed holds, an axis keeps the rows it names, a value the feed
- * no longer offers resets to all, the amount sort is one untitled list grouped by token, and a
- * search naming a contact summarises that party. Every rule is the core's; this checks the wiring.
+ * The Activity feed's filter, sort, counterparty summary and CSV export, port of the iOS
+ * `ActivityFeedTests`: the controls offer only what the feed holds, an axis keeps the rows it
+ * names, a value the feed no longer offers resets to all, the amount sort is one untitled list
+ * grouped by token, a search naming a contact summarises that party, and the export is the whole
+ * feed as the core's CSV under its file name. Every rule is the core's; this checks the wiring.
  */
 @RunWith(AndroidJUnit4::class)
 class ActivityFeedTest {
@@ -110,6 +114,18 @@ class ActivityFeedTest {
         assertTrue(body, body.startsWith("2 transactions · "))
         assertTrue(body, body.contains("Sent 1.5 STRK"))
         assertTrue(body, body.contains("Received 2 STRK"))
+    }
+
+    @Test
+    fun exportWritesTheWholeFeedAsCsv() {
+        val cache = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir
+        val file = writeActivityCsv(cache, feed)
+        assertNotNull(file)
+        assertEquals("bramble-activity.csv", file?.name)
+        assertEquals("exports", file?.parentFile?.name)
+        val text = file?.readText().orEmpty()
+        assertEquals(activityCsv(feed), text)
+        assertTrue(text.startsWith("datetimeUtc,networkId,accountAddress,"))
     }
 
     private companion object {

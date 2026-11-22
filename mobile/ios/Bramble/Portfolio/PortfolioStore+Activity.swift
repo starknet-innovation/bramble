@@ -1,4 +1,5 @@
 import BrambleCore
+import Foundation
 
 /// The Activity feed (`activity-ops.ts handleActivity` over `createExplorerFirstHistory`): the saved
 /// log first, then — when a read is due or forced — Starkscan when the explorer lane is permitted,
@@ -69,6 +70,21 @@ extension PortfolioStore {
 
     /// The scope's whole feed: every row, not the filtered view.
     var activityEntries: [ActivityEntry] { scope == nil ? [] : activityView?.entries ?? [] }
+
+    /// Writes the scope's whole feed (`activityCsv`) to a temporary file named
+    /// `activityCsvFileName()` for the share sheet, replacing the last export; nil when there is
+    /// nothing to export or the file cannot be written.
+    func activityCsvFile() -> URL? {
+        let entries = activityEntries
+        guard !entries.isEmpty else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(activityCsvFileName())
+        do {
+            try Data(activityCsv(entries: entries).utf8).write(to: url, options: [.atomic, .completeFileProtection])
+        } catch {
+            return nil
+        }
+        return url
+    }
 
     // The explorer lane: an answering page is authoritative; any failure falls through silently.
     private func starkscan(scope: Scope, tokens: [TokenConfig], now: Double, generation: Int) async -> ActivityView? {

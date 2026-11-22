@@ -4,12 +4,13 @@ import SwiftUI
 /// `activityScreen` from `activity-views.ts`: the Activity dock for the active account and network,
 /// fed by the explorer lane or the RPC scan, grouped by UTC day. Above the feed: the search, the
 /// filters and the sort (`ActivityFilterBar`), and the counterparty summary while a search resolves
-/// one party. Export CSV is not offered yet. Opening the tab reads history when due; the refresh
+/// one party; Export CSV shares the whole feed. Opening the tab reads history when due; the refresh
 /// control forces a read; while visible the feed re-checks every 60 s.
 struct ActivityScreen: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.scenePhase) private var phase
+    @State private var export: ActivityExport?
 
     /// Seconds between feed re-checks while the tab is visible.
     private static let pollIntervalSeconds = 60
@@ -46,6 +47,12 @@ struct ActivityScreen: View {
                 StatusLine(text: portfolio.feed.result)
             }
         }
+        .sheet(item: $export) { file in
+            ActivityShareSheet(export: file) { completed in
+                export = nil
+                if completed { store.activityExported() }
+            }
+        }
         .task(id: store.activityContacts) { portfolio.refilter(contacts: store.activityContacts) }
         .task(id: portfolio.scope?.accountId) { await store.coordination.refresh() }
         .task(id: portfolio.scope?.accountId) {
@@ -78,6 +85,11 @@ struct ActivityScreen: View {
                     Task { await portfolio.refreshActivity(force: true) }
                 }
             }
+            IconButton(icon: .receive, label: "Export CSV", tint: skin.muted) {
+                export = portfolio.activityCsvFile().map(ActivityExport.init(url:))
+                if export == nil { store.toast = "Export failed" }
+            }
+            .disabled(portfolio.activityEntries.isEmpty)
         }
     }
 
