@@ -5,6 +5,9 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { addressLabel, addressText } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
+import { reviewStepsSendMessages } from "../../../i18n/messages/review-steps-send";
+import { reviewLines } from "../../../i18n/review";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { inlineCopyButton } from "../../shared/parts";
 import {
@@ -14,24 +17,18 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
+import { fragmentTokens, htmlSentence } from "./html-message";
 import { type TransferMode, transferSuccessSummary } from "./transfer-mode";
 import type { TransferFields } from "./transfer-model";
 
 type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
 
-const BUCKET_NAMES = { private: "Private balance", public: "Public balance" } as const;
+const bucketName = (bucket: "private" | "public"): string => t(`review.send.bucket.${bucket}`);
 
 // The full address behind a truncated one, revealed in place by a native
 // disclosure so a keyboard user can inspect it without leaving the review.
 const fullAddressReveal = (address: string, label: string): string =>
   `<details class="address-reveal"><summary>${escapeHtml(label)}</summary><code>${escapeHtml(addressText(address))}</code></details>`;
-
-/**
- * Copy for a name-resolved recipient that is not already saved. A name is a
- * convenient spelling, not a saved contact, so the review says the address it
- * resolved to is new rather than only showing it.
- */
-const NEW_RECIPIENT_WARNING = "New recipient. Check the full address before you send.";
 
 /**
  * Renders the confirm-face summary in the order the decision is made: who it
@@ -54,18 +51,18 @@ export const reviewSummaryHtml = (
   sender: { readonly address: string; readonly label: string } = { address: "", label: "" },
   network = "",
 ): string => {
-  const copyLabel = mode === "send" ? "Copy recipient address" : "Copy account address";
+  const copyLabel = t(mode === "send" ? "review.send.copyRecipient" : "review.send.copyAccount");
   const recipientIdentity =
     fields.recipientResolvedFrom === "stark-name"
-      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressText(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span><small class="send-review-source">Resolved from Starknet ID</small>`
-      : `<span class="send-review-address copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressLabel(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, mode === "send" ? "Show full recipient address" : "Show full account address") : ""}`;
+      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressText(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span><small class="send-review-source">${th("review.send.resolvedFromStarknetId")}</small>`
+      : `<span class="send-review-address copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressLabel(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, t(mode === "send" ? "review.send.showRecipient" : "review.send.showAccount")) : ""}`;
   return `
   <dl class="send-review-facts">
-    <div><dt>From</dt><dd><strong>${escapeHtml(sender.label || addressLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(addressText(sender.address))}">${escapeHtml(addressLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, "Show full sender address") : ""}</dd></div>
-    <div><dt>${mode === "send" ? "To" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || addressLabel(fields.recipient))}</strong>${recipientIdentity}</dd></div>
-    ${network ? `<div><dt>Network</dt><dd>${escapeHtml(network)}</dd></div>` : ""}
-    <div><dt>Amount</dt><dd><span class="send-review-amount">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong></span><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></dd></div>
-    ${mode === "send" ? "" : `<div><dt>Movement</dt><dd><strong>${BUCKET_NAMES[fields.source]} → ${BUCKET_NAMES[fields.destination]}</strong></dd></div>`}
+    <div><dt>${th("review.send.from")}</dt><dd><strong>${escapeHtml(sender.label || addressLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(addressText(sender.address))}">${escapeHtml(addressLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, t("review.send.showSender")) : ""}</dd></div>
+    <div><dt>${th(mode === "send" ? "review.send.to" : "review.send.account")}</dt><dd><strong>${escapeHtml(fields.recipientLabel || addressLabel(fields.recipient))}</strong>${recipientIdentity}</dd></div>
+    ${network ? `<div><dt>${th("review.send.network")}</dt><dd>${escapeHtml(network)}</dd></div>` : ""}
+    <div><dt>${th("review.send.amount")}</dt><dd><span class="send-review-amount">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong></span><small>${escapeHtml(fields.fiatEstimate || t("review.send.fiatUnavailable"))}</small></dd></div>
+    ${mode === "send" ? "" : `<div><dt>${th("review.send.movement")}</dt><dd><strong>${escapeHtml(bucketName(fields.source))} → ${escapeHtml(bucketName(fields.destination))}</strong></dd></div>`}
   </dl>`;
 };
 
@@ -82,11 +79,13 @@ const reviewFeeHtml = (review: TransferReview): string =>
 
 /**
  * The note that an undeployed account's first send also submits its
- * deployment. Shared with the deploy screen, which shows it so a reader knows
- * deploying by hand is optional (issue 662).
+ * deployment, in English. The deploy screen still reads this constant (issue
+ * 662); the review reads {@link firstSendDeploys}, which follows the language.
  */
-export const FIRST_SEND_DEPLOYS =
-  "This account is not deployed yet; the first send also submits its deployment.";
+export const FIRST_SEND_DEPLOYS = reviewStepsSendMessages.en["review.send.firstSendDeploys"];
+
+/** The first-send deployment note in the active language. */
+const firstSendDeploys = (): string => t("review.send.firstSendDeploys");
 
 /**
  * Renders only the warnings a review raised: the note that a name-resolved
@@ -98,9 +97,11 @@ export const FIRST_SEND_DEPLOYS =
  */
 export const reviewRisksHtml = (review: TransferReview, newResolvedRecipient = false): string => {
   const messages = [
-    ...(newResolvedRecipient ? [NEW_RECIPIENT_WARNING] : []),
+    // A name is a convenient spelling, not a saved contact, so a name-resolved
+    // recipient that is not saved yet is called out as new.
+    ...(newResolvedRecipient ? [t("review.send.newRecipient")] : []),
     ...riskFlagMessages(review.flags),
-    ...(review.requiresDeployment ? [FIRST_SEND_DEPLOYS] : []),
+    ...(review.requiresDeployment ? [firstSendDeploys()] : []),
   ];
   return messages.length === 0 ? "" : reviewPanel(messages, "");
 };
@@ -111,9 +112,9 @@ export const reviewRisksHtml = (review: TransferReview, newResolvedRecipient = f
  * face. All untrusted review copy passes through the shared escaped renderers.
  */
 const reviewDetailsHtml = (review: TransferReview): string =>
-  `${reviewCallsList(review.summaries)}${reviewPanel(
-    [...riskFlagMessages(review.flags), ...(review.requiresDeployment ? [FIRST_SEND_DEPLOYS] : [])],
-    "No additional wallet warnings were detected. Verify the recipient and decoded action before confirming.",
+  `${reviewCallsList(reviewLines(review.summaries, review.summaryTexts))}${reviewPanel(
+    [...riskFlagMessages(review.flags), ...(review.requiresDeployment ? [firstSendDeploys()] : [])],
+    t("review.send.noWarnings"),
   )}`;
 
 /**
@@ -151,8 +152,15 @@ export const successReceiptHtml = (
     ? `<strong>${escapeHtml(fields.recipientLabel)}</strong> `
     : "";
   const senderName = sender.label ? `<strong>${escapeHtml(sender.label)}</strong> ` : "";
-  const subject = sender.address
-    ? `${senderName}${receiptAddress(sender.address, "Copy sender address")} sent`
-    : "Sent";
-  return `${subject} ${amount} to ${recipientName}${receiptAddress(fields.recipient, "Copy recipient address")}`;
+  const recipient = `${recipientName}${receiptAddress(fields.recipient, t("send.copyRecipient"))}`;
+  if (!sender.address) {
+    const fragments = { amount, recipient };
+    return htmlSentence(t("send.receipt.sent", fragmentTokens(fragments)), fragments);
+  }
+  const fragments = {
+    amount,
+    recipient,
+    sender: `${senderName}${receiptAddress(sender.address, t("send.receipt.copySender"))}`,
+  };
+  return htmlSentence(t("send.receipt.sentBy", fragmentTokens(fragments)), fragments);
 };

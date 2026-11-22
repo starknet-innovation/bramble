@@ -9,6 +9,7 @@
     "./connector": "./src/connector.ts",
     "./grant-session": "./src/grant-session.ts",
     "./grant-window": "./src/grant-window.ts",
+    "./panel-presence": "./src/panel-presence.ts",
     "./grant-transport": "./src/grant-transport.js",
     "./transport": "./src/transport.ts",
     "./webhid": "./src/webhid-impl.js"

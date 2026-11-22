@@ -27,6 +27,11 @@ extension.
   The test-Ledger fixtures (`sepolia-stage-ldg.ts`, S-LDG: TA-32…) derive the
   device's keys from its phrase (`ledgerKeypair`); that phrase must belong to a
   test-only device that has never held real funds.
+  The send-suite accounts (`sepolia-stage-txn.ts`, S-TXN: TX-00…TX-10, issue
+  976) are the only Sepolia accounts the nightly sends from: one deployed
+  account per signing shape, plus TX-00, the bank for its throwaway deploy
+  accounts. They run only once `BRAMBLE_DATASET_SEED_S_TXN` is in the seed
+  file, and re-running `matrix-stage-sepolia.ts TX` tops each one back up.
 - `manifest/<network>/` is the dataset ledger, with one file per fixture group. It records
   every account's provenance, expected import outcome and transaction log
   (addresses and transaction hashes only, no key material). The matrix stages

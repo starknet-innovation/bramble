@@ -9,9 +9,13 @@
  * otherwise reads as a request to sign. Every phase used to narrate what the
  * wallet was doing to the device, which said the title again in more words
  * and made a handshake look like seven events instead of one wait.
+ *
+ * Copy is read from the grant tab's catalog when shown, so it follows the
+ * tab's language.
  */
 
 import type { LedgerTransitionPhase } from "@bramble/ledger-protocol/device-transition";
+import { gt } from "./messages";
 
 /**
  * Fixed non-sensitive copy rendered for one Ledger transition phase.
@@ -22,17 +26,29 @@ export type LedgerTransitionProgress = {
   readonly title: string;
 };
 
-const PROGRESS: Readonly<Record<LedgerTransitionPhase, LedgerTransitionProgress>> = {
-  "checking-device": { message: "", title: "Checking your Ledger" },
-  "returning-to-dashboard": { message: "", title: "Returning to the dashboard" },
-  "reconnecting-dashboard": { message: "", title: "Reconnecting to your Ledger" },
-  "checking-firmware": { message: "", title: "Checking Ledger firmware" },
-  "opening-starknet": {
-    message: "Confirm the prompt on your Ledger. No transaction is signed.",
-    title: "Approve opening Starknet",
-  },
-  "reconnecting-starknet": { message: "", title: "Starknet is opening" },
-  "confirming-starknet": { message: "", title: "Confirming Starknet" },
+const PROGRESS: Readonly<Record<LedgerTransitionPhase, () => LedgerTransitionProgress>> = {
+  "checking-device": () => ({ message: "", title: gt("ledgerGrant.progress.checkingDevice") }),
+  "returning-to-dashboard": () => ({
+    message: "",
+    title: gt("ledgerGrant.progress.returningToDashboard"),
+  }),
+  "reconnecting-dashboard": () => ({
+    message: "",
+    title: gt("ledgerGrant.progress.reconnectingDashboard"),
+  }),
+  "checking-firmware": () => ({ message: "", title: gt("ledgerGrant.progress.checkingFirmware") }),
+  "opening-starknet": () => ({
+    message: gt("ledgerGrant.progress.openingStarknetCopy"),
+    title: gt("ledgerGrant.progress.openingStarknet"),
+  }),
+  "reconnecting-starknet": () => ({
+    message: "",
+    title: gt("ledgerGrant.progress.reconnectingStarknet"),
+  }),
+  "confirming-starknet": () => ({
+    message: "",
+    title: gt("ledgerGrant.progress.confirmingStarknet"),
+  }),
 };
 
 /**
@@ -40,13 +56,13 @@ const PROGRESS: Readonly<Record<LedgerTransitionPhase, LedgerTransitionProgress>
  * is about to ask the device for things, so it says up front that none of
  * them signs anything (mc-wallet #476).
  */
-export const LEDGER_HANDSHAKE_PROGRESS: LedgerTransitionProgress = {
-  message: "No transaction is signed.",
-  title: "Checking firmware and Starknet",
-};
+export const ledgerHandshakeProgress = (): LedgerTransitionProgress => ({
+  message: gt("ledgerGrant.progress.noSignature"),
+  title: gt("ledgerGrant.progress.handshake"),
+});
 
 /**
  * Returns fixed, non-sensitive progress copy for one Ledger transition phase.
  */
 export const ledgerTransitionProgress = (phase: LedgerTransitionPhase): LedgerTransitionProgress =>
-  PROGRESS[phase];
+  PROGRESS[phase]();

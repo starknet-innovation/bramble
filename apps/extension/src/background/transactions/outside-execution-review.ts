@@ -11,6 +11,7 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { AllowanceRecord } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import { outsideExecutionCalls } from "@bramble/transactions/outside-execution-calls";
+import { type ReviewText, reviewTextsFor } from "@bramble/transactions/review-messages";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -29,6 +30,7 @@ import type { TrustedRecipientSources } from "./trusted-recipients";
 export type OutsideExecutionReview = {
   readonly flags: readonly ApprovalRiskFlag[];
   readonly summaries: readonly string[];
+  readonly summaryTexts?: readonly ReviewText[] | undefined;
 };
 
 /**
@@ -78,7 +80,8 @@ export const reviewOutsideExecution = (
     return refusal;
   }
   return {
-    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    flags: report.flags.map((flag) => ({ ...flag })),
     summaries: report.calls.map((call) => call.summary),
+    summaryTexts: reviewTextsFor(report.calls),
   };
 };

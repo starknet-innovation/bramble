@@ -67,7 +67,7 @@ export type LedgerOnboardView =
       readonly message?: string;
       readonly selected: readonly string[];
     }
-  | { readonly kind: "error"; readonly message: string };
+  | { readonly kind: "error"; readonly message: string; readonly supportCode?: string };
 
 /**
  * Best-effort on-chain state; `null` degrades to unavailable without blocking.

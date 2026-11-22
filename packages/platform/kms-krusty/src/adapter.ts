@@ -2,7 +2,7 @@
  * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
  */
 import { WalletError } from "@bramble/core/errors";
-import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord, ownField } from "@bramble/core/json";
 import type { KmsPort } from "@bramble/vault/kms-port";
 import {
   canonicalFelt,
@@ -48,13 +48,8 @@ const asRecord = (value: unknown): Record<string, unknown> => {
 // Reads a field only when it is an own enumerable data property, through the
 // shared boundary predicate: a getter on the WASM module object must never run
 // during validation, and must never answer differently on a second read.
-const ownValue = (record: Record<string, unknown>, field: string): unknown => {
-  const descriptor = Object.getOwnPropertyDescriptor(record, field);
-  return isOwnDataProperty(descriptor) ? descriptor.value : undefined;
-};
-
 const krustyResultValue = (record: Record<string, unknown>, field: string): unknown => {
-  const value = ownValue(record, field);
+  const value = ownField(record, field);
   if (value !== undefined) {
     return value;
   }
@@ -72,7 +67,7 @@ const krustyResultValue = (record: Record<string, unknown>, field: string): unkn
 };
 
 const requireFunction = (module: Record<string, unknown>, name: string): Callable => {
-  const value = ownValue(module, name);
+  const value = ownField(module, name);
   if (typeof value !== "function") {
     throw new WalletError(`Krusty KMS export missing: ${name}`);
   }
@@ -127,7 +122,7 @@ const isMnemonicWordCount = (value: number): boolean =>
  */
 export const createKrustyKms = (moduleValue: unknown): KmsPort => {
   const module = asRecord(moduleValue);
-  const init = ownValue(module, "default");
+  const init = ownField(module, "default");
   const ready =
     typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
 

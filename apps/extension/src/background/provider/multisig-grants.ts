@@ -51,8 +51,13 @@ export type MultisigOriginGrantStore = {
     readonly isAuthorized: () => boolean;
     readonly multisigId: string;
   }) => Promise<void>;
-  /** Throws, changing nothing, when the ledger can't be read. */
-  readonly revoke: (origin: string, credential: string) => Promise<void>;
+  /**
+   * Drops `origin`'s multisig grant, or only `multisigId` from it when given
+   * (the site goes once none remain). Only removes; an id the site was not
+   * granted changes nothing. Throws, changing nothing, when the ledger can't
+   * be read.
+   */
+  readonly revoke: (origin: string, credential: string, multisigId?: string) => Promise<void>;
   readonly sites: (credential: string) => Promise<readonly ConnectedSite[]>;
 };
 
@@ -106,12 +111,41 @@ const withoutId = (current: GrantDocument, multisigId: string): GrantDocument =>
   schemaVersion: 1,
 });
 
-// withoutId only removes, so an unchanged count means nothing to write.
+const withoutOriginAccess = (
+  current: GrantDocument,
+  origin: string,
+  multisigId?: string,
+): GrantDocument => ({
+  grants: current.grants
+    .map((grant) =>
+      grant.origin !== origin
+        ? grant
+        : {
+            ...grant,
+            multisigIds:
+              multisigId === undefined ? [] : grant.multisigIds.filter((id) => id !== multisigId),
+          },
+    )
+    .filter((grant) => grant.multisigIds.length > 0),
+  schemaVersion: 1,
+});
+
+// Both removals only remove, so an unchanged count means nothing to write.
 const idCount = (ledger: GrantDocument): number =>
   ledger.grants.reduce((total, grant) => total + grant.multisigIds.length, 0);
 
 const byOrigin = (left: ConnectedSite, right: ConnectedSite): number =>
   left.origin < right.origin ? -1 : left.origin > right.origin ? 1 : 0;
+
+const sitesOf = (ledger: GrantDocument): readonly ConnectedSite[] =>
+  ledger.grants
+    .map((grant) => ({
+      accountCount: grant.multisigIds.length,
+      accountIds: [],
+      multisigIds: [...grant.multisigIds],
+      origin: grant.origin,
+    }))
+    .sort(byOrigin);
 
 /**
  * In-memory ledger for tests and for a worker with no browser storage.
@@ -147,16 +181,11 @@ export const memoryMultisigGrantStore = (): MultisigOriginGrantStore => {
     async removeAccount(input) {
       write(withoutId(read(), input.multisigId), input.isAuthorized);
     },
-    async revoke(origin) {
-      ledger = {
-        grants: ledger.grants.filter((grant) => grant.origin !== origin),
-        schemaVersion: 1,
-      };
+    async revoke(origin, _credential, multisigId) {
+      ledger = withoutOriginAccess(ledger, origin, multisigId);
     },
     async sites() {
-      return read()
-        .grants.map((grant) => ({ accountCount: grant.multisigIds.length, origin: grant.origin }))
-        .sort(byOrigin);
+      return sitesOf(read());
     },
   };
 };
@@ -229,35 +258,41 @@ export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOrig
           requireAuthorized(input.isAuthorized);
         });
       }),
-    revoke: (origin, credential) =>
+    revoke: (origin, credential, multisigId) =>
       serialize(async () => {
         const current = await readForWrite(store, credential);
-        const grants = current.grants.filter((grant) => grant.origin !== origin);
-        if (grants.length === current.grants.length) return;
-        await store.write({ grants, schemaVersion: 1 }, credential);
+        const next = withoutOriginAccess(current, origin, multisigId);
+        if (idCount(next) === idCount(current)) return;
+        await store.write(next, credential);
       }),
     async sites(credential) {
-      const ledger = await readEncrypted(store, credential);
-      return ledger.grants
-        .map((grant) => ({ accountCount: grant.multisigIds.length, origin: grant.origin }))
-        .sort(byOrigin);
+      return sitesOf(await readEncrypted(store, credential));
     },
   };
 };
 
 /**
  * Merges single-signer and multisig connected-site rows. An origin present in
- * both is one row whose count is the sum.
+ * both is one row carrying both id lists, whose count is the sum.
  */
 export const mergeConnectedSites = (
   vaultSites: readonly ConnectedSite[],
   multisigSites: readonly ConnectedSite[],
 ): readonly ConnectedSite[] => {
-  const counts = new Map<string, number>();
+  const merged = new Map<string, ConnectedSite>();
   for (const site of [...vaultSites, ...multisigSites]) {
-    counts.set(site.origin, (counts.get(site.origin) ?? 0) + site.accountCount);
+    const existing = merged.get(site.origin);
+    merged.set(
+      site.origin,
+      existing
+        ? {
+            accountCount: existing.accountCount + site.accountCount,
+            accountIds: [...existing.accountIds, ...site.accountIds],
+            multisigIds: [...existing.multisigIds, ...site.multisigIds],
+            origin: site.origin,
+          }
+        : site,
+    );
   }
-  return [...counts.entries()]
-    .map(([origin, accountCount]) => ({ accountCount, origin }))
-    .sort(byOrigin);
+  return [...merged.values()].sort(byOrigin);
 };

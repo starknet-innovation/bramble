@@ -19,7 +19,9 @@
  * user still decides on.
  */
 
+import type { MessageRef } from "@bramble/core/i18n";
 import { normalizeHostname } from "@bramble/core/service-url";
+import { insightEnglish, insightText, isInsightText } from "./insight-messages";
 
 /**
  * Bundled baseline of known-bad registrable domains — the always-on offline floor.
@@ -115,8 +117,21 @@ export type OriginContext = {
  */
 export type OriginInsight = {
   readonly blocked: boolean;
+  /** English warnings, rendered from `warningTexts`. */
   readonly warnings: readonly string[];
+  /**
+   * The same warnings as references, index for index, for the UI to render in
+   * the reader's language. Absent when any would not pass the panel's bounds.
+   */
+  readonly warningTexts?: readonly MessageRef[];
 };
+
+// Decided as references; the English is derived so the two never disagree.
+const insightResult = (blocked: boolean, texts: readonly MessageRef[]): OriginInsight => ({
+  blocked,
+  warnings: texts.map(insightEnglish),
+  ...(texts.every(isInsightText) ? { warningTexts: texts } : {}),
+});
 
 const hostnameOf = (origin: string): string | null => {
   try {
@@ -204,15 +219,15 @@ const riskyTld = (host: string): string | null => {
 const hasPunycodeLabel = (host: string): boolean =>
   host.split(".").some((label) => label.startsWith("xn--"));
 
-const reputationWarning = (context: OriginContext): string | null => {
+const reputationWarning = (context: OriginContext): MessageRef | null => {
   if (context.connected === true) {
-    return "You have connected to this site before.";
+    return insightText("siteInsight.connectedBefore");
   }
   if (context.firstSeenAt === undefined || context.firstSeenAt === null) {
-    return "First time this wallet has seen this site; you have no prior history with it.";
+    return insightText("siteInsight.firstSeen");
   }
   if (typeof context.now === "number" && context.now - context.firstSeenAt < DAY_MS) {
-    return "This site was first seen less than a day ago.";
+    return insightText("siteInsight.newSite");
   }
   return null;
 };
@@ -248,33 +263,31 @@ export const originInsights = (
 ): OriginInsight => {
   const host = hostnameOf(origin);
   if (host === null) {
-    return { blocked: false, warnings: ["Origin could not be parsed as a valid site."] };
+    return insightResult(false, [insightText("siteInsight.unparseable")]);
   }
 
-  const warnings: string[] = [];
+  const warnings: MessageRef[] = [];
   const blocked = matchesAny(host, BLOCKED_DOMAINS) || hostInSet(host, dynamicBlocked);
   if (blocked) {
-    warnings.push("This domain is on the wallet blocklist of known phishing and scam sites.");
+    warnings.push(insightText("siteInsight.blocklisted"));
   }
   if (hasPunycodeLabel(host)) {
-    warnings.push(
-      "Domain uses punycode (internationalized characters) that can mimic a real name.",
-    );
+    warnings.push(insightText("siteInsight.punycode"));
   }
   const target = lookalikeTarget(host);
   if (target !== null) {
-    warnings.push(`Domain closely resembles ${target}; watch for a spoofed lookalike.`);
+    warnings.push(insightText("siteInsight.lookalike", { target }));
   }
   const tld = riskyTld(host);
   if (tld !== null) {
-    warnings.push(`The .${tld} top-level domain is frequently used for scams; be cautious.`);
+    warnings.push(insightText("siteInsight.riskyTld", { tld }));
   }
   const reputation = reputationWarning(context);
   if (reputation !== null) {
     warnings.push(reputation);
   }
 
-  return { blocked, warnings };
+  return insightResult(blocked, warnings);
 };
 
 /**

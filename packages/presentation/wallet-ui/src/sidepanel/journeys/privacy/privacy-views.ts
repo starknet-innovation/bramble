@@ -15,17 +15,19 @@ import {
   PRIVACY_OTHER_WALLET,
   PRIVACY_OTHER_WALLET_NEXT,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
+import { t, th } from "../../../i18n/messages";
+import { reviewLines } from "../../../i18n/review";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, formatFri, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
-import {
-  PRIVACY_NETWORK_UNAVAILABLE,
-  type PrivacyBlockerKind,
-  type PrivacyDisclosureState,
-  type PrivacyJourneyState,
+import type {
+  PrivacyBlockerKind,
+  PrivacyDisclosureState,
+  PrivacyJourneyState,
 } from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
@@ -34,8 +36,7 @@ import { type PreparationProgress, preparationProgressText } from "./privacy-pre
  * proves at review and a relayed send at confirm, both inside the Send flow,
  * which imports this rather than spelling the guidance a second way.
  */
-export const PROVING_HINT =
-  "Keep the wallet open. Proving may take longer than a normal token transfer.";
+export const provingHint = (): string => t("privacy.provingHint");
 
 /**
  * The liveness line of a wait: the job's phase and elapsed time when it has
@@ -45,8 +46,9 @@ export const PROVING_HINT =
  */
 export const privacyLivenessText = (
   progress: PreparationProgress | null | undefined,
-  hint: string = PROVING_HINT,
-): string => (progress ? `${preparationProgressText(progress)}. ${hint}` : hint);
+  hint: string = provingHint(),
+): string =>
+  progress ? t("privacy.liveness", { hint, progress: preparationProgressText(progress) }) : hint;
 
 type PreparingStep = Extract<PrivacyJourneyState, { readonly stage: "preparing" }>["step"];
 
@@ -61,25 +63,32 @@ type PreparingStep = Extract<PrivacyJourneyState, { readonly stage: "preparing" 
 // abandoned preparation — but the proof is discarded, which is worth a line
 // before someone spends minutes on it twice. The proof wait also says nothing
 // is signed yet: minutes of "preparing" otherwise read as signing underway.
-const PREPARING_COPY: Readonly<
-  Record<PreparingStep, { readonly body: string; readonly hint: string; readonly title: string }>
-> = {
-  discovering: {
-    body: "",
-    hint: "Keep the wallet open.",
-    title: "Checking private balances",
-  },
-  proving: {
-    body: "No transaction is signed or sent until you confirm the review. Going back discards this preparation.",
-    hint: PROVING_HINT,
-    title: "Preparing to go private",
-  },
-};
+const preparingCopy = (
+  step: PreparingStep,
+): { readonly body: string; readonly hint: string; readonly title: string } =>
+  step === "discovering"
+    ? {
+        body: "",
+        hint: t("privacy.preparing.discovering.hint"),
+        title: t("privacy.preparing.discovering.title"),
+      }
+    : {
+        body: t("privacy.preparing.proving.body"),
+        hint: provingHint(),
+        title: t("privacy.preparing.proving.title"),
+      };
+
+const backToWallet = (): string =>
+  button({
+    attributes: { id: "privacy-cancel" },
+    label: t("privacy.action.backToWallet"),
+    variant: "secondary",
+  });
 
 const preparing = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "preparing" }>,
 ): string => {
-  const copy = PREPARING_COPY[journey.step];
+  const copy = preparingCopy(journey.step);
   const proving = journey.step === "proving";
   return `
   <section class="privacy-working" role="status" aria-live="polite" data-privacy-preparing="${journey.step}">
@@ -87,14 +96,14 @@ const preparing = (
     <h2>${escapeHtml(copy.title)}</h2>
     ${copy.body === "" ? "" : `<p>${escapeHtml(copy.body)}</p>`}
     <ol class="privacy-task-list">
-      <li data-state="${proving ? "done" : "active"}"><span></span>Check registration</li>
-      <li data-state="${proving ? "active" : "pending"}"><span></span>Build registration proof</li>
-      <li data-state="pending"><span></span>Review and confirm</li>
-      <li data-state="pending"><span></span>Broadcast to Starknet</li>
+      <li data-state="${proving ? "done" : "active"}"><span></span>${th("privacy.task.checkRegistration")}</li>
+      <li data-state="${proving ? "active" : "pending"}"><span></span>${th("privacy.task.buildProof")}</li>
+      <li data-state="pending"><span></span>${th("privacy.task.reviewAndConfirm")}</li>
+      <li data-state="pending"><span></span>${th("privacy.task.broadcast")}</li>
     </ol>
     <p class="hint" id="privacy-liveness">${escapeHtml(privacyLivenessText(journey.progress, copy.hint))}</p>
     <div class="privacy-actions">
-      ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
+      ${backToWallet()}
     </div>
   </section>`;
 };
@@ -106,9 +115,7 @@ const preparing = (
 const activationOutcome = (
   preparation: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>["preparation"],
 ): string =>
-  preparation.poolFeeFri
-    ? "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK."
-    : "Going private sets up a private balance for this account.";
+  t(preparation.poolFeeFri ? "review.privacy.outcomeWithPoolFee" : "review.privacy.outcome");
 
 const preparationDetails = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>,
@@ -118,49 +125,59 @@ const preparationDetails = (
   return `<section class="privacy-review">
     <header class="decision-head">
       <span class="decision-seal">${icon("shield")}</span>
-      <span><p class="decision-label">Reviewed intent</p><h2>Activate private balances</h2></span>
+      <span><p class="decision-label">${th("review.privacy.reviewedIntent")}</p><h2>${th("review.privacy.activate")}</h2></span>
     </header>
-    <section class="decision-layer decision-outcome" aria-label="What will happen">
-      <p class="decision-label">What will happen</p>
+    <section class="decision-layer decision-outcome" aria-label="${th("review.privacy.whatWillHappen")}">
+      <p class="decision-label">${th("review.privacy.whatWillHappen")}</p>
       <p>${escapeHtml(activationOutcome(preparation))}</p>
     </section>
-    ${reviewPanel([
-      "Registration is public. It stores this account's viewing-key commitment on-chain and opens its private channel. It does not reveal the viewing key or your private balance.",
-    ])}
-    <section class="decision-layer decision-boundary" aria-label="Cost">
-      <p class="decision-label">Cost</p>
+    ${reviewPanel([t("review.privacy.registrationPublic")])}
+    <section class="decision-layer decision-boundary" aria-label="${th("review.privacy.cost")}">
+      <p class="decision-label">${th("review.privacy.cost")}</p>
       ${receipt([
         {
-          label: "Maximum network fee",
+          label: t("review.privacy.maxFee"),
           value: preparation.networkFee
             ? formatFeeEstimate(preparation.networkFee)
-            : preparation.route === "private-relay"
-              ? "Sponsored"
-              : "Unavailable",
+            : t(
+                preparation.route === "private-relay"
+                  ? "review.privacy.sponsored"
+                  : "review.privacy.unavailable",
+              ),
         },
         ...(preparation.poolFeeFri
-          ? [{ label: "Pool fee", value: `${formatFri(preparation.poolFeeFri)} from public STRK` }]
+          ? [
+              {
+                label: t("review.privacy.poolFee"),
+                value: t("review.privacy.poolFeeValue", {
+                  amount: formatFri(preparation.poolFeeFri),
+                }),
+              },
+            ]
           : []),
         {
-          label: "Submission",
-          value:
-            preparation.route === "private-relay" ? "Private relay" : "Public account transaction",
+          label: t("review.privacy.submission"),
+          value: t(
+            preparation.route === "private-relay"
+              ? "review.privacy.privateRelay"
+              : "review.privacy.publicAccountTransaction",
+          ),
         },
       ])}
     </section>
     <details class="send-review-disclosure" data-disclosure="privacy-activation-technical">
-      <summary><span>Technical details</span>${icon("chevronDown")}</summary>
+      <summary><span>${th("review.privacy.technical")}</span>${icon("chevronDown")}</summary>
       <div class="send-review-disclosure-body">
     ${receipt([
-      { label: "Network", value: networkDisplayName(status.network) },
+      { label: t("review.privacy.network"), value: networkDisplayName(status.network) },
       ...(preparation.authorization
         ? [
             {
-              label: "Public approval calls",
+              label: t("review.privacy.publicApprovalCalls"),
               value: String(preparation.authorization.publicCallCount),
             },
             {
-              label: "Authorization window",
+              label: t("review.privacy.authorizationWindow"),
               value: `${preparation.authorization.executeAfter} → ${preparation.authorization.executeBefore}`,
               valueStyle: "code" as const,
             },
@@ -168,9 +185,9 @@ const preparationDetails = (
               action: {
                 attributes: { "data-copy": addressText(preparation.authorization.caller) },
                 icon: "copy" as const,
-                label: "Copy authorization caller address",
+                label: t("review.privacy.copyCaller"),
               },
-              label: "Authorization caller",
+              label: t("review.privacy.authorizationCaller"),
               value: addressLabel(preparation.authorization.caller),
               valueStyle: "code" as const,
             },
@@ -180,15 +197,17 @@ const preparationDetails = (
         action: {
           attributes: { "data-copy": addressText(preparation.poolAddress) },
           icon: "copy",
-          label: "Copy privacy pool address",
+          label: t("review.privacy.copyPool"),
         },
-        label: "Privacy pool",
+        label: t("review.privacy.pool"),
         value: addressLabel(preparation.poolAddress),
         valueStyle: "code",
       },
     ])}
     <ul class="privacy-facts">
-      ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}
+      ${reviewLines(preparation.summaries, preparation.summaryTexts)
+        .map((summary) => `<li>${escapeHtml(summary)}</li>`)
+        .join("")}
     </ul>
       </div>
     </details>
@@ -196,7 +215,7 @@ const preparationDetails = (
     ${button({
       attributes: { id: "privacy-confirm" },
       icon: "shield",
-      label: "Activate private balances",
+      label: t("review.privacy.activate"),
     })}
   </section>`;
 };
@@ -204,13 +223,13 @@ const preparationDetails = (
 const working = (journey: Extract<PrivacyJourneyState, { readonly stage: "working" }>): string => `
   <section class="privacy-working" role="status" aria-live="polite">
     ${liquidDots("privacy")}${liquidDotsFilter("privacy")}
-    <h2>Activating private balances</h2>
-    <p>Generating the registration proof, waiting for your authorization, then broadcasting.</p>
+    <h2>${th("privacy.working.title")}</h2>
+    <p>${th("privacy.working.body")}</p>
     <ol class="privacy-task-list">
-      <li data-state="done"><span></span>Review complete</li>
-      <li data-state="active"><span></span>Generate proof and authorize</li>
-      <li data-state="pending"><span></span>Broadcast to Starknet</li>
-      <li data-state="pending"><span></span>Discover private balance</li>
+      <li data-state="done"><span></span>${th("privacy.task.reviewComplete")}</li>
+      <li data-state="active"><span></span>${th("privacy.task.generateAndAuthorize")}</li>
+      <li data-state="pending"><span></span>${th("privacy.task.broadcast")}</li>
+      <li data-state="pending"><span></span>${th("privacy.task.discoverBalance")}</li>
     </ol>
     <p class="hint" id="privacy-liveness">${escapeHtml(privacyLivenessText(journey.progress))}</p>
   </section>`;
@@ -218,11 +237,11 @@ const working = (journey: Extract<PrivacyJourneyState, { readonly stage: "workin
 const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "success" }>): string => `
   <section class="privacy-outcome privacy-success" role="status" aria-live="polite">
     <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg></span>
-    <h2>Registered</h2>
-    <p>You can now shield ${escapeHtml(journey.symbol)} from its asset screen.</p>
+    <h2>${th("privacy.success.title")}</h2>
+    <p>${th("privacy.success.body", { symbol: journey.symbol })}</p>
     <div class="privacy-actions">
-      ${button({ attributes: { id: "privacy-done" }, label: "Back to wallet", variant: "secondary" })}
-      ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: "View activity", variant: "secondary" })}
+      ${button({ attributes: { id: "privacy-done" }, label: t("privacy.action.backToWallet"), variant: "secondary" })}
+      ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: t("privacy.action.viewActivity"), variant: "secondary" })}
     </div>
   </section>`;
 
@@ -236,27 +255,23 @@ const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failur
   return `
   <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive" data-severity="${journey.severity}">
     <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="privacy-unknown-mark" d="M28 17v13m0 8v1" /></svg></span>
-    <h2>${warning ? "Status unknown" : "Private transaction not completed"}</h2>
+    <h2>${warning ? th("privacy.failure.statusUnknown") : th("privacy.failure.notCompleted")}</h2>
     <span class="privacy-outcome-reason">
       <p>${escapeHtml(journey.error)}</p>
-      ${inlineCopyButton(journey.errorDetails || journey.error, "Copy error details", { id: "privacy-failure-copy-error" })}
+      ${inlineCopyButton(journey.errorDetails || journey.error, t("privacy.failure.copyDetails"), { id: "privacy-failure-copy-error" })}
     </span>
-    ${
-      warning
-        ? ""
-        : '<p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>'
-    }
+    ${warning ? "" : `<p class="hint">${th("privacy.failure.noRetry")}</p>`}
     <div class="privacy-actions">
       ${
         warning
           ? button({
               attributes: { "data-view": "activity" },
               icon: "activity",
-              label: "View activity",
+              label: t("privacy.action.viewActivity"),
             })
-          : button({ attributes: { id: "privacy-retry" }, label: "Try again" })
+          : button({ attributes: { id: "privacy-retry" }, label: t("privacy.action.tryAgain") })
       }
-      ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
+      ${backToWallet()}
     </div>
   </section>`;
 };
@@ -269,66 +284,76 @@ type BlockedCopy = {
 
 // One screen per prerequisite, each ending in the next thing to do. The
 // runtime's own message is shown beneath as the specific reason, so the
-// classification never hides what was actually reported.
-const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
-  deploy: {
-    action: button({
-      attributes: { "data-privacy-deploy-register": "" },
-      icon: "shield",
-      label: "Shield",
-    }),
-    body: "Registration is a transaction sent by this account, so its contract has to exist on Starknet first. Deploying and registering are two transactions, each with a network fee.",
-    title: "Deploy this account first",
-  },
-  fund: {
-    action: button({
-      attributes: { "data-view": "receive" },
-      icon: "qrCode",
-      label: "Fund with STRK",
-    }),
-    body: "Going private requires your account to be funded and activated.",
-    title: "Initialize your account",
-  },
-  ledger: {
-    action: "",
-    body: "Private balances need a viewing key that a Ledger device does not expose to the wallet. Use a software account to shield.",
-    title: "Not available for Ledger accounts",
-  },
-  network: {
-    action: button({
-      attributes: { "data-view": "network" },
-      icon: "globe",
-      label: "Choose a network",
-    }),
-    body: "Switch to a network with a privacy pool.",
-    title: PRIVACY_NETWORK_UNAVAILABLE,
-  },
-  "other-wallet": {
-    action: "",
-    body: PRIVACY_OTHER_WALLET_NEXT,
-    title: PRIVACY_OTHER_WALLET,
-  },
-  pending: {
-    action: button({
-      attributes: { "data-view": "activity" },
-      icon: "activity",
-      label: "View activity",
-    }),
-    body: "Your registration is on Starknet, waiting to be indexed. Shielding unlocks on its own — don't register again.",
-    title: "Registration is on its way",
-  },
-  service: {
-    action: button({ attributes: { id: "privacy-retry" }, icon: "refresh", label: "Try again" }),
-    body: "The privacy service could not be reached or refused the request. Nothing was submitted.",
-    title: "Private balances unavailable",
-  },
+// classification never hides what was actually reported. Built per render so
+// the copy follows the active language.
+const blockedCopy = (kind: PrivacyBlockerKind): BlockedCopy => {
+  switch (kind) {
+    case "deploy":
+      return {
+        action: button({
+          attributes: { "data-privacy-deploy-register": "" },
+          icon: "shield",
+          label: t("privacy.action.shield"),
+        }),
+        body: t("privacy.blocked.deploy.body"),
+        title: t("privacy.blocked.deploy.title"),
+      };
+    case "fund":
+      return {
+        action: button({
+          attributes: { "data-view": "receive" },
+          icon: "qrCode",
+          label: t("privacy.action.fundWithStrk"),
+        }),
+        body: t("privacy.blocked.fund.body"),
+        title: t("privacy.blocked.fund.title"),
+      };
+    case "ledger":
+      return {
+        action: "",
+        body: t("privacy.blocked.ledger.body"),
+        title: t("privacy.blocked.ledger.title"),
+      };
+    case "network":
+      return {
+        action: button({
+          attributes: { "data-view": "network" },
+          icon: "globe",
+          label: t("privacy.action.chooseNetwork"),
+        }),
+        body: t("privacy.blocked.network.body"),
+        title: t("privacy.blocked.network.title"),
+      };
+    case "other-wallet":
+      return { action: "", body: PRIVACY_OTHER_WALLET_NEXT, title: PRIVACY_OTHER_WALLET };
+    case "pending":
+      return {
+        action: button({
+          attributes: { "data-view": "activity" },
+          icon: "activity",
+          label: t("privacy.action.viewActivity"),
+        }),
+        body: t("privacy.blocked.pending.body"),
+        title: t("privacy.blocked.pending.title"),
+      };
+    case "service":
+      return {
+        action: button({
+          attributes: { id: "privacy-retry" },
+          icon: "refresh",
+          label: t("privacy.action.tryAgain"),
+        }),
+        body: t("privacy.blocked.service.body"),
+        title: t("privacy.blocked.service.title"),
+      };
+  }
 };
 
 const blocked = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>,
   disclosure: PrivacyDisclosureState | null,
 ): string => {
-  const copy = BLOCKED_COPY[journey.blocker.kind];
+  const copy = blockedCopy(journey.blocker.kind);
   // The refusal names the missing STRK but not the amount. The fund screen is
   // the one place the reader can act on a number, so it states the pool fee the
   // registration needs when the disclosure has read one; a network-fee estimate
@@ -337,13 +362,13 @@ const blocked = (
   const requirement =
     poolFeeFri === undefined
       ? ""
-      : `<p class="hint">Registration needs ${escapeHtml(formatFri(poolFeeFri))} for the pool fee, plus a network fee.</p>`;
+      : `<p class="hint">${th("privacy.blocked.poolFeeNeeded", { fee: formatFri(poolFeeFri) })}</p>`;
   // The other-wallet screen is the two approved lines. The action refusal is a
   // different sentence and is not repeated under them.
   const reason =
     journey.blocker.kind === "other-wallet"
       ? ""
-      : `<p class="hint">${escapeHtml(journey.blocker.message)}</p>`;
+      : `<p class="hint">${escapeHtml(localizeErrorCopy(journey.blocker.message))}</p>`;
   return `
   <section class="privacy-outcome privacy-blocked" role="status" aria-live="polite" data-privacy-blocker="${journey.blocker.kind}">
     <span class="privacy-outcome-mark" aria-hidden="true">${icon("shield")}</span>
@@ -353,7 +378,7 @@ const blocked = (
     ${requirement}
     <div class="privacy-actions">
       ${copy.action}
-      ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
+      ${backToWallet()}
     </div>
   </section>`;
 };
@@ -385,14 +410,14 @@ export const privacyFlow = (
               ? success(journey)
               : journey.stage === "failure"
                 ? failure(journey)
-                : emptyState("Choose an asset to begin.");
+                : emptyState(t("privacy.empty.chooseAsset"));
   return (
     flowHeader(
       journey.stage === "activate-review" ||
         journey.stage === "blocked" ||
         journey.stage === "preparing"
-        ? "Go private"
-        : "Private balance",
+        ? t("privacy.header.goPrivate")
+        : t("privacy.header.privateBalance"),
       status,
       token?.symbol ?? "STRK20",
     ) + flowScreen("privacy", `<section class="section privacy-flow">${body}</section>`)

@@ -48,14 +48,42 @@ const byOrigin = (left: ConnectedSite, right: ConnectedSite): number => {
 };
 
 /**
- * Derives the connected-sites list (origin plus granted account count) from a
+ * Removes access from `origin`'s grant: the whole grant without `accountId`,
+ * otherwise only that id, dropping the grant once it has none left. Only ever
+ * removes; an origin or id that is not granted returns `grants` itself, so the
+ * caller can skip the write by identity.
+ */
+export const withoutOriginAccess = (
+  grants: Vault["originGrants"],
+  origin: string,
+  accountId?: string,
+): Vault["originGrants"] => {
+  const grant = grants.find((stored) => stored.origin === origin);
+  if (!grant || (accountId !== undefined && !grant.accountIds.includes(accountId))) {
+    return grants;
+  }
+  const accountIds =
+    accountId === undefined ? [] : grant.accountIds.filter((id) => id !== accountId);
+  return accountIds.length === 0
+    ? grants.filter((stored) => stored !== grant)
+    : grants.map((stored) => (stored === grant ? { ...grant, accountIds } : stored));
+};
+
+/**
+ * Derives the connected-sites list (origin plus granted account ids) from a
  * decrypted vault, ordered by origin for stable rendering. Reads the stored
  * grants directly, not {@link grantedAccountIdsFor}: the permissions manager
  * lists every site the user has ever authorised, and the account count is the
- * grant's history, independently of which account is active. Reused by the
- * connected-sites reader and by revocation responses.
+ * grant's history, independently of which account is active. The ids go only to
+ * the trusted wallet UI, which lists them so each can be disconnected. Reused
+ * by the connected-sites reader and by revocation responses.
  */
 export const connectedSitesFromVault = (vault: Vault): readonly ConnectedSite[] =>
   vault.originGrants
-    .map((grant) => ({ accountCount: grant.accountIds.length, origin: grant.origin }))
+    .map((grant) => ({
+      accountCount: grant.accountIds.length,
+      accountIds: [...grant.accountIds],
+      multisigIds: [],
+      origin: grant.origin,
+    }))
     .sort(byOrigin);

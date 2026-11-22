@@ -15,6 +15,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { inputControl } from "@bramble/ui-kit/fields";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t, th } from "../../i18n/messages";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { rankTokenQueryMatch } from "./token-search";
 
@@ -58,11 +59,11 @@ const optionRow = (
 
 const searchField = (label: string): string =>
   inputControl({
-    ariaLabel: `Search ${label.toLowerCase()}`,
+    ariaLabel: t("shell.search.label", { label: label.toLowerCase() }),
     attributes: { "data-token-search": "" },
     autocomplete: "off",
     className: "token-dropdown-search",
-    placeholder: "Search",
+    placeholder: t("shell.search.placeholder"),
     spellcheck: false,
     type: "search",
   });
@@ -84,7 +85,7 @@ const groupMarkup = (
     <div class="token-dropdown-options" role="listbox" aria-labelledby="${escapeHtml(labelId)}">
       ${group.options.map((option, index) => optionRow(option, selectedId, index)).join("")}
     </div>
-    ${group.search ? '<p class="token-dropdown-empty" data-token-search-empty hidden>No token matches that search.</p>' : ""}
+    ${group.search ? `<p class="token-dropdown-empty" data-token-search-empty hidden>${th("shell.search.noMatch")}</p>` : ""}
   </div>`;
 };
 
@@ -106,7 +107,7 @@ export const tokenDropdownOptions = (
   const filled = groups.filter((group) => group.options.length > 0);
   const body =
     filled.length === 0
-      ? '<p class="token-dropdown-empty">No tokens available.</p>'
+      ? `<p class="token-dropdown-empty">${th("shell.search.noTokens")}</p>`
       : filled.map((group, index) => groupMarkup(group, index, panelId, selectedId)).join("");
   return action === null
     ? body

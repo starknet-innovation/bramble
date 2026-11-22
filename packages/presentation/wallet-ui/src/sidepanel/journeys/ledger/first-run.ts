@@ -9,6 +9,7 @@
 
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
+import { t } from "../../../i18n/messages";
 import { showToast } from "../../shared/dom";
 import { applyPassphraseMeter, bindEnterToContinue } from "../onboarding/passphrase-meter";
 import { bindPassphraseReveal } from "../onboarding/passphrase-reveal";
@@ -58,10 +59,10 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       const passphraseValid = isVaultPassphrase(value);
       result.textContent = !passphraseValid
         ? valueLength > 0
-          ? `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters.`
+          ? t("ledger.firstRun.tooShort", { min: String(MIN_VAULT_PASSPHRASE_LENGTH) })
           : ""
         : confirmation.length > 0 && value !== confirmation
-          ? "Enter the same passphrase in both fields."
+          ? t("onboarding.passphrase.sameInBoth")
           : "";
     }
     applyPassphraseMeter(
@@ -80,7 +81,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   button?.addEventListener("click", () => {
     if (!passphraseOk()) {
       showToast(
-        `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+        t("ledger.firstRun.tooShortToast", { min: String(MIN_VAULT_PASSPHRASE_LENGTH) }),
         "error",
         form,
       );

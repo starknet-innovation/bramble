@@ -13,9 +13,17 @@ import { BRV_FIXTURES } from "./sepolia-stage-brv";
 import { LDG_FIXTURES } from "./sepolia-stage-ldg";
 import { RDY_FIXTURES } from "./sepolia-stage-rdy";
 import { SCR_FIXTURES } from "./sepolia-stage-scr";
+import { TXN_FIXTURES } from "./sepolia-stage-txn";
 
 await runSepoliaFixtures(
-  [...BRM_FIXTURES, ...SCR_FIXTURES, ...BRV_FIXTURES, ...RDY_FIXTURES, ...LDG_FIXTURES],
+  [
+    ...BRM_FIXTURES,
+    ...SCR_FIXTURES,
+    ...BRV_FIXTURES,
+    ...RDY_FIXTURES,
+    ...LDG_FIXTURES,
+    ...TXN_FIXTURES,
+  ],
   process.argv[2],
 );
 console.log("\nSepolia stage done; manifest written");

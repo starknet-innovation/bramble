@@ -22,6 +22,7 @@ import { textField } from "@bramble/ui-kit/fields";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { addressLabel, addressText } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import {
   accountAvatar,
@@ -50,7 +51,7 @@ const accountNameRow = (
       ${textField({
         attributes: { "data-account-name": stored.id },
         autocomplete: "off",
-        label: `Name for ${generated}`,
+        label: t("settings.account.nameFor", { name: generated }),
         labelHidden: true,
         maxlength: NAME_MAXLENGTH,
         name: "label",
@@ -59,7 +60,7 @@ const accountNameRow = (
       })}
       <span class="account-name-meta">
         <code title="${escapeHtml(addressText(stored.address))}">${escapeHtml(addressLabel(stored.address))}</code>
-        ${inlineCopyButton(addressText(stored.address), `Copy ${generated} address`)}
+        ${inlineCopyButton(addressText(stored.address), t("settings.account.copyAddress", { name: generated }))}
         ${accountGroupsLine(memberGroups)}
       </span>
     </div>
@@ -69,11 +70,11 @@ const accountNameRow = (
         // row offers it directly. The account keeps its keys and its grants and
         // comes back from the "Hidden accounts" section below.
         attributes: {
-          "aria-label": `Hide ${generated}`,
+          "aria-label": t("settings.account.hideNamed", { name: generated }),
           "data-hide-account": stored.id,
         },
         icon: "eyeOff",
-        label: "Hide",
+        label: t("settings.account.hide"),
         size: "small",
         type: "button",
         variant: "ghost",
@@ -82,9 +83,9 @@ const accountNameRow = (
         // One "Save" per row reads as a list of identical controls to a screen
         // reader, so each carries the account it saves. The accessible name still
         // starts with the visible word, which is what voice control matches on.
-        attributes: { "aria-label": `Save name for ${generated}` },
+        attributes: { "aria-label": t("settings.account.saveNameFor", { name: generated }) },
         icon: "check",
-        label: "Save",
+        label: t("settings.account.save"),
         size: "small",
         type: "submit",
         variant: "secondary",
@@ -110,8 +111,8 @@ export const accountNamesSection = (
     (stored) => stored.networkId === status.networkId && !hidden.has(stored.id),
   );
   return `<section class="section">
-    <p class="eyebrow">Account names</p>
-    <p class="hint">Leave a name empty to use the generated one.</p>
+    <p class="eyebrow">${th("settings.account.namesTitle")}</p>
+    <p class="hint">${th("settings.account.namesHint")}</p>
     ${
       networkAccounts.length === 0
         ? noAccountEmpty(status)
@@ -122,11 +123,11 @@ export const accountNamesSection = (
     ${menuRow({
       attributes: {
         id: "new-account",
-        title: `Derives the next account on ${status.network} from this wallet's recovery phrase.`,
+        title: t("settings.account.addAccountTitle", { network: status.network }),
       },
       className: "row-action",
       icon: "plus",
-      label: "Add account",
+      label: t("settings.account.addAccount"),
     })}
     <p id="label-result" role="status"></p>
     <p id="new-account-result" role="status"></p>
@@ -153,8 +154,8 @@ export const hiddenAccountsSection = (
     return "";
   }
   return `<section class="section">
-    <p class="eyebrow">Hidden accounts</p>
-    <p class="hint">Hidden accounts stay in the wallet, out of the drawer and send pickers.</p>
+    <p class="eyebrow">${th("settings.account.hiddenTitle")}</p>
+    <p class="hint">${th("settings.account.hiddenHint")}</p>
     <div class="account-name-list">
       ${hiddenAccounts
         .map((stored) => {
@@ -170,11 +171,11 @@ export const hiddenAccountsSection = (
             <span class="account-name-actions">
               ${button({
                 attributes: {
-                  "aria-label": `Show ${generated}`,
+                  "aria-label": t("settings.account.showNamed", { name: generated }),
                   "data-reveal-account": stored.id,
                 },
                 icon: "eye",
-                label: "Show",
+                label: t("settings.account.show"),
                 size: "small",
                 type: "button",
                 variant: "secondary",

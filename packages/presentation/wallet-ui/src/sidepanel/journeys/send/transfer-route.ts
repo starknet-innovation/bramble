@@ -24,6 +24,7 @@ import {
 } from "@bramble/transactions/send-routes";
 import { STRK_TOKEN_ADDRESS, STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
 import { PRIVACY_OTHER_WALLET_ACTION } from "@bramble/wallet-protocol/privacy-blocker";
+import { t } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFri } from "../../shared/parts";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
@@ -161,7 +162,7 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
     feeTokenDecimals: decimalsOfToken(context, feeModel.feeToken),
     feeTokenSymbol:
       symbolOfToken(context, feeModel.feeToken) ??
-      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : "fee token"),
+      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : t("review.send.fee.token")),
     poolFeeFri: state?.poolFeeFri ? rawBalance(state.poolFeeFri) : null,
     recipient: fields.recipient || null,
     recipientRegistration: context.recipientRegistration,
@@ -190,10 +191,10 @@ export const resolveTransferRoute = (context: TransferRouteContext): SendRouteRe
     return { blocked: { pending: false, reason: PRIVACY_OTHER_WALLET_ACTION } };
   }
   if (context.privacy.error && context.fields.source !== "public") {
-    return { blocked: { pending: false, reason: "Private balances are unavailable right now" } };
+    return { blocked: { pending: false, reason: t("send.route.privateUnavailable") } };
   }
   if (context.privacy.error && context.fields.destination === "private") {
-    return { blocked: { pending: false, reason: "Private balances are unavailable right now" } };
+    return { blocked: { pending: false, reason: t("send.route.privateUnavailable") } };
   }
   return resolveSendRoute(sendRouteInputFor(context));
 };
@@ -212,7 +213,10 @@ export const transferPoolFeeAmount = (context: TransferRouteContext): string | n
   if (sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)) return formatFri(amount.toString());
   return input.feeTokenDecimals === null
     ? null
-    : `up to ${formatTokenAmount(amount, input.feeTokenDecimals)} ${input.feeTokenSymbol}`;
+    : t("review.send.fee.upTo", {
+        amount: formatTokenAmount(amount, input.feeTokenDecimals),
+        symbol: input.feeTokenSymbol,
+      });
 };
 
 /**

@@ -10,13 +10,13 @@ import {
   STRK_TOKEN_ADDRESS,
   STRK_TOKEN_DECIMALS,
 } from "@bramble/wallet-model/networks";
+import { checkDisplayedStrkFee } from "../live/fee-cap";
 import {
   isValidSignatureCalldata,
   isValidSignatureResult,
   VALID_SIGNATURE,
 } from "./local-mainnet-chain";
 import {
-  checkDisplayedStrkFee,
   gaslessOfferWithinCap,
   MAX_TX_FEE_STRK,
   SELF_TRANSFER_AMOUNT,
@@ -33,13 +33,15 @@ describe("local mainnet spend caps", () => {
   });
 
   test("accepts a STRK fee on the cap and refuses a larger one or a missing one", () => {
-    expect(checkDisplayedStrkFee("Estimated fee: 0.02 STRK")).toEqual({
+    expect(checkDisplayedStrkFee("Estimated fee: 0.02 STRK", MAX_TX_FEE_STRK)).toEqual({
       kind: "ok",
       raw: 20_000_000_000_000_000n,
     });
-    expect(checkDisplayedStrkFee("Estimated fee: 0.020001 STRK").kind).toBe("over");
-    expect(checkDisplayedStrkFee("Estimating network fee…").kind).toBe("missing");
-    expect(checkDisplayedStrkFee("Estimated fee: 1 WEI").kind).toBe("missing");
+    expect(checkDisplayedStrkFee("Estimated fee: 0.020001 STRK", MAX_TX_FEE_STRK).kind).toBe(
+      "over",
+    );
+    expect(checkDisplayedStrkFee("Estimating network fee…", MAX_TX_FEE_STRK).kind).toBe("missing");
+    expect(checkDisplayedStrkFee("Estimated fee: 1 WEI", MAX_TX_FEE_STRK).kind).toBe("missing");
   });
 
   test("caps known gasless symbols and refuses STRK and unknown tokens", () => {

@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Json } from "@bramble/core/json";
 import { providerInvokeCalls } from "@bramble/wallet-protocol/invoke";
+import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
 import { readApiVersionParam } from "@bramble/wallet-protocol/results";
 import { readTypedDataParam } from "@bramble/wallet-protocol/typed-data-params";
 
@@ -71,10 +72,17 @@ describe("providerInvokeCalls calldata arms", () => {
     ).toBeNull();
   });
 
-  test("rejects call-count and calldata fan-out above the shared limits", () => {
+  test("accepts the call cap, rejects one more, and rejects calldata past the array budget", () => {
     const call = { calldata: [], contractAddress: "0x1", entrypoint: "t" };
     expect(
-      providerInvokeCalls(asJson({ calls: Array.from({ length: 17 }, () => call) })),
+      providerInvokeCalls(
+        asJson({ calls: Array.from({ length: INVOKE_LIMITS.calls }, () => call) }),
+      ),
+    ).toHaveLength(INVOKE_LIMITS.calls);
+    expect(
+      providerInvokeCalls(
+        asJson({ calls: Array.from({ length: INVOKE_LIMITS.calls + 1 }, () => call) }),
+      ),
     ).toBeNull();
     expect(
       providerInvokeCalls(
@@ -82,7 +90,7 @@ describe("providerInvokeCalls calldata arms", () => {
           calls: [
             {
               ...call,
-              calldata: Array.from({ length: 4_097 }, () => "0x1"),
+              calldata: Array.from({ length: INVOKE_LIMITS.calldataFelts + 1 }, () => "0x1"),
             },
           ],
         }),
