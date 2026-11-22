@@ -74,9 +74,10 @@ internal fun resolveStarkName(
     var sawOtherChain = false
     val answered =
         body?.let { request ->
-            network.rpcUrls.firstNotNullOfOrNull { url ->
-                when (provesChain(URL(url), network.network, post, calls)) {
-                    true -> asked(URL(url), request, name, post, calls)
+            // A URL that does not parse is skipped: its exception would carry the URL (and any key).
+            network.rpcUrls.mapNotNull { runCatching { URL(it) }.getOrNull() }.firstNotNullOfOrNull { url ->
+                when (provesChain(url, network.network, post, calls)) {
+                    true -> asked(url, request, name, post, calls)
                     false -> null.also { sawOtherChain = true }
                     null -> null
                 }

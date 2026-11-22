@@ -1,5 +1,6 @@
 package org.bramble.wallet
 
+import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
 import org.junit.Assert.assertEquals
@@ -7,7 +8,7 @@ import org.junit.Test
 
 /**
  * Every RPC read takes its endpoints from the wallet's `networks()` (the override first), and from
- * the bundled catalog only when the core refuses that (no wallet yet, or locked).
+ * the bundled catalog only before a wallet exists; with a wallet but no session, from none at all.
  */
 class NetworkEndpointsTest {
     private val bundled =
@@ -33,8 +34,15 @@ class NetworkEndpointsTest {
     }
 
     @Test
-    fun lockedOrNoWalletUsesBundled() {
-        val picked = endpointNetwork(NetworkId.SEPOLIA, { error("locked") }, { bundled })
+    fun noWalletUsesBundled() {
+        val picked = endpointNetwork(NetworkId.SEPOLIA, { throw CoreException.NoWallet() }, { bundled })
         assertEquals(listOf("https://b.example"), picked.rpcUrls)
+    }
+
+    @Test
+    fun lockedFailsClosed() {
+        val picked = endpointNetwork(NetworkId.SEPOLIA, { throw CoreException.Locked() }, { bundled })
+        assertEquals(emptyList<String>(), picked.rpcUrls)
+        assertEquals(NetworkId.SEPOLIA, picked.network)
     }
 }

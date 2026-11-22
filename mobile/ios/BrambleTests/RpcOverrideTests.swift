@@ -26,15 +26,19 @@ final class RpcOverrideTests: XCTestCase {
         XCTAssertEqual(endpointNetwork(.sepolia, wallet: core).rpcUrls, try sepolia().rpcUrls)
     }
 
-    func testLockedOrNoWalletUsesTheBundledEndpoints() throws {
+    func testNoWalletUsesTheBundledEndpointsAndLockedNone() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let fresh = try WalletCore(dataDir: dir.path, clock: DeviceClock())
         XCTAssertEqual(endpointNetwork(.sepolia, wallet: fresh).rpcUrls, try sepolia().rpcUrls)
 
+        // A wallet whose session is gone cannot read its override: no endpoint, so no read
+        // reaches the bundled providers with the account in it.
         let core = try unlockedCore()
         _ = try core.setRpcOverride(network: .sepolia, rpcUrl: Self.override)
         core.lock()
-        XCTAssertEqual(endpointNetwork(.sepolia, wallet: core).rpcUrls, try sepolia().rpcUrls)
+        let locked = endpointNetwork(.sepolia, wallet: core)
+        XCTAssertEqual(locked.rpcUrls, [])
+        XCTAssertEqual(locked.network, .sepolia)
     }
 
     func testTheCoresRefusalIsShown() throws {

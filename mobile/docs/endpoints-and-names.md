@@ -13,10 +13,13 @@ apps render and wire; every rule is the core's.
   balances, deployment state, the send and deploy plans, the portfolio and token reads, private
   balances, account discovery and the multisig reads all take it from there. `supported_networks()`
   is still used for network names only.
-- **Locked or no wallet.** The override lives in the vault, so `networks()` refuses while locked
-  and before a wallet exists; `endpointNetwork` then uses the bundled record. Onboarding and
-  "Find your accounts" (which runs unlocked, after import) are unchanged, and no account read runs
-  while locked.
+- **Locked or no wallet.** The override is a preference (`preferences.json`, beside the vault) that
+  the core reads only through the unlocked session, so `networks()` refuses while locked and before
+  a wallet exists. With no wallet, `endpointNetwork` uses the bundled record: onboarding has no
+  override to honour, and "Find your accounts" runs unlocked, after import. With a wallet but no
+  session (`Locked`, which the core's idle lock can return just before the app's own lock fires), it
+  returns the record with no endpoints, so a read in that gap fails rather than sending the account
+  to the bundled providers.
 - **Chain check.** Unchanged: an endpoint is used only after `rpc_verify_chain_id` proves the
   network's chain, so a Sepolia URL saved for Mainnet is skipped like any wrong-chain endpoint; the
   send plan probes the chain again. Saving probes nothing, as in the extension.
@@ -67,7 +70,7 @@ apps render and wire; every rule is the core's.
 
 | Behaviour | iOS (`BrambleTests`) | Android |
 | --- | --- | --- |
-| Override tried first, bundled as failover; cleared; bundled while locked or with no wallet | `RpcOverrideTests` | `NetworkEndpointsTest` (JVM), `CoreBridgeTest.rpcOverrideFirstAndRedacted` |
+| Override tried first, bundled as failover; cleared; bundled with no wallet, none while locked | `RpcOverrideTests` | `NetworkEndpointsTest` (JVM), `CoreBridgeTest.rpcOverrideFirstAndRedacted` |
 | Core refusal shown; other failures | `RpcOverrideTests.testTheCoresRefusalIsShown` | `CoreBridgeTest` |
 | Failure text naming an override is redacted | `RpcOverrideTests.testAnErrorTextNamingAnOverrideIsRedacted` | `ErrorTextTest.passThroughTextIsRedacted` (JVM), `CoreBridgeTest` |
 | Name resolves; chain proven first; wrong-chain endpoint never asked; failover; lines; fail closed | `StarkNameLookupTests` | `StarkNameLookupTest` (JVM, core calls stood in for) |

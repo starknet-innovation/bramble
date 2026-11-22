@@ -127,7 +127,8 @@ class CoreBridgeTest {
         assertEquals("failed: [endpoint]", redactEndpoints("failed: $override"))
         assertFalse(describe(CoreException.InvalidInput("node at $override refused")).contains("KEY"))
         core.lock()
-        assertEquals("locked: the bundled list", bundled, endpointNetwork(NetworkId.SEPOLIA, core).rpcUrls)
+        // Locked, the override is unreadable: no endpoint, so no read reaches the bundled providers.
+        assertEquals("locked: no endpoints", emptyList<String>(), endpointNetwork(NetworkId.SEPOLIA, core).rpcUrls)
     }
 
     private fun setOverrideRefusal(
