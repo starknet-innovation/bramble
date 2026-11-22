@@ -1,5 +1,6 @@
 package org.bramble.wallet
 
+import kotlinx.coroutines.launch
 import org.bramble.core.NetworkId
 import org.bramble.wallet.design.ThemeChoice
 
@@ -38,7 +39,8 @@ suspend fun WalletStore.saveRpcOverride(
     // on screen enters it again, so no read goes to the old endpoints after the save.
     if (target == network) {
         portfolio.lock()
-        refreshBalances(ticket)
+        // The app's scope: leaving the Network screen must not cancel the reload after the lock.
+        appScope.launch { refreshBalances(ticket) }
     }
     return saved
 }

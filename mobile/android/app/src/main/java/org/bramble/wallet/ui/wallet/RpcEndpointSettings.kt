@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.bramble.core.CoreException
+import org.bramble.core.NetworkId
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.describe
 import org.bramble.wallet.design.BrambleField
@@ -59,21 +60,35 @@ fun RpcEndpointSettings(store: WalletStore) {
             val target = store.network
             val typed = url
             scope.launch {
-                runCatching { store.saveRpcOverride(target, typed) }
-                    .onSuccess { saved ->
-                        store.showNotice(if (saved == null) "RPC endpoint reset" else "RPC endpoint saved")
-                        url = saved.orEmpty()
-                        custom = saved != null
-                        error = null
-                    }.onFailure { failure ->
-                        if (failure !is CancellationException) {
-                            error = rpcOverrideRefusal(failure).also { store.showToast(it) }
-                        }
-                    }
+                store.saveEndpoint(target, typed, refused = { error = it }) { saved ->
+                    url = saved.orEmpty()
+                    custom = saved != null
+                    error = null
+                }
             }
         }
         StatusLine(error, StatusTone.DANGER)
     }
+}
+
+/**
+ * Saves [typed] as [target]'s endpoint, with the notice or the refusal. [shown] gets what is stored
+ * only while [target] is still selected: the field shows the selected network's endpoint, and a
+ * switch meanwhile has reloaded it.
+ */
+private suspend fun WalletStore.saveEndpoint(
+    target: NetworkId,
+    typed: String,
+    refused: (String) -> Unit,
+    shown: (String?) -> Unit,
+) {
+    runCatching { saveRpcOverride(target, typed) }
+        .onSuccess { saved ->
+            showNotice(if (saved == null) "RPC endpoint reset" else "RPC endpoint saved")
+            if (network == target) shown(saved)
+        }.onFailure { failure ->
+            if (failure !is CancellationException) refused(rpcOverrideRefusal(failure).also { showToast(it) })
+        }
 }
 
 /** The core's refusal in its own words ([describe]), else the extension's fallback line. */
