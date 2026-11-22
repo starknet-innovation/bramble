@@ -31,4 +31,14 @@ fun WalletStore.rpcOverride(): String = runCatching { walletCore.rpcOverride(net
 suspend fun WalletStore.saveRpcOverride(
     target: NetworkId,
     raw: String,
-): String? = calls.work(session.ticket()) { walletCore.setRpcOverride(target, raw) }
+): String? {
+    val ticket = session.ticket()
+    val saved = calls.work(ticket) { walletCore.setRpcOverride(target, raw) }
+    // The portfolio's scope holds the endpoint list it was entered with: a change to the network
+    // on screen enters it again, so no read goes to the old endpoints after the save.
+    if (target == network) {
+        portfolio.lock()
+        refreshBalances(ticket)
+    }
+    return saved
+}

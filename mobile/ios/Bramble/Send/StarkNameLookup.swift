@@ -57,7 +57,7 @@ enum StarkNameLookup {
         return .refused(sawOtherChain ? couldNotResolve(name) : "Could not reach the network to resolve \(name).")
     }
 
-    private static func couldNotResolve(_ name: String) -> String { "Could not resolve \(name)." }
+    static func couldNotResolve(_ name: String) -> String { "Could not resolve \(name)." }
 }
 
 extension SendFlowModel {
@@ -97,7 +97,12 @@ extension SendFlowModel {
         }
         switch outcome {
         case let .resolved(address):
-            guard let canonical = validateRecipient(input: address) else { return }
+            // The core resolves only a nonzero felt; anything the address rules still refuse is a
+            // failed lookup, never a silent stop on "Resolving…".
+            guard let canonical = validateRecipient(input: address) else {
+                recipientNote = StarkNameLookup.couldNotResolve(name)
+                return
+            }
             recipientNote = nil
             takeResolvedName(canonical, name: name, isNew: SendRecipients.knownLabel(of: canonical, in: known) == nil)
 

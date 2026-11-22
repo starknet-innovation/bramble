@@ -27,6 +27,8 @@ apps render and wire; every rule is the core's.
   (`set_rpc_override`: trimmed, empty clears). Success toasts "RPC endpoint saved" / "RPC endpoint
   reset"; a refusal shows the core's reason ("Mobile RPC endpoints must use https", "Invalid RPC
   endpoint") under the field and as a toast; anything else is "RPC endpoint update failed".
+  A save enters the portfolio's scope again (`saveRpcOverride` on both platforms), since the scope
+  holds the endpoint list it was entered with: no read goes to the old endpoints afterwards.
   The extension puts the field one screen deeper ("Advanced endpoints" → "Endpoints"); mobile keeps
   it on the Network screen beside the relay, as it already did for the relay.
 - **Explorer fallback.** Already wired: the history lane asks `explorer_fallback_allowed`, which is

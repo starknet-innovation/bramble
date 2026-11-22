@@ -46,11 +46,11 @@ struct RpcEndpointDisclosure: View {
 
     private func save() {
         busy = true
-        let core = store.core, network = store.network, typed = url
+        let network = store.network, typed = url
         Task {
             defer { busy = false }
             do {
-                let saved = try await store.work { try core.setRpcOverride(network: network, rpcUrl: typed) }
+                let saved = try await store.saveRpcOverride(typed, for: network)
                 store.notify(saved == nil ? "RPC endpoint reset" : "RPC endpoint saved")
                 url = saved ?? ""
                 custom = saved != nil

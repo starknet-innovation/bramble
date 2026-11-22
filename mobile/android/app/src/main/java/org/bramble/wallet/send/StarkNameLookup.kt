@@ -175,5 +175,11 @@ private suspend fun SendFlowModel.resolveName(
         outcome is StarkNameOutcome.Refused -> {
             recipientNote = outcome.line
         }
+
+        // The core resolves only a nonzero felt; anything the address rules still refuse is a
+        // failed lookup, never a silent stop on "Resolving…".
+        else -> {
+            recipientNote = couldNotResolve(name)
+        }
     }
 }
