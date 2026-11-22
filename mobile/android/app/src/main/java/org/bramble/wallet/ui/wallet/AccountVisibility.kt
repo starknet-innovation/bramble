@@ -20,8 +20,10 @@ import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
 import org.bramble.core.UnusableAccount
 import org.bramble.core.friendlyAccountName
+import org.bramble.wallet.ReadyKeyNotice
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.AccountAvatar
+import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleSize
@@ -31,6 +33,8 @@ import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
+import org.bramble.wallet.design.PillButton
+import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.hiddenRecords
@@ -38,7 +42,7 @@ import org.bramble.wallet.setHidden
 import org.bramble.wallet.unusableAccounts
 import org.bramble.wallet.unusableReasonText
 
-// Manage's hidden and kept accounts (docs/accounts.md §2.4a),
+// Manage's hidden and kept accounts and Home's pre-fix Ready key notice (docs/accounts.md §2.4a),
 // twin of the iOS sections of the same names. The core decides every state; these only render it.
 
 /** A row's Hide control (`accountNameRow`): the account keeps its key and comes back from "Hidden accounts". */
@@ -109,5 +113,30 @@ private fun KeptRow(
             Text(detail, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
         }
         trailing?.invoke()
+    }
+}
+
+/** The extension's Home notice for the active account when the core marks `preFixReadyKey`. */
+@Composable
+internal fun ReadyKeyNoticeCard(
+    store: WalletStore,
+    moveFunds: () -> Unit,
+) {
+    if (!ReadyKeyNotice.shows(store.activeRecord)) return
+    val skin = LocalSkin.current
+    Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BrambleIcon(BrambleIconName.ALERT, skin.muted)
+            Text(
+                ReadyKeyNotice.TITLE,
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
+            )
+        }
+        Text(ReadyKeyNotice.BODY, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+        PillButton(ReadyKeyNotice.MOVE_FUNDS, kind = PillKind.SECONDARY, onClick = moveFunds)
     }
 }

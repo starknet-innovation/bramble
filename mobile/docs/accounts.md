@@ -104,7 +104,7 @@ extension-side decision first.
 Copying the signer public key and the class hash needs the SCOPE.md clipboard amendment in §2.8,
 which this workstream makes.
 
-### 2.4a Hidden and kept accounts (M15c, wallet-core `v0.6.0`)
+### 2.4a Hidden, kept and pre-fix Ready accounts (M15c, wallet-core `v0.6.0`)
 
 The core decides every state here; the apps render it.
 
@@ -132,11 +132,20 @@ hint "These accounts stay in your wallet. Use them in the Bramble extension." an
 extension has no counterpart (it operates them all), so this wording is mobile's own. The section
 is absent when the list is empty.
 
+**Pre-fix Ready key (#98).** `AccountRecord.pre_fix_ready_key` marks a Ready account whose sealed
+key Krusty 2.0 or earlier derived; Argent X and a fresh restore do not find it from the phrase.
+Home shows the extension's notice (`ready-key-notice.ts`, `release/v0.10.11`) for the active
+account: "Back up this account's key" / "Restoring your phrase won't find this account. Keep its
+private key, or move its funds to another account." with "Move funds", which opens Send.
+**Decision:** the extension's "Back up key" (private-key reveal) and "Don't show again" are left
+out: mobile has no private-key export (krusty-kms#257) and the core keeps no dismissed-notice
+preference yet.
+
 Tests: iOS `BrambleTests/AccountVisibilityTests` (hide, show, Send's picker, the core's refusal and
-the active-account move over a real core; the kept lines); Android `AccountVisibilityTest` (JVM:
-the list split, the refusal's wording, the kept lines). No test opens a vault holding kept
-records: the bindings have no hook to seal one, so they rest on wallet-core's
-`tests/vault_match.rs` and the apps' rendering rules.
+the active-account move over a real core; the kept lines; the notice rule); Android
+`AccountVisibilityTest` (JVM: the list split, the refusal's wording, the kept lines, the notice
+rule). No test opens a vault holding kept or pre-fix records: the bindings have no hook to seal
+one, so those two rest on wallet-core's `tests/vault_match.rs` and the apps' rendering rules.
 
 ### 2.5 Receive (`ReceiveView.swift`)
 

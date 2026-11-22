@@ -3,7 +3,7 @@ import BrambleCore
 import XCTest
 
 /// Hidden accounts through a real core (the store's `setHidden`, `visibleRecords`,
-/// `hiddenRecords`), the kept-accounts copy.
+/// `hiddenRecords`), the kept-accounts copy, and when Home shows the pre-fix Ready key notice.
 final class AccountVisibilityTests: XCTestCase {
     /// The published parity phrase the accounts fixtures use; public, never a real wallet.
     private func phrase() throws -> String {
@@ -91,5 +91,16 @@ final class AccountVisibilityTests: XCTestCase {
         XCTAssertEqual(Set(lines).count, reasons.count)
         XCTAssertTrue(lines.allSatisfy { !$0.isEmpty })
         XCTAssertTrue(lines[2].contains("SN_DEVNET"), "names the network mobile lacks")
+    }
+
+    @MainActor
+    func testReadyKeyNoticeOnlyForAPreFixKey() async throws {
+        let store = try await twoAccountStore()
+        var record = try XCTUnwrap(store.activeRecord)
+        XCTAssertFalse(record.preFixReadyKey, "a phrase-derived account is not affected")
+        XCTAssertFalse(ReadyKeyNotice.shows(for: record))
+        XCTAssertFalse(ReadyKeyNotice.shows(for: nil))
+        record.preFixReadyKey = true
+        XCTAssertTrue(ReadyKeyNotice.shows(for: record))
     }
 }

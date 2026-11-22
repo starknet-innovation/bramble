@@ -2,7 +2,8 @@ import SwiftUI
 
 /// `homeView()` from `portfolio/home-view.ts`: hero total, the four major actions, and the token
 /// list (`PortfolioHeroView`, `PortfolioTokens`: prices, tracked tokens, balances and their states
-/// all from the core, read once through the portfolio store). Home no longer flags an undeployed
+/// all from the core, read once through the portfolio store), and the extension's notice for a
+/// pre-fix Ready key (`ReadyKeyNotice`). Home no longer flags an undeployed
 /// account: the first send deploys it, and Settings › This account opens Deploy account.
 struct HomeView: View {
     @Environment(WalletStore.self) private var store
@@ -15,6 +16,14 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             PortfolioHeroView()
             ShieldedHeroLabel()
+            if ReadyKeyNotice.shows(for: store.activeRecord) {
+                Callout(
+                    icon: .alert,
+                    title: ReadyKeyNotice.title,
+                    message: ReadyKeyNotice.body,
+                    action: (ReadyKeyNotice.moveFunds, send)
+                )
+            }
             HStack(spacing: BrambleMetrics.ActionRow.gap) {
                 ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
                 ActionTile(title: "Swap", icon: .shuffle) {

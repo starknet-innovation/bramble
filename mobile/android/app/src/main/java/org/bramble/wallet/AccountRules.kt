@@ -25,3 +25,22 @@ fun unusableReasonText(account: UnusableAccount): String =
         UnusableReason.OTHER_NETWORK -> "On ${account.networkId}, which mobile doesn't support."
         UnusableReason.NOT_DERIVED_HERE -> "Mobile can't derive this account's key."
     }
+
+/**
+ * The extension's Home notice for a Ready account whose key an earlier Krusty derived
+ * (`ready-key-notice.ts`, `portfolio.readyKey.*` on `release/v0.10.11`), twin of iOS `ReadyKeyNotice`.
+ */
+object ReadyKeyNotice {
+    /** The notice's heading. */
+    const val TITLE = "Back up this account's key"
+
+    /** What happens and what to do. */
+    const val BODY =
+        "Restoring your phrase won't find this account. Keep its private key, or move its funds to another account."
+
+    /** The control that opens Send for the account. */
+    const val MOVE_FUNDS = "Move funds"
+
+    /** Whether Home shows the notice: only for an account the core marks `preFixReadyKey`. */
+    fun shows(account: AccountRecord?): Boolean = account?.preFixReadyKey == true
+}
