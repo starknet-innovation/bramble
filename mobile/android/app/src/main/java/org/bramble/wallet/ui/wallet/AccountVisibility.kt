@@ -1,0 +1,92 @@
+package org.bramble.wallet.ui.wallet
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.launch
+import org.bramble.core.friendlyAccountName
+import org.bramble.wallet.WalletStore
+import org.bramble.wallet.design.AccountAvatar
+import org.bramble.wallet.design.BrambleIconName
+import org.bramble.wallet.design.BrambleLayout
+import org.bramble.wallet.design.BrambleSize
+import org.bramble.wallet.design.BrambleSpace
+import org.bramble.wallet.design.BrambleTypeScale
+import org.bramble.wallet.design.BrambleWeight
+import org.bramble.wallet.design.Eyebrow
+import org.bramble.wallet.design.IconButton
+import org.bramble.wallet.design.LocalSkin
+import org.bramble.wallet.design.StatusLine
+import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.hiddenRecords
+import org.bramble.wallet.setHidden
+
+// Manage's hidden accounts (docs/accounts.md §2.4a),
+// twin of the iOS sections of the same names. The core decides every state; these only render it.
+
+/** A row's Hide control (`accountNameRow`): the account keeps its key and comes back from "Hidden accounts". */
+@Composable
+internal fun HideAccountButton(
+    store: WalletStore,
+    accountId: String,
+    address: String,
+) {
+    val scope = rememberCoroutineScope()
+    IconButton(BrambleIconName.EYE_OFF, "Hide ${friendlyAccountName(address)}") {
+        scope.launch { runCatching { store.setHidden(accountId, true) }.onFailure(store::showError) }
+    }
+}
+
+/** "Hidden accounts" (`hiddenAccountsSection`): this network's hidden accounts, each with Show. */
+@Composable
+internal fun HiddenAccountsSection(store: WalletStore) {
+    val hidden = store.hiddenRecords
+    if (hidden.isEmpty()) return
+    val scope = rememberCoroutineScope()
+    Eyebrow("Hidden accounts")
+    StatusLine("Hidden accounts stay in the wallet, out of the drawer and send pickers.")
+    Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+        hidden.forEach { record ->
+            KeptRow(record.address, record.displayName, record.shortAddress) {
+                IconButton(BrambleIconName.EYE, "Show ${friendlyAccountName(record.address)}") {
+                    scope.launch { runCatching { store.setHidden(record.id, false) }.onFailure(store::showError) }
+                }
+            }
+        }
+    }
+}
+
+/** One read-only account line: avatar, a title, a muted detail, and an optional trailing control. */
+@Composable
+private fun KeptRow(
+    address: String,
+    title: String,
+    detail: String,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val skin = LocalSkin.current
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = BrambleSize.row).padding(horizontal = BrambleSpace.sm),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AccountAvatar(address)
+        Column(
+            Modifier.weight(1f).semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap),
+        ) {
+            Text(title, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold))
+            Text(detail, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+        }
+        trailing?.invoke()
+    }
+}

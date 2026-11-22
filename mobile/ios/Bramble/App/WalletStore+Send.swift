@@ -16,7 +16,7 @@ extension WalletStore {
             core: core,
             network: networkInfo,
             account: account,
-            accounts: records,
+            accounts: visibleRecords,
             balances: balances,
             transport: rpc.transport,
             trackedTokens: portfolio.preferences.trustedTokenAddresses(network: networkInfo.network),

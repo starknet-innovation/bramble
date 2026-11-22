@@ -57,8 +57,8 @@ struct AccountsSheet: View {
     }
 
     private var visible: [AccountRecord] {
-        guard let activeGroup else { return store.records }
-        return store.records.filter { activeGroup.accountIds.contains($0.id) }
+        guard let activeGroup else { return store.visibleRecords }
+        return store.visibleRecords.filter { activeGroup.accountIds.contains($0.id) }
     }
 
     private var drawer: some View {

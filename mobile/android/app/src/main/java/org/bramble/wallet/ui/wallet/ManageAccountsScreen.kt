@@ -52,6 +52,7 @@ import org.bramble.wallet.select
 import org.bramble.wallet.toggleMember
 import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.updateGroup
+import org.bramble.wallet.visibleRecords
 
 /** A label or group name, as the core's `is_account_label` bounds it (1–64 characters, trimmed). */
 private const val NAME_LIMIT = 64
@@ -59,7 +60,8 @@ private const val NAME_LIMIT = 64
 /**
  * "Accounts & groups" (`accountFlow`, `docs/accounts.md` §2.4), port of the iOS
  * `AccountsManageView`: the active account's name form and receipt (address, signer public key,
- * class hash, each copied in full), this network's accounts with an inline copy, and the groups
+ * class hash, each copied in full), this network's accounts with an inline copy and Hide, the
+ * hidden ones with Show, and the groups
  * (create, rename, change icon, membership, delete). Every rule is the core's; fields are the flat
  * design-system field. "Add account" opens the same chooser as the drawer.
  */
@@ -81,6 +83,7 @@ fun ManageAccountsScreen(
             Eyebrow("Accounts")
             AccountList(store)
             PillButton("Add account", kind = PillKind.SECONDARY, icon = BrambleIconName.PLUS) { choosing = true }
+            HiddenAccountsSection(store)
             Eyebrow("Groups")
             NewGroupForm(store)
             store.groups.forEach { group -> GroupEditor(store, group) }
@@ -88,17 +91,18 @@ fun ManageAccountsScreen(
     }
 }
 
-/** This network's accounts; tapping one makes it active, and each row copies its address inline. */
+/** This network's visible accounts; tapping one makes it active, each row copies its address and hides inline. */
 @Composable
 private fun AccountList(store: WalletStore) {
     val scope = rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-        store.records.forEach { record ->
+        store.visibleRecords.forEach { record ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AccountRow(record, record.id == store.activeRecord?.id, Modifier.weight(1f)) {
                     scope.launch { runCatching { store.select(record.id) }.onFailure(store::showError) }
                 }
                 CopyButton(store, record.address, "Copy ${record.displayName} address")
+                HideAccountButton(store, record.id, record.address)
             }
         }
     }

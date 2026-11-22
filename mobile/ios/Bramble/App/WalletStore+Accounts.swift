@@ -27,6 +27,25 @@ extension WalletStore {
         }
     }
 
+    /// This network's accounts the drawer, Send and Manage list (`hiddenAccountIds` left out).
+    var visibleRecords: [AccountRecord] { records.filter { !$0.hidden } }
+
+    /// This network's hidden accounts, which Manage lists with the control that shows them again.
+    var hiddenRecords: [AccountRecord] { records.filter(\.hidden) }
+
+    /// Hides or shows one account (`writeAccountVisibility`). The core refuses hiding the last
+    /// account a network shows and moves the active account off one it hides; its refusal is the
+    /// toast, as the extension shows the background's.
+    func setHidden(_ hidden: Bool, for id: String) async {
+        let core = core, before = activeRecord?.id
+        do {
+            try await work { try core.setAccountHidden(accountId: id, hidden: hidden) }
+            await reloadAccounts()
+            notify(hidden ? "Account hidden" : "Account shown")
+            if activeRecord?.id != before { await refreshBalances(reset: true) }
+        } catch { toast = describe(error) }
+    }
+
     /// Switches the active account (the drawer row is the switch control).
     func select(id: String) async {
         let core = core

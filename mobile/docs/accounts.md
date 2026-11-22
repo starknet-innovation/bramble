@@ -50,9 +50,10 @@ the difference with **Decision**.
 - Filter chips appear only when at least one group exists: "All" (wallet icon), then one chip per
   group with its icon. The selected chip has the accessibility trait `.isSelected`, matching the
   extension's `aria-pressed`. Choosing a chip limits the list to that group's `accountIds`.
-- Rows show only this network's accounts: avatar, display name, `account_label(address)` in mono.
-  The full address is the accessibility value; in the extension it is `title`. The active row uses
-  accent-soft and a trailing check. Tapping a row switches account and closes the drawer.
+- Rows show only this network's visible accounts (hidden ones are left out, §2.4a): avatar,
+  display name, `account_label(address)` in mono. The full address is the accessibility value; in
+  the extension it is `title`. The active row uses accent-soft and a trailing check. Tapping a row
+  switches account and closes the drawer.
 - Each row has a ghost folder button showing the group's icon, or `folder` when the account has no
   group. Its accessibility label is "Folder: <name>" or "No folder — choose one". It opens a
   single-select picker listing the groups plus "None".
@@ -102,6 +103,30 @@ extension-side decision first.
 
 Copying the signer public key and the class hash needs the SCOPE.md clipboard amendment in §2.8,
 which this workstream makes.
+
+### 2.4a Hidden accounts (M15c, wallet-core `v0.6.0`)
+
+The core decides every state here; the apps render it.
+
+**Hidden accounts (P6).** `set_account_hidden(account_id, hidden)` keeps the extension's
+`hiddenAccountIds` in the preferences file, and `AccountRecord.hidden` tells the app which are
+hidden. A hidden account leaves the drawer, Send's account picker and Manage's account list
+(`visibleRecords` on both platforms); it keeps its key, can still be the active account and still
+signs. Manage, as `account-names.ts` does:
+
+- Each account row has "Hide" (eye-off; accessible name "Hide <generated name>"). Android shows it
+  as an icon button with that name, since its pill button fills the row's width.
+- "Hidden accounts" lists this network's hidden accounts with "Show" (eye; "Show <generated
+  name>"), under the hint "Hidden accounts stay in the wallet, out of the drawer and send
+  pickers."; the section is absent when none is hidden.
+- Toasts "Account hidden" / "Account shown". The core refuses hiding an unknown account and the
+  last account a network shows ("Can't hide the last account on this network", the extension's
+  words, shown as the error toast), and moves the active account to the network's first visible
+  one before hiding it. The apps do not re-check either rule.
+
+Tests: iOS `BrambleTests/AccountVisibilityTests` (hide, show, Send's picker, the core's refusal and
+the active-account move over a real core); Android `AccountVisibilityTest` (JVM: the list split
+and the refusal's wording).
 
 ### 2.5 Receive (`ReceiveView.swift`)
 
