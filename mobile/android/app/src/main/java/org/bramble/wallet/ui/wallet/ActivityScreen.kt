@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.bramble.core.ActivityDayGroup
+import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityRow
 import org.bramble.core.ActivityTone
 import org.bramble.core.activityEmptyCopy
@@ -55,6 +56,7 @@ import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.networkName
 import org.bramble.wallet.refreshSendState
 import org.bramble.wallet.send.SendCopy
 import org.bramble.wallet.ui.CopyButton
@@ -109,15 +111,19 @@ fun ActivityScreen(store: WalletStore) {
             }
         }
         if (unavailable) StatusLine(activityUnavailableNotice())
-        ActivityFeed(store, portfolio.groups, unavailable)
+        ActivityFeed(store, portfolio.groups, portfolio.groupEntries, unavailable)
     }
 }
 
-/** The day groups under their headings, or the core's empty copy when there is nothing yet. */
+/**
+ * The day groups under their headings, or the core's empty copy when there is nothing yet.
+ * [entries] is the stored entry behind each row, in the shape of [groups].
+ */
 @Composable
 internal fun ActivityFeed(
     store: WalletStore,
     groups: List<ActivityDayGroup>,
+    entries: List<List<ActivityEntry>>,
     historyUnavailable: Boolean,
 ) {
     val skin = LocalSkin.current
@@ -135,7 +141,8 @@ internal fun ActivityFeed(
         )
         return
     }
-    groups.forEach { group ->
+    groups.forEachIndexed { index, group ->
+        val records = entries.getOrNull(index).orEmpty()
         Text(
             group.heading,
             color = skin.muted,
@@ -143,7 +150,7 @@ internal fun ActivityFeed(
             modifier = Modifier.semantics { heading() },
         )
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-            group.rows.forEach { ActivityRowItem(store, it) }
+            group.rows.forEachIndexed { at, row -> ActivityRowItem(store, row, records.getOrNull(at)) }
         }
     }
 }
@@ -153,13 +160,14 @@ internal fun ActivityFeed(
  * tone the status), the heading that joins verb and amount, the truncated hash (a link to the
  * explorer in the system browser when there is one) with its copy control, the status word for a
  * row that is not accepted, the token mark, and the disclosure chevron. The expansion: the
- * counterparty (or the Detail fact), then Submitted and Status. No fiat figure: a value from
- * today's price is not what the transaction was worth.
+ * counterparty (or the Detail fact), the record's Network and Token contract, then Submitted and
+ * Status. No fiat figure: a value from today's price is not what the transaction was worth.
  */
 @Composable
 private fun ActivityRowItem(
     store: WalletStore,
     row: ActivityRow,
+    entry: ActivityEntry?,
 ) {
     var open by remember(row.hash) { mutableStateOf(false) }
     Column(
@@ -169,7 +177,7 @@ private fun ActivityRowItem(
             .testTag("activity-row-${row.hash}"),
     ) {
         ActivitySummary(store, row, open) { open = !open }
-        if (open) ActivityFacts(store, row)
+        if (open) ActivityFacts(store, row, entry)
     }
 }
 
@@ -254,12 +262,15 @@ private fun ActivityHash(
 
 /**
  * The expansion's facts: the counterparty (its role, the 6…4 address and a copy control carrying
- * the full one), or the Detail fact; then Submitted and Status, each only when the row has it.
+ * the full one), or the Detail fact; the network and token contract of [entry], the stored
+ * record the row was built from (`activityRecordFacts` in `activity-detail.ts`); then Submitted
+ * and Status. Each only when recorded.
  */
 @Composable
 private fun ActivityFacts(
     store: WalletStore,
     row: ActivityRow,
+    entry: ActivityEntry?,
 ) {
     Column(
         Modifier.fillMaxWidth().padding(start = BrambleLayout.taskHairlineInset, bottom = BrambleSpace.sm),
@@ -273,6 +284,13 @@ private fun ActivityFacts(
             }
         } else {
             row.detail?.let { ActivityFact(DETAIL_LABEL, it) }
+        }
+        val network = entry?.let { networkName(it.network) }.orEmpty()
+        if (network.isNotEmpty()) ActivityFact(NETWORK_LABEL, network)
+        entry?.tokenAddress?.let { contract ->
+            ActivityFact(TOKEN_CONTRACT_LABEL, contract, mono = true) {
+                CopyButton(store, contract, COPY_TOKEN_CONTRACT_LABEL)
+            }
         }
         row.submitted?.let { ActivityFact(SUBMITTED_LABEL, it) }
         row.statusHint?.let { ActivityFact(STATUS_LABEL, it) }
@@ -305,6 +323,9 @@ private fun ActivityFact(
 
 /** The expansion's fixed fact labels (`transactionRow`'s `dt`s). */
 private const val DETAIL_LABEL = "Detail"
+private const val NETWORK_LABEL = "Network"
+private const val TOKEN_CONTRACT_LABEL = "Token contract"
+private const val COPY_TOKEN_CONTRACT_LABEL = "Copy token contract address"
 private const val SUBMITTED_LABEL = "Submitted"
 private const val STATUS_LABEL = "Status"
 

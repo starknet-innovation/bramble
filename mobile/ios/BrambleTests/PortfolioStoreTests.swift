@@ -250,6 +250,51 @@ final class PortfolioStoreTests: XCTestCase {
         XCTAssertEqual(activityEmptyCopy(historyUnavailable: true), "No transactions recorded on this device yet.")
     }
 
+    /// A swap's legs are two entries under one hash. Each row keeps the entry it was built from,
+    /// so the second leg never shows the first leg's token contract.
+    func testLegsOfOneTransactionKeepTheirOwnEntries() async throws {
+        let store = try store("ready", in: "legs")
+        let account = try account(.mainnet)
+        try await store.load(account: account, network: network(.mainnet))
+        let strk = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+        let eth = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
+        func leg(_ symbol: String, _ address: String, _ amount: String) -> ActivityEntry {
+            ActivityEntry(
+                accountId: account.id,
+                amount: amount,
+                counterparty: "0x5a1b",
+                direction: .in,
+                failureNotice: nil,
+                finalizedOnL1: nil,
+                hash: "0xabc9",
+                kind: .transfer,
+                network: .mainnet,
+                notFoundCount: nil,
+                status: .accepted,
+                submittedAt: 1_790_000_000_000,
+                summary: "Received \(amount) \(symbol)",
+                token: symbol,
+                tokenAddress: address
+            )
+        }
+        store.activityView = store.activity.scanApply(
+            accountId: account.id,
+            network: .mainnet,
+            rows: [leg("STRK", strk, "1.5"), leg("ETH", eth, "0.1")],
+            nowMs: 1_790_251_200_000
+        )
+        store.recomputeGroups()
+
+        let rows = store.groups.flatMap(\.rows)
+        let entries = store.groupEntries.flatMap(\.self)
+        XCTAssertEqual(rows.map(\.hash), ["0xabc9", "0xabc9"])
+        XCTAssertEqual(store.groupEntries.map(\.count), store.groups.map(\.rows.count))
+        XCTAssertEqual(zip(rows, entries).map { "\($0.heading) \($1.tokenAddress ?? "")" }.sorted(), [
+            "Received 0.1 ETH \(eth)",
+            "Received 1.5 STRK \(strk)"
+        ])
+    }
+
     func testFilesAreProtectedAndRemovedWithTheWallet() async throws {
         let store = try store("ready")
         try await store.load(account: account(.mainnet), network: network(.mainnet))

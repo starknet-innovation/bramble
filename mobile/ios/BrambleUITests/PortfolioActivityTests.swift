@@ -137,7 +137,8 @@ final class PortfolioActivityTests: XCTestCase {
     }
 
     /// (5) Activity: disclosure rows, each hash linked to the explorer with its copy control; a
-    /// row opens onto its counterparty with a copy control of its own.
+    /// row opens onto its counterparty with a copy control of its own, then the record's network
+    /// and token contract (`activityRecordFacts`).
     private func activityStory(_ app: XCUIApplication) {
         tap(app.buttons["Activity"])
         let received = element(app, "activity-link-0xabc1")
@@ -149,6 +150,10 @@ final class PortfolioActivityTests: XCTestCase {
         let summary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Received 1.5 STRK.")).firstMatch
         tap(summary)
         tap(app.buttons["Copy sender address"].firstMatch)
+        XCTAssertTrue(app.staticTexts["Network"].exists)
+        XCTAssertTrue(app.staticTexts["Starknet Mainnet"].exists)
+        XCTAssertTrue(app.staticTexts["Token contract"].exists)
+        XCTAssertTrue(app.buttons["Copy token contract address"].firstMatch.exists)
         snapshot(app, "activity")
     }
 
