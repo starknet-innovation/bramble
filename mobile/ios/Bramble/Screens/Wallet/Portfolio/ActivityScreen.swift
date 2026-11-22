@@ -2,9 +2,10 @@ import BrambleCore
 import SwiftUI
 
 /// `activityScreen` from `activity-views.ts`: the Activity dock for the active account and network,
-/// fed by the explorer lane or the RPC scan, grouped by UTC day. Export CSV is out of scope, so no
-/// control for it is shown. Opening the tab reads history when due; the refresh control forces a
-/// read; while visible the feed re-checks every 60 s.
+/// fed by the explorer lane or the RPC scan, grouped by UTC day. Above the feed: the search, the
+/// filters and the sort (`ActivityFilterBar`), and the counterparty summary while a search resolves
+/// one party. Export CSV is not offered yet. Opening the tab reads history when due; the refresh
+/// control forces a read; while visible the feed re-checks every 60 s.
 struct ActivityScreen: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -28,13 +29,25 @@ struct ActivityScreen: View {
                     .background(skin.elevated, in: RoundedRectangle(cornerRadius: BrambleRadius.md, style: .continuous))
                     .accessibilityIdentifier("history-unavailable")
             }
-            if portfolio.groups.isEmpty {
+            if portfolio.feed.total == 0 {
                 EmptyState(message: activityEmptyCopy(historyUnavailable: view?.historyUnavailable == true))
                     .accessibilityIdentifier("activity-empty")
             } else {
-                days
+                ActivityFilterBar()
+                if let summary = portfolio.feed.summary {
+                    ActivityPartySummaryView(parts: summary)
+                }
+                if portfolio.feed.hasNoMatches {
+                    StatusLine(text: "No matching transactions.")
+                        .accessibilityIdentifier("activity-no-matches")
+                } else {
+                    days
+                }
+                StatusLine(text: portfolio.feed.result)
             }
         }
+        .task(id: store.activityContacts) { portfolio.refilter(contacts: store.activityContacts) }
+        .task(id: portfolio.scope?.accountId) { await store.coordination.refresh() }
         .task(id: portfolio.scope?.accountId) {
             await portfolio.refreshActivity(force: false)
             while !Task.isCancelled {
@@ -84,11 +97,14 @@ struct ActivityScreen: View {
     private var days: some View {
         ForEach(Array(store.portfolio.groups.enumerated()), id: \.offset) { index, group in
             VStack(alignment: .leading, spacing: BrambleSpace.md) {
-                Text(group.heading)
-                    .brambleText(BrambleTypeScale.body, weight: BrambleWeight.medium)
-                    .foregroundStyle(skin.muted)
-                    .padding(.horizontal, BrambleSpace.lg)
-                    .accessibilityAddTraits(.isHeader)
+                // The amount sort's one group is untitled, as the extension lists it.
+                if !group.heading.isEmpty {
+                    Text(group.heading)
+                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.medium)
+                        .foregroundStyle(skin.muted)
+                        .padding(.horizontal, BrambleSpace.lg)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 VStack(spacing: BrambleSpace.xs) {
                     ForEach(legs(of: group, at: index)) { leg in
                         ActivityRowView(row: leg.row, entry: leg.entry)

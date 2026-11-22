@@ -38,26 +38,37 @@ extension PortfolioStore {
         recomputeGroups()
     }
 
-    /// The day groups the Activity screen renders, and the entry behind each row. The tracked
-    /// tokens resolve each row's token mark; rows carry no fiat figure, so prices are not an input.
+    /// The day groups the Activity screen renders, and the entry behind each row, under the
+    /// current filter and contacts. The tracked tokens resolve each row's token mark and the token
+    /// filter; rows carry no fiat figure from today's prices, so prices are not an input.
     func recomputeGroups() {
-        guard let scope, let view = activityView else {
-            groups = []
-            groupEntries = []
-            return
-        }
-        groups = activityGroups(
-            entries: view.entries,
-            tracked: preferences.tracked(network: scope.network.network).map(\.token),
+        refilter()
+    }
+
+    /// Rebuilds `feed` under `filter` (by default the one it holds): after a read, or when the
+    /// person changes the filter.
+    func refilter(_ filter: ActivityFilter? = nil) {
+        rebuildFeed(filter: filter ?? feed.filter, contacts: feed.contacts)
+    }
+
+    /// Rebuilds `feed` when the names the search resolves changed.
+    func refilter(contacts: [ActivityContact]) {
+        guard contacts != feed.contacts else { return }
+        rebuildFeed(filter: feed.filter, contacts: contacts)
+    }
+
+    private func rebuildFeed(filter: ActivityFilter, contacts: [ActivityContact]) {
+        feed = ActivityFeedState(
+            entries: activityEntries,
+            filter: filter,
+            tracked: scope.map { preferences.tracked(network: $0.network.network).map(\.token) } ?? [],
+            contacts: contacts,
             nowMs: clock()
         )
-        // `activity_groups` builds one row per entry, in order, and only splits them by day.
-        var rest = view.entries[...]
-        groupEntries = groups.map { group in
-            defer { rest = rest.dropFirst(group.rows.count) }
-            return Array(rest.prefix(group.rows.count))
-        }
     }
+
+    /// The scope's whole feed: every row, not the filtered view.
+    var activityEntries: [ActivityEntry] { scope == nil ? [] : activityView?.entries ?? [] }
 
     // The explorer lane: an answering page is authoritative; any failure falls through silently.
     private func starkscan(scope: Scope, tokens: [TokenConfig], now: Double, generation: Int) async -> ActivityView? {
