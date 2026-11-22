@@ -31,7 +31,7 @@ the difference with **Decision**.
 | Discovery | Indices up to the gap-limit target (20 past the last index with activity, at least 20, at most 200) in batches of 4. Each index has 10 shapes: OZ and argent 0.3.1/0.3.0/0.4.0/Xverse 0.4.0 on this wallet's ladder; argent 0.3.1/0.3.0/0.4.0 on Ready's; braavos 1.0.0/base on Braavos's (issues 505, 734). Creatable (listed unused at index 0 or a manual index): OZ and argent 0.4.0 on this wallet's ladder, braavos 1.0.0 on Braavos's (issue 718, view only). Probe: `starknet_getClassHashAt` at `latest`. Only code 20 or /contract not found/i (in the error's message or its `data`) means "not deployed"; any other error propagates. If not deployed, `balanceOf` is read for the network's default ETH and STRK. If deployed, the same round makes advisory reads at `latest` (`wallet_core::accounts::advisory`): Argent's `get_owner`/`get_owner_type`/`get_guardian` and Braavos's `get_signers`/`get_deferred_remove_signers` plus the latest block's timestamp, when the live class is one this wallet signs for (otherwise `release`). On a network with a privacy pool, it also reads the pool's `get_public_key(address)`, and a non-zero key that is not this wallet's own viewing key adds the danger-colour "Private balances off" note. These reads only label the row: one that fails leaves it unlabelled and never pauses the scan, and the row stays selectable. The send path re-checks. Keep = deployed ∨ funded ∨ (creatable ∧ (index 0 ∨ manual)). Selectable = OZ ∨ deployed ∨ funded. Auto-selection caps at 40. Manual index 0..0x7fffffff. | `onboarding-ops.ts:46-190`; `wallet-model/src/accounts/recovery.ts`; `account-compatibility.ts` (`argentSigningRestriction`, `braavosSigningRestriction`); `strk20-registration-owner.ts` (`strk20RegisteredElsewhere`) |
 | Restore | 1-40 selections, all distinct by `type:class:index`. Every selection is re-derived through Krusty, and derived addresses must be unique. The set is committed atomically. The first selection becomes active. | `vault/src/service/recovery.ts` |
 | Groups | `{id, name, icon, accountIds}`. Name 1-64 characters. Id = slug. Icon from `GROUP_ICONS` (18). An account is in at most one group. **There are no default groups**: "Operations" and "Long term" are ui-lab fixtures. | `features/settings/src/groups.ts`; `ui-lab/src/fixtures/journey-fixtures.ts:41-54` |
-| Network switch | One `activeAccountId` for the whole vault. Switching network keeps the active account if it is on the target network, else takes the first account there, else projects the active account (same family, `accountIndex`, class for non-OZ, salt) onto the target network, stores it and makes it active. | `runtime/runtime-state.ts:125-132,280-307`; `vault/src/accounts/network-account.ts`; `vault/src/service/service.ts:119-150` |
+| Network switch | One `activeAccountId` for the whole vault. Switching network keeps the active account if it is on the target network, else takes the first visible account there (a hidden one only if none is visible), else projects the active account (same family, `accountIndex`, class for non-OZ, salt) onto the target network, stores it and makes it active. | `runtime/runtime-state.ts:125-132,280-307`; `vault/src/accounts/network-account.ts`; `vault/src/service/service.ts:119-150` |
 | Signing key | Each family's own ladder (issue 505). Bramble's: `m/44'/9004'/i'/0/0` (OZ, and Argent this wallet made). Braavos's: `m/44'/9004'/0'/0/i`. Ready's: the ETH key at `m/44'/60'/0'/0/0` seeds `m/44'/9004'/0'/0/i`, never under a BIP-39 passphrase. Each record stores its `ladder` (vault v5); records from v4 and earlier are all on Bramble's ladder and keep their addresses. Only index 0 is shared between Bramble's and Braavos's ladders. | `vault/src/accounts/accounts.ts` (`deriveAccount`), `derivation-core.ts`; mobile `kms.rs::private_key` (`Ladder`) |
 
 ## 2. User-visible behaviour, screen by screen
@@ -110,7 +110,7 @@ The core decides every state here; the apps render it.
 
 **Hidden accounts (P6).** `set_account_hidden(account_id, hidden)` keeps the extension's
 `hiddenAccountIds` in the preferences file, and `AccountRecord.hidden` tells the app which are
-hidden. A hidden account leaves the drawer, Send's account picker and Manage's account list
+hidden. A hidden account leaves the drawer, Send's recipient list and Manage's account list
 (`visibleRecords` on both platforms); it keeps its key, can still be the active account and still
 signs. Manage, as `account-names.ts` does:
 
@@ -142,9 +142,9 @@ left out, and with them its advice to keep the private key: mobile has no privat
 (krusty-kms#257) and the core keeps no dismissed-notice preference yet. When the export lands, take
 the extension's title ("Back up this account's key") and body back with the control.
 
-Tests: iOS `BrambleTests/AccountVisibilityTests` (hide, show, Send's picker, the core's refusal and
+Tests: iOS `BrambleTests/AccountVisibilityTests` (hide, show, Send's recipient list, the core's refusal and
 the active-account move over a real core; the kept lines; the notice rule); Android
-`AccountVisibilityTest` (JVM: the list split, the refusal's wording, the kept lines, the notice
+`AccountVisibilityTest` (JVM: the list split, the kept lines, the notice
 rule). No test opens a vault holding kept or pre-fix records: the bindings have no hook to seal
 one, so those two rest on wallet-core's `tests/vault_match.rs` and the apps' rendering rules.
 

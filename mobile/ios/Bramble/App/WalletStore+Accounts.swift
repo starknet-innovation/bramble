@@ -43,7 +43,13 @@ extension WalletStore {
             await reloadAccounts()
             notify(hidden ? "Account hidden" : "Account shown")
             if activeRecord?.id != before { await refreshBalances(reset: true) }
-        } catch { toast = describe(error) }
+        } catch {
+            // Hiding the active account is two writes: the core may have moved the active account
+            // before the hide failed. Re-read, so the app follows the core's active account.
+            await reloadAccounts()
+            if activeRecord?.id != before { await refreshBalances(reset: true) }
+            toast = describe(error)
+        }
     }
 
     /// The accounts the vault holds that mobile keeps but does not operate, for Manage's read-only

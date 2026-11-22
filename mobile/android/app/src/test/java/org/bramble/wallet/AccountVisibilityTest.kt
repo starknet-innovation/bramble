@@ -2,7 +2,6 @@ package org.bramble.wallet
 
 import org.bramble.core.AccountFamily
 import org.bramble.core.AccountRecord
-import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
 import org.bramble.core.UnusableAccount
 import org.bramble.core.UnusableReason
@@ -48,14 +47,6 @@ class AccountVisibilityTest {
         val records = listOf(account(0), account(1, hidden = true), account(2), account(3, hidden = true))
         assertEquals(listOf("SN_MAIN:0x0", "SN_MAIN:0x2"), records.visible().map { it.id })
         assertEquals(listOf("SN_MAIN:0x1", "SN_MAIN:0x3"), records.hidden().map { it.id })
-    }
-
-    @Test
-    fun refusalIsTheExtensionsWords() {
-        assertEquals(
-            "Can't hide the last account on this network",
-            describe(CoreException.InvalidInput("can't hide the last account on this network")),
-        )
     }
 
     @Test

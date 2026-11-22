@@ -22,7 +22,12 @@ suspend fun WalletStore.setHidden(
     accountId: String,
     hidden: Boolean,
 ) {
-    accountCall { it.setAccountHidden(accountId, hidden) }
+    runCatching { accountCall { it.setAccountHidden(accountId, hidden) } }.onFailure { refused ->
+        // Hiding the active account is two writes: the core may have moved the active account
+        // before the hide failed. Re-read, so the app follows the core's active account.
+        if (refused !is CancellationException) runCatching { accountCall { } }
+        throw refused
+    }
     showNotice(if (hidden) "Account hidden" else "Account shown")
 }
 
