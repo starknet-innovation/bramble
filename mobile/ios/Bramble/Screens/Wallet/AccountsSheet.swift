@@ -263,17 +263,33 @@ struct FolderPicker: View {
 }
 
 /// `addAccountChooser`: "Add a new account" with the options this app offers today: a regular
-/// account, and a multisig through the Ready Multisig gateway. Ledger is left out (another
-/// workstream); importing is shown as coming, like onboarding does.
+/// account, a multisig through the Ready Multisig gateway, and "Import an existing account", which
+/// leads to `importAccountChooser` and the private-key form. Ledger is left out (another workstream).
 struct AddAccountChooser: View {
+    private enum Stage { case add, importChooser, importKey }
+
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let close: () -> Void
     let added: () -> Void
     let multisig: () -> Void
     @State private var busy = false
+    @State private var stage = Stage.add
 
     var body: some View {
+        switch stage {
+        case .add:
+            chooser
+
+        case .importChooser:
+            ImportAccountChooser(back: { stage = .add }, importKey: { stage = .importKey })
+
+        case .importKey:
+            ImportKeyForm(back: { stage = .importChooser }, imported: added)
+        }
+    }
+
+    private var chooser: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Drawer.gap) {
             HStack(spacing: BrambleSpace.sm) {
                 Text("Add a new account")
@@ -308,10 +324,11 @@ struct AddAccountChooser: View {
                     detail: "Create a Ready Multisig or add a shared address.",
                     action: multisig
                 )
-                OptionCard(icon: .link, title: "Import an existing account", detail: "Coming to Bramble mobile.") {
-                    // No action: importing is not offered yet, and the card is disabled.
-                }
-                    .disabled(true)
+                OptionCard(
+                    icon: .link,
+                    title: "Import an existing account",
+                    detail: "Bring accounts you already own: a recovery phrase or a private key."
+                ) { stage = .importChooser }
             }
             Spacer(minLength: 0)
         }

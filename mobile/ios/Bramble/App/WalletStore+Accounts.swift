@@ -79,6 +79,18 @@ extension WalletStore {
         notify("Account added")
     }
 
+    /// "Import private key" (`wallet.importAccount`, OpenZeppelin only): the core seals the key in
+    /// the vault and makes the account active; no call returns the key. Throws the core's refusal
+    /// ("invalid private key", "account already exists", `Locked`) for the form to show.
+    func importPrivateKey(_ privateKey: String) async throws {
+        let core = core, network = network
+        _ = try await work { try core.importPrivateKey(network: network, privateKey: privateKey) }
+        scheduleIdleLock()
+        await reloadAccounts()
+        await refreshBalances(reset: true)
+        notify("Account imported")
+    }
+
     /// Saves or clears (empty) the active account's name; toasts as `bindAccountLabel` does.
     func saveLabel(_ label: String, for id: String) async {
         let core = core

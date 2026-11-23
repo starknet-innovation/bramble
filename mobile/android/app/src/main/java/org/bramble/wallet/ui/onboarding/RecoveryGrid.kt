@@ -257,7 +257,7 @@ private fun SuggestionStrip(
 }
 
 /** Empties the clipboard without reading it. `clearPrimaryClip` is API 28, the app's minimum. */
-private fun clearClipboard(context: Context) {
+internal fun clearClipboard(context: Context) {
     val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
     if (clipboard.hasPrimaryClip()) clipboard.clearPrimaryClip()
 }
