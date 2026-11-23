@@ -116,15 +116,18 @@ const readTrackedAmounts = async (
   return read({ pairs, rpcUrls }).catch(() => []);
 };
 
-// The settled outcome of each pending revoke in `records`, read from the
-// wallet's own activity reconciliation, which keeps checking a submitted hash
-// after the panel closes (issue 647). Only the row this wallet recorded for the
-// transaction it submitted (`origin: "wallet"`) in the revoking record's own
-// scope counts: a chain-discovered or other-scope row with the same hash is
-// not this wallet's observation. A revoke still pending or pre-confirmed, or
-// whose activity line was never written, has no outcome and keeps settling on
-// readings alone. Conflicting rows resolve in the store, failed over accepted.
-const revokeOutcomes = async (
+/**
+ * The settled outcome of each pending revoke in `records`, read from the
+ * wallet's own activity reconciliation, which keeps checking a submitted hash
+ * after the panel closes (issue 647). Only the row this wallet recorded for the
+ * transaction it submitted (`origin: "wallet"`) in the revoking record's own
+ * scope counts: a chain-discovered or other-scope row with the same hash is
+ * not this wallet's observation. A revoke still pending or pre-confirmed, or
+ * whose activity line was never written, has no outcome and keeps settling on
+ * readings alone. Conflicting rows resolve in the store, failed over accepted.
+ * Exported for the mobile parity generator (scripts/mobile-parity-allowances).
+ */
+export const revokeOutcomes = async (
   deps: WalletOpsDeps,
   records: readonly AllowanceRecord[],
   networkId: StarknetNetworkId,
@@ -185,8 +188,11 @@ const allowanceScopeOwners = async (
   return { multisigUnread: signed.unreadable, owners };
 };
 
-// What the listing could not vouch for, in the order the manager states it.
-const listingNotices = (flags: {
+/**
+ * What the listing could not vouch for, in the order the manager states it.
+ * Exported for the mobile parity generator (scripts/mobile-parity-allowances).
+ */
+export const listingNotices = (flags: {
   readonly multisigUnread: boolean;
   readonly retentionFull: boolean;
   readonly scanComplete: boolean;
@@ -196,14 +202,17 @@ const listingNotices = (flags: {
   ...(flags.retentionFull ? (["retention-full"] as const) : []),
 ];
 
-// What the manager may claim about each row. A contract this account tracks as
-// a token is fungible by the user's own say-so; any other contract is fungible
-// only if the chain answered `allowance(owner, spender)` for that exact pair,
-// which an ERC721 cannot do. Everything else is listed as an approval whose
-// units the wallet will not vouch for, rather than as an amount of a token that
-// may not exist. A row the chain has resolved to an exact zero is dropped: the
-// spender's reach is nil, so there is nothing outstanding to show.
-const outstandingAllowances = (
+/**
+ * What the manager may claim about each row. A contract this account tracks as
+ * a token is fungible by the user's own say-so; any other contract is fungible
+ * only if the chain answered `allowance(owner, spender)` for that exact pair,
+ * which an ERC721 cannot do. Everything else is listed as an approval whose
+ * units the wallet will not vouch for, rather than as an amount of a token that
+ * may not exist. A row the chain has resolved to an exact zero is dropped: the
+ * spender's reach is nil, so there is nothing outstanding to show.
+ * Exported for the mobile parity generator (scripts/mobile-parity-allowances).
+ */
+export const outstandingAllowances = (
   views: readonly AllowanceView[],
   assets: ApprovedAssets,
   confirmed: ReadonlySet<string>,
