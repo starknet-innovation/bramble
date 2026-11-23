@@ -100,9 +100,11 @@ const NAMES: readonly (readonly [string, string])[] = [
   ["blank", "   "],
   ["empty", ""],
   ["a hex address", `0x${"a".repeat(64)}`],
-  ["128 UTF-16 units", `${"a.".repeat(61)}a.stark`],
-  ["129 UTF-16 units", `${"a.".repeat(61)}ab.stark`],
-  ["129 units counting outer whitespace", ` ${"a.".repeat(61)}a.stark`],
+  // 120 + 8 = 128 units, 129 units, and the 128-unit name behind one space: the cap counts the
+  // raw text, not the trimmed name.
+  ["128 UTF-16 units", `${"a.".repeat(60)}aa.stark`],
+  ["129 UTF-16 units", `${"a.".repeat(60)}aaa.stark`],
+  ["128 units trimmed, 129 counting outer whitespace", ` ${"a.".repeat(60)}aa.stark`],
   ["an astral character counts two units", `${"\u{1f600}".repeat(64)}a.stark`],
 ];
 
