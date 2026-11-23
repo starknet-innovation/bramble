@@ -99,24 +99,28 @@ struct NetworkView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-            FlowHeader(
-                title: "Network",
-                subtitle: "Choose where the wallet operates",
-                network: store.networkLabel
-            ) { dismiss() }
-            MenuGroup {
-                ForEach(supportedNetworks(), id: \.chainId) { network in
-                    row(network)
+        ScrollView {
+            VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
+                FlowHeader(
+                    title: "Network",
+                    subtitle: "Choose where the wallet operates",
+                    network: store.networkLabel
+                ) { dismiss() }
+                MenuGroup {
+                    ForEach(supportedNetworks(), id: \.chainId) { network in
+                        row(network)
+                    }
                 }
+                Text("Switching selects or derives an account on the target network.")
+                    .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                RpcEndpointDisclosure()
+                CoordinationRelayDisclosure()
+                ProductAnalyticsDisclosure()
+                ReliabilityDiagnosticsDisclosure()
+                Spacer()
             }
-            Text("Switching selects or derives an account on the target network.")
-                .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
-            RpcEndpointDisclosure()
-            CoordinationRelayDisclosure()
-            Spacer()
+            .padding(BrambleMetrics.Screen.shellPadding)
         }
-        .padding(BrambleMetrics.Screen.shellPadding)
     }
 
     private func row(_ network: NetworkInfo) -> some View {
