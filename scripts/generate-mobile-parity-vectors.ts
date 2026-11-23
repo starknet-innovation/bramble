@@ -33,6 +33,7 @@ import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-p
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
 import { renderStarkNameParity, STARK_NAME_PARITY_FIXTURE_PATH } from "./mobile-parity-stark-name";
+import { renderSwapParity, SWAP_PARITY_FIXTURE_PATH } from "./mobile-parity-swap";
 import {
   computeImportedVaultParity,
   computeVaultParity,
@@ -161,6 +162,9 @@ for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${pa
 
 await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
 console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);
+
+await writeFile(SWAP_PARITY_FIXTURE_PATH, await renderSwapParity());
+console.log(`wrote ${SWAP_PARITY_FIXTURE_PATH}`);
 
 // So are the privacy fixture and the privacy copy tables.
 await import("./generate-mobile-privacy-vectors");
