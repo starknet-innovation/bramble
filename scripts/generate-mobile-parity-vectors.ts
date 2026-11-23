@@ -33,6 +33,7 @@ import { CALLS_PARITY_FIXTURE_PATH, renderCallsParity } from "./mobile-parity-ca
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
+import { renderStakingParity, STAKING_PARITY_FIXTURE_PATH } from "./mobile-parity-staking";
 import { renderStarkNameParity, STARK_NAME_PARITY_FIXTURE_PATH } from "./mobile-parity-stark-name";
 import { renderSwapParity, SWAP_PARITY_FIXTURE_PATH } from "./mobile-parity-swap";
 import {
@@ -135,6 +136,8 @@ for (const [path, compute] of [
 await writeFile(ACTIVITY_PARITY_FIXTURE_PATH, await renderActivityParity());
 console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);
 
+await writeFile(STAKING_PARITY_FIXTURE_PATH, await renderStakingParity());
+console.log(`wrote ${STAKING_PARITY_FIXTURE_PATH}`);
 await writeFile(CALLS_PARITY_FIXTURE_PATH, await renderCallsParity());
 console.log(`wrote ${CALLS_PARITY_FIXTURE_PATH}`);
 await writeFile(ALLOWANCES_PARITY_FIXTURE_PATH, await renderAllowancesParity());
