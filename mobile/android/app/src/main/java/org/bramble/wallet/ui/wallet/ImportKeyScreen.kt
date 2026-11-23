@@ -8,7 +8,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CancellationException
@@ -68,7 +67,6 @@ fun ImportKeyForm(
 ) {
     val skin = LocalSkin.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     var key by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<String?>(null) }
     DisposableEffect(Unit) { onDispose { key = "" } }
@@ -82,7 +80,9 @@ fun ImportKeyForm(
         }
         key = ""
         result = null
-        scope.launch {
+        // The store's scope, not the form's: leaving mid-import must not cancel the reload and
+        // toast after the core has already sealed the account.
+        store.appScope.launch {
             runCatching { store.importPrivateKey(privateKey) }
                 .onSuccess { imported() }
                 .onFailure { refused ->
