@@ -55,6 +55,7 @@ fun HomeScreen(
                 .PortfolioHeroSection(store.portfolio)
             org.bramble.wallet.privacy
                 .ShieldedHeroLabel(store)
+            ReadyKeyNoticeCard(store, moveFunds = actions.send)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
             val active = store.activeRecord

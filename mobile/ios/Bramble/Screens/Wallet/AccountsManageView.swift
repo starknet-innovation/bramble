@@ -2,7 +2,8 @@ import BrambleCore
 import SwiftUI
 
 /// "Accounts & groups" (`accountFlow` in `flows.ts`): pick an account (each row with its inline
-/// address copy), add one, organise groups, then name the active account and inspect its
+/// address copy and Hide), add one, show hidden ones again, see the ones mobile keeps unused,
+/// organise groups, then name the active account and inspect its
 /// identifiers as a receipt with copy controls, top to bottom: pick → organise → inspect.
 struct AccountsManageView: View {
     private enum Layout {
@@ -19,18 +20,21 @@ struct AccountsManageView: View {
     @State private var choosing = false
     @State private var label = ""
     @State private var labelResult: String?
+    @State private var unusable: [UnusableAccount] = []
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                 FlowHeader(title: "Accounts & groups", network: store.networkLabel) { dismiss() }
                 SettingsSection(title: "Accounts") {
-                    ForEach(store.records, id: \.id) { record in accountRow(record) }
+                    ForEach(store.visibleRecords, id: \.id) { record in accountRow(record) }
                     MenuRow(icon: .plus, title: "Add account", chevron: false) { choosing = true }
                 }
-                if store.records.isEmpty {
+                if store.visibleRecords.isEmpty {
                     StatusLine(text: "No accounts on this network yet. Add one below.")
                 }
+                HiddenAccountsSection()
+                UnusableAccountsSection(accounts: unusable)
                 GroupsSection()
                 if let active = store.activeRecord { activeSection(active) }
             }
@@ -53,6 +57,7 @@ struct AccountsManageView: View {
             .environment(store)
         }
         .onAppear { label = store.activeRecord?.label ?? "" }
+        .task { unusable = await store.unusableAccounts() }
         .onChange(of: store.activeRecord?.id) { _, _ in
             label = store.activeRecord?.label ?? ""
             labelResult = nil
@@ -102,8 +107,17 @@ struct AccountsManageView: View {
             .accessibilityValue(record.address)
             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             CopyButton(value: record.address, label: "Copy \(record.displayName) address")
-                .padding(.trailing, BrambleSpace.sm)
+            hideButton(record).padding(.trailing, BrambleSpace.sm)
         }
+    }
+
+    /// Hiding is the reversible way out of the lists; the account keeps its key and comes back
+    /// from "Hidden accounts" (`accountNameRow`).
+    private func hideButton(_ record: AccountRecord) -> some View {
+        PillButton("Hide", kind: .ghost, icon: .eyeOff, small: true) {
+            Task { await store.setHidden(true, for: record.id) }
+        }
+        .accessibilityLabel("Hide \(friendlyAccountName(address: record.address))")
     }
 
     private func activeSection(_ active: AccountRecord) -> some View {

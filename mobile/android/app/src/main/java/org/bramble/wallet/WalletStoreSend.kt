@@ -58,7 +58,7 @@ fun WalletStore.makeSendModel(startToken: String? = null): SendFlowModel? {
  */
 fun WalletStore.sendRecipients(): RecipientBook {
     val contacts = coordination.contacts.map { it.copy(address = validateRecipient(it.address) ?: it.address) }
-    return recipientBook(records, groups, contacts, activeRecord?.id)
+    return recipientBook(visibleRecords, groups, contacts, activeRecord?.id)
 }
 
 /**
