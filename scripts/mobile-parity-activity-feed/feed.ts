@@ -167,12 +167,14 @@ export const FEED: readonly ActivityEntry[] = [
     status: "accepted",
     summary: "Received 7 USDC from 0x5a11…5678",
   }),
+  // Larger than every ETH row with an address: with the tracked tokens it sorts first among
+  // them, without them after them (its own `symbol:eth` key).
   row(12, T - 4 * DAY - HOUR, {
-    ...send("0.25", "ETH", undefined),
+    ...send("2", "ETH", undefined),
     counterparty: ALICE,
     direction: "out",
     status: "accepted",
-    summary: "Sent 0.25 ETH to 0x5a11…5678",
+    summary: "Sent 2 ETH to 0x5a11…5678",
   }),
   row(13, T - 5 * DAY, {
     ...send("10", "STRK", undefined),
@@ -249,4 +251,4 @@ export const without = (...indexes: readonly number[]): readonly ActivityEntry[]
   FEED.filter((_, at) => !indexes.includes(at + 1));
 
 /** Values the cases name. */
-export const KEYS = { ALICE_PADDED, BOB, STRK, USDC_BRIDGED } as const;
+export const KEYS = { ALICE_PADDED, BOB, ETH, STRK, USDC_BRIDGED } as const;
