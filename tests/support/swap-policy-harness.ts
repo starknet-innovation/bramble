@@ -11,8 +11,10 @@
  * eventually disagree about what "honest" means.
  */
 
+import type { PriceService } from "@bramble/portfolio/prices";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -167,9 +169,14 @@ export type SwapSubmit = (input: {
  * Drives the REAL background message handler over an injected AVNU service
  * that returns `build` verbatim, so every assertion runs through the same
  * validation, policy, freeze, and submit path production uses. `submit`
- * replaces the node's reply (for example, a lost one).
+ * replaces the node's reply (for example, a lost one); `services` replaces the
+ * AVNU service (a real one over a fake fetch) or adds a price feed.
  */
-export const makeSwapHarness = (build: readonly SwapCall[], submit?: SwapSubmit) => {
+export const makeSwapHarness = (
+  build: readonly SwapCall[],
+  submit?: SwapSubmit,
+  services: { readonly prices?: PriceService; readonly swap?: SwapService } = {},
+) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   let tick = 0;
@@ -180,8 +187,9 @@ export const makeSwapHarness = (build: readonly SwapCall[], submit?: SwapSubmit)
     },
     store: createMemoryStore(),
   });
+  const allowanceStore = memoryAllowanceStore();
   const submitted: unknown[] = [];
-  const swap: SwapService = {
+  const swap: SwapService = services.swap ?? {
     async listTokens() {
       return [];
     },
@@ -203,6 +211,7 @@ export const makeSwapHarness = (build: readonly SwapCall[], submit?: SwapSubmit)
   };
   const handler = createMessageHandler(walletStub, testExtension, {
     activity,
+    allowanceStore,
     runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
@@ -212,10 +221,11 @@ export const makeSwapHarness = (build: readonly SwapCall[], submit?: SwapSubmit)
         return submit ? submit(input) : { calls: [], transactionHash: "0x5aa9" };
       },
     } as never,
+    ...(services.prices ? { prices: services.prices } : {}),
     session,
     swap,
   });
-  return { activity, handler, submitted };
+  return { activity, allowanceStore, handler, submitted };
 };
 
 /** Sends the reviewed wallet.swapPrepare for `build` and keeps what was submitted. */

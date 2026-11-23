@@ -28,11 +28,13 @@ import {
   ACTIVITY_FEED_FIXTURE_PATH,
   renderActivityFeedParity,
 } from "./mobile-parity-activity-feed";
+import { ALLOWANCES_PARITY_FIXTURE_PATH, renderAllowancesParity } from "./mobile-parity-allowances";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
 import { renderStakingParity, STAKING_PARITY_FIXTURE_PATH } from "./mobile-parity-staking";
 import { renderStarkNameParity, STARK_NAME_PARITY_FIXTURE_PATH } from "./mobile-parity-stark-name";
+import { renderSwapParity, SWAP_PARITY_FIXTURE_PATH } from "./mobile-parity-swap";
 import {
   computeImportedVaultParity,
   computeVaultParity,
@@ -135,6 +137,8 @@ console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);
 
 await writeFile(STAKING_PARITY_FIXTURE_PATH, await renderStakingParity());
 console.log(`wrote ${STAKING_PARITY_FIXTURE_PATH}`);
+await writeFile(ALLOWANCES_PARITY_FIXTURE_PATH, await renderAllowancesParity());
+console.log(`wrote ${ALLOWANCES_PARITY_FIXTURE_PATH}`);
 // The RPC override rules (P4) and Starknet name lookups (P5), recomputed in full.
 await writeFile(SETTINGS_PARITY_FIXTURE_PATH, await renderSettingsParity());
 console.log(`wrote ${SETTINGS_PARITY_FIXTURE_PATH}`);
@@ -161,6 +165,9 @@ for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${pa
 
 await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
 console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);
+
+await writeFile(SWAP_PARITY_FIXTURE_PATH, await renderSwapParity());
+console.log(`wrote ${SWAP_PARITY_FIXTURE_PATH}`);
 
 // So are the privacy fixture and the privacy copy tables.
 await import("./generate-mobile-privacy-vectors");
