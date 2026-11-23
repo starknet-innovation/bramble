@@ -17,22 +17,22 @@ built for the source revision; a zip built elsewhere with a different Bun does n
 reproduce, which is the pin mismatch recorded in
 [#352](https://github.com/starknet-innovation/bramble/issues/352).
 
-- **Bun 1.3.3** (<https://bun.sh>), which `npm run build-for-amo` installs for you
+- **Bun 1.4.4** (<https://bun.sh>), which `npm run build-for-amo` installs for you
 - **Node.js 24** with the **npm** it ships (`bun run vendor:privacy` runs `npm ci`)
 - `git` and `zip`
 - Network access: `bun install`, `vendor:argent` and `vendor:privacy` fetch pinned
   upstream sources.
 
-Mozilla reviews source builds on Ubuntu; the steps below need nothing beyond the tools
-above. They were verified on the `v0.10.5` source with Bun 1.3.3 (macOS arm64): two
-independent rebuilds from the same source archive produced byte-identical
-`bramble-firefox-0.10.5.zip` files. Releases built before the Bun pin (for example
-`v0.10.3`, built with Bun 1.4.2) do not reproduce with this recipe. On the `v0.10.10`
-source, `npm run build-for-amo` (Node.js 24, no Bun installed beforehand) produced the
-same zip on macOS arm64 and in an x86_64 Ubuntu 24.04 container run as root, and the
-manual steps matched it byte for byte. Before submitting,
-confirm that a rebuild on Ubuntu matches the submitted archive's checksum, which is the
-check the reviewer will perform.
+Mozilla reviews source builds on Ubuntu. On the `v0.10.10` source with Bun 1.3.3,
+`npm run build-for-amo` (Node.js 24, no Bun installed beforehand) produced the same
+zip on macOS arm64 and in an x86_64 Ubuntu 24.04 container. The manual steps matched
+it byte for byte. Two clean rebuilds with Bun 1.4.4 on macOS arm64 also produced
+byte-identical archives to each other. A release reproduces only with the Bun
+version its source revision pins. Releases built before the pin, such as
+`v0.10.3` with Bun 1.4.2, need their original build toolchain.
+
+Before submitting, confirm that a rebuild on Ubuntu matches the submitted
+archive's checksum, which is the check the reviewer will perform.
 
 ## The submitted archive
 

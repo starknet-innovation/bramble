@@ -50,6 +50,11 @@ bun run package:extension
 
 CI runs the same gates. Do not merge around them.
 
+The unit-test coverage floor (`bun run check:coverage`, 95% of functions and lines)
+sits only a fraction of a point above the current figure. Bun reports the average of
+each file's own percentage, so one new module with untested functions moves it more
+than its size suggests. Add tests with any new module rather than lowering the floor.
+
 ## Workflow: branches, releases, and PRs
 
 Work follows a **roadmap-driven, release-branch** model. The full, canonical
