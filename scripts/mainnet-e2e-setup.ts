@@ -11,7 +11,9 @@ import { displayRpcUrl } from "./gasless-mainnet-rpc";
 
 /**
  * The create/fund/deploy commands. The class hash is the one the wallet
- * derives, not sncast's default OpenZeppelin class.
+ * derives, not sncast's default OpenZeppelin class, and the salt is 0x0
+ * because the wallet derives an imported key's address with salt 0x0; sncast's
+ * default random salt gives an address the wallet can never import.
  */
 export const setupInstructions =
   (): string => `Create a mainnet OpenZeppelin account with Bramble's class, fund it, and deploy it.
@@ -20,9 +22,16 @@ export const setupInstructions =
     --network mainnet \\
     --name bramble \\
     --type oz \\
-    --class-hash ${OPENZEPPELIN_ACCOUNT_CLASS_HASH}
+    --class-hash ${OPENZEPPELIN_ACCOUNT_CLASS_HASH} \\
+    --salt 0x0
 
-Fund the printed address with STRK (0.5 STRK covers several runs), then:
+Keep --salt 0x0: the wallet derives the key's address with salt 0x0, so an
+account with sncast's random salt cannot be imported. An existing key can be
+reused by adding an accounts-file entry with "salt": "0x0" and the address
+that salt gives; this script checks the address before any browser starts.
+
+Fund the printed address with STRK (keep at least 1 STRK: the review caps
+the estimated fee at 0.2 STRK per send), then:
 
   sncast account deploy --network mainnet --name bramble
 

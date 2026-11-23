@@ -58,9 +58,9 @@ describe("mainnet spend policy", () => {
     expect(standard.usdc.minRaw).toBe(20_000n);
     expect(standard.usdc.maxRaw).toBe(5n * USDC);
     expect(standard.usdc.capRaw).toBe(50_000n);
-    expect(strk20.strk.minRaw).toBe(21n * STRK);
-    expect(strk20.strk.maxRaw).toBe(30n * STRK);
-    expect(strk20.strk.capRaw).toBe(22n * STRK);
+    expect(strk20.strk.minRaw).toBe(32n * STRK);
+    expect(strk20.strk.maxRaw).toBe(40n * STRK);
+    expect(strk20.strk.capRaw).toBe(32n * STRK);
     expect(strk20.usdc).toEqual(standard.usdc);
     expect(parseSpendTier(undefined)).toBe("standard");
     expect(parseSpendTier("strk20")).toBe("strk20");
@@ -98,8 +98,8 @@ describe("mainnet spend policy", () => {
     expect(spent.message).toContain("exceeds the 0.2 per-run cap");
 
     const held = judgeBalances({
-      after: { strk: 25n * STRK, usdc: USDC },
-      before: { strk: 25n * STRK, usdc: USDC },
+      after: { strk: 36n * STRK, usdc: USDC },
+      before: { strk: 36n * STRK, usdc: USDC },
       phase: "preflight",
       tier: "strk20",
     });
@@ -107,15 +107,15 @@ describe("mainnet spend policy", () => {
   });
 
   test("post-run checks the spend cap, not the preflight minimum", () => {
-    // A normal STRK20 lifecycle: start at 25 STRK, spend about 16.
+    // A normal STRK20 lifecycle: start at 36 STRK, spend about 27.
     const strk20Run = judgeBalances({
       after: { strk: 9n * STRK, usdc: USDC },
-      before: { strk: 25n * STRK, usdc: USDC },
+      before: { strk: 36n * STRK, usdc: USDC },
       phase: "post",
       tier: "strk20",
     });
     expect(strk20Run.kind).toBe("ok");
-    expect(strk20Run.strkDelta).toBe(16n * STRK);
+    expect(strk20Run.strkDelta).toBe(27n * STRK);
 
     // Standard tier: a run inside the cap that ends below the minimum passes
     // post; the next preflight asks for a top-up.
@@ -137,7 +137,7 @@ describe("mainnet spend policy", () => {
     // The cap still binds after the run, and so does the maximum.
     const strk20Over = judgeBalances({
       after: { strk: 2n * STRK, usdc: USDC },
-      before: { strk: 25n * STRK, usdc: USDC },
+      before: { strk: 36n * STRK, usdc: USDC },
       phase: "post",
       tier: "strk20",
     });

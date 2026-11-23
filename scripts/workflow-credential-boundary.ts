@@ -58,8 +58,13 @@ export const CREDENTIAL_BOUNDARIES: readonly Boundary[] = [
   { files: ["release.yml"], secrets: ["CWS_"], environments: ["chrome-web-store"] },
   // UI Lab: the Chromatic project token and the Pages deployment.
   { files: ["ui-lab.yml"], secrets: ["CHROMATIC_PROJECT_TOKEN"], environments: ["github-pages"] },
-  // The Sepolia seed file, which still controls funded testnet accounts.
-  { files: ["nightly.yml"], secrets: ["BRAMBLE_SEPOLIA_SEEDS"], environments: [] },
+  // The Sepolia seed file, which still controls funded testnet accounts, and
+  // the S-TXN phrase behind the nightly's testnet sends and deploys.
+  {
+    files: ["nightly.yml"],
+    secrets: ["BRAMBLE_SEPOLIA_SEEDS", "BRAMBLE_SEPOLIA_TXN_SEED"],
+    environments: [],
+  },
 ];
 
 const ENVIRONMENT_NAME = /^[A-Za-z0-9._-]+$/;

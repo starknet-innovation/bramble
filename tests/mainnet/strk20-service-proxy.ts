@@ -33,6 +33,20 @@ type ProxyRoute = {
 };
 
 /**
+ * Service URLs the wallet is pointed at for a proxy rooted at `base`. The
+ * discovery and prover bases carry no trailing slash, like the production
+ * config: the wallet appends `/v1/...` itself, and a trailing slash here gives
+ * `//v1/...`, which the route parser refuses.
+ */
+export const strk20ProxyServiceUrls = (
+  base: string,
+): { readonly discoveryUrl: string; readonly proverUrl: string; readonly rpcUrl: string } => ({
+  discoveryUrl: `${base}/discovery`,
+  proverUrl: `${base}/prover`,
+  rpcUrl: `${base}/rpc/`,
+});
+
+/**
  * Parses only the fixed STRK20 test-proxy routes and methods. Request data is
  * reduced to an allowlisted route key before any upstream URL is selected.
  */
@@ -247,12 +261,9 @@ export const startStrk20ServiceProxy = async (input: {
       resolveListen();
     });
   });
-  const base = `http://${HOST}:${PORT}/strk20-e2e`;
   return {
     activity: () => [...activity],
     close: () => closeServer(server, sockets),
-    discoveryUrl: `${base}/discovery/`,
-    proverUrl: `${base}/prover/`,
-    rpcUrl: `${base}/rpc/`,
+    ...strk20ProxyServiceUrls(`http://${HOST}:${PORT}/strk20-e2e`),
   };
 };

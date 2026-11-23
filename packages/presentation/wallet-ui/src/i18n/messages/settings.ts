@@ -414,7 +414,7 @@ export const settingsMessages = {
     "settings.importKey.importedMany": "已导入 {count} 个账户",
     "settings.importKey.importSelected": "导入所选",
     "settings.importKey.missingKey": "输入要导入的私钥",
-    "settings.language.auto": "跟随浏览器",
+    "settings.language.auto": "浏览器",
     "settings.language.saveFailed": "无法更改语言。",
     "settings.language.title": "语言",
     "settings.network.hint": "切换时会在目标网络上选择或派生一个账户。",
