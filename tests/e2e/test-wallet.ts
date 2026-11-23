@@ -55,8 +55,9 @@ const reply = (call: RpcCall): RpcReply => {
 
 /**
  * Answers a parsed JSON-RPC body as a chain where nothing is deployed and
- * every balance is zero, batch or single. The body is untrusted test traffic:
- * a non-object entry is answered as an unknown method, never thrown on.
+ * every balance is zero, batch or single. The body is untrusted test traffic
+ * and is never thrown on: a non-object single body is answered as an unknown
+ * method, and a non-object entry in a batch is dropped from the reply.
  */
 export const emptyChainRpcResponse = (body: unknown): RpcReply | readonly RpcReply[] =>
   Array.isArray(body) ? body.filter(isRpcCall).map(reply) : reply(isRpcCall(body) ? body : {});

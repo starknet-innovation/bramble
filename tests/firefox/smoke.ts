@@ -12,15 +12,17 @@
  *
  * Offline, like the Chromium suite: Firefox's only route out is a loopback
  * proxy that answers the wallet's mainnet RPC hosts as an empty chain and
- * refuses everything else (`offline-network.ts`). The smoke proves that by
- * fetching an outside host and requiring the proxy to have refused it.
+ * refuses everything else (`offline-network.ts`). The smoke proves that path
+ * by fetching an outside host and requiring the proxy to have refused it;
+ * prefs switch off the direct paths (DNS checks, WebRTC, HTTP/3) untested.
  *
  * Not a Playwright suite (Playwright cannot load Firefox add-ons) and not a
  * `bun test` file: it is a script, so neither runner picks it up. Exits
  * non-zero on the first failed step, printing geckodriver's log tail.
  */
 
-import { existsSync, openSync, readFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -146,26 +148,31 @@ const main = async (): Promise<void> => {
   }
   const work = await mkdtemp(join(tmpdir(), "bramble-firefox-smoke-"));
   const driverLog = join(work, "geckodriver.log");
-  const network = await startOfflineNetwork(work);
-  let driver: ReturnType<typeof Bun.spawn> | undefined;
+  let closeNetwork = (): void => undefined;
+  let logFd: number | undefined;
+  let driverGroup: number | undefined;
   let session: Session | undefined;
   try {
+    const network = await startOfflineNetwork(work);
+    closeNetwork = network.close;
     const browser = await resolveBrowser(work);
     const port = await freePort();
-    const logFd = openSync(driverLog, "a");
+    logFd = openSync(driverLog, "a");
     // Marionette treats moz-extension pages as privileged and refuses scripts,
     // clicks, and navigation there unless the driver allows system access.
     // That widens what this automation may touch, not what the add-on may do.
     const args = ["--allow-system-access", "--host", "127.0.0.1", "--port", String(port)];
-    driver = Bun.spawn([browser.geckodriver, ...args], {
-      stderr: logFd,
-      stdin: "ignore",
-      stdout: logFd,
-    });
+    // Its own process group, so cleanup can take Firefox down with it even
+    // when the session never closed.
+    driverGroup = spawn(browser.geckodriver, args, {
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+    }).pid;
     const driverUrl = `http://127.0.0.1:${port}`;
-    await waitFor("geckodriver to listen", async () =>
-      (await fetch(`${driverUrl}/status`).catch(() => undefined))?.ok ? true : undefined,
-    );
+    await waitFor("geckodriver to listen", async () => {
+      const status = await fetch(`${driverUrl}/status`, { signal: AbortSignal.timeout(2_000) });
+      return status.ok ? true : undefined;
+    });
     session = await openSession(driverUrl, {
       alwaysMatch: {
         acceptInsecureCerts: true,
@@ -250,8 +257,15 @@ const main = async (): Promise<void> => {
     throw error;
   } finally {
     await session?.call("DELETE", "").catch(() => undefined);
-    driver?.kill();
-    network.close();
+    if (driverGroup !== undefined) {
+      try {
+        process.kill(-driverGroup, "SIGKILL");
+      } catch {
+        // The group already exited with the session.
+      }
+    }
+    if (logFd !== undefined) closeSync(logFd);
+    closeNetwork();
     await rm(work, { force: true, recursive: true });
   }
 };

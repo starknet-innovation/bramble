@@ -31,6 +31,9 @@ const GECKODRIVER = {
   url: "https://github.com/mozilla/geckodriver/releases/download/v0.37.1/geckodriver-v0.37.1-linux64.tar.gz",
 } as const;
 
+// Per download; the Firefox archive is about 80 MB.
+const DOWNLOAD_TIMEOUT_MS = 300_000;
+
 /** Absolute paths to the two executables the smoke starts. */
 export type BrowserBinaries = { readonly firefox: string; readonly geckodriver: string };
 
@@ -46,7 +49,8 @@ const fetchVerified = async (
   pin: { readonly sha256: string; readonly url: string },
   dir: string,
 ): Promise<string> => {
-  const response = await fetch(pin.url);
+  // A stalled mirror fails the run rather than holding the nightly job.
+  const response = await fetch(pin.url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`download failed (${response.status}): ${pin.url}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   const digest = createHash("sha256").update(bytes).digest("hex");

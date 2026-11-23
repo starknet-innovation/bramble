@@ -10,6 +10,9 @@
 
 const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf";
 const POLL_MS = 200;
+// Above WebDriver's own 30 s script timeout and session start-up; a stalled
+// driver fails the run instead of holding the CI job.
+const COMMAND_TIMEOUT_MS = 90_000;
 
 /** An element handle as WebDriver returns it. */
 type Element = { readonly [ELEMENT_KEY]: string };
@@ -83,6 +86,7 @@ export const openSession = async (driverUrl: string, capabilities: unknown): Pro
   const request = async (method: string, path: string, body?: unknown): Promise<unknown> => {
     const response = await fetch(`${driverUrl}${path}`, {
       method,
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
       ...(body === undefined
         ? {}
         : { body: JSON.stringify(body), headers: { "content-type": "application/json" } }),

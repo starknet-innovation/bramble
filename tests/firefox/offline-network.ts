@@ -156,11 +156,20 @@ export const startOfflineNetwork = async (dir: string): Promise<OfflineNetwork> 
  * Firefox prefs that make the proxy its only route: manual proxy for every
  * scheme, no direct fallback, and no proxy bypass except loopback (which
  * nothing in the wallet reaches during the smoke). A proxied host is resolved
- * by the proxy, which resolves nothing; DNS prefetch and DNS-over-HTTPS are
- * off so Firefox does not look a name up on its own either.
+ * by the proxy, which resolves nothing.
+ *
+ * The rest switch off what Firefox does outside the proxy: DNS prefetch,
+ * DNS-over-HTTPS, the connectivity and captive-portal checks (which resolve
+ * names directly), WebRTC and HTTP/3 (UDP). The smoke proves only the proxied
+ * path (`network is blackholed`); these prefs close the other paths we know
+ * of, they are not themselves tested.
  */
 export const offlinePrefs = (proxyPort: number): Record<string, boolean | number | string> => ({
+  "media.peerconnection.enabled": false,
+  "network.captive-portal-service.enabled": false,
+  "network.connectivity-service.enabled": false,
   "network.dns.disablePrefetch": true,
+  "network.http.http3.enable": false,
   "network.proxy.allow_hijacking_localhost": false,
   "network.proxy.failover_direct": false,
   "network.proxy.http": "127.0.0.1",

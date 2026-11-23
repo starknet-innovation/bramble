@@ -221,11 +221,11 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
-      # The only gate that runs the Gecko build (blocking); see tests/firefox/smoke.ts.
       - { name: Build Firefox extension, id: build_firefox, continue-on-error: true, run: bun run build:firefox }
-      - name: Firefox smoke
+      - name: Firefox smoke # the only gate that runs the Gecko build (blocking); tests/firefox/smoke.ts
         id: firefox_smoke
         continue-on-error: true
+        timeout-minutes: 20 # a stall must not hold the job ahead of the Sepolia steps
         run: '[ -f tests/firefox/smoke.ts ] || { echo "::error::This release branch predates the Firefox smoke test."; exit 1; }; bun run test:firefox:smoke'
       # Live Sepolia run of every in-wallet import path against the issue-821
       # test accounts (tools/vendor-dataset/verify-sepolia.ts). It sends nothing:
