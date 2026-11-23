@@ -63,6 +63,8 @@ multisig private balances that work on Mainnet, and fixes from user reports.
   the review fits on screen. A multisig proposal stays at 16. When the network
   refuses a transaction for a size or fee limit, the wallet shows the node's
   reason (#974, #975).
+- Builds use Bun 1.4.4. A release reproduces only with the Bun its source
+  pins; see BUILDING.md (#989).
 
 ### Fixed
 - Older NFTs such as SPOKs show their art; Bramble now reads token URIs stored
@@ -89,6 +91,8 @@ multisig private balances that work on Mainnet, and fixes from user reports.
 - Activity rows show the network fee again (#1002, #1004).
 - Importing a co-signer's completed multisig transaction works when this
   wallet already holds a different signature (#1003, #1005).
+- Clicking Connect again on a site whose connection request is still waiting
+  opens Bramble's popup again, instead of showing nothing (#973, #1023).
 
 ## [0.10.10] - Unreleased
 
