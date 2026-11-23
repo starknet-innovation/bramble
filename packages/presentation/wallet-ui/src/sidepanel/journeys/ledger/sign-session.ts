@@ -29,8 +29,10 @@ import {
 } from "@bramble/ledger-protocol/client";
 import {
   asLedgerRejection,
+  isLedgerRejectionCode,
   LedgerRejection,
   type LedgerRejectionCode,
+  ledgerErrorSupportCode,
 } from "@bramble/ledger-protocol/errors";
 import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
 import {
@@ -69,6 +71,8 @@ export type LedgerSignPhase =
       /** The device catalog code, or `null` when the wallet failed after the device signed. */
       readonly code: LedgerRejectionCode | null;
       readonly message: string;
+      /** Catalog code, plus the raw error name when one was caught. */
+      readonly supportCode?: string;
     }
   | { readonly kind: "submitting" }
   | { readonly kind: "verifying" };
@@ -124,11 +128,19 @@ const UNFINISHED_PHASE: LedgerSignPhase = {
   message: LEDGER_SIGN_UNFINISHED,
 };
 
-const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
-  code,
-  kind: "error",
-  message: ledgerMessageIn(code, uiLocale()),
-});
+const errorPhase = (error: unknown): LedgerSignPhase => {
+  const rejection =
+    typeof error === "string" && isLedgerRejectionCode(error)
+      ? new LedgerRejection(error)
+      : asLedgerRejection(error);
+  const supportCode = ledgerErrorSupportCode(rejection);
+  return {
+    code: rejection.code,
+    kind: "error",
+    message: ledgerMessageIn(rejection.code, uiLocale()),
+    ...(supportCode ? { supportCode } : {}),
+  };
+};
 
 /**
  * Creates a controller for the side-panel Ledger signing runtime. Single-flight
@@ -241,7 +253,7 @@ export const createLedgerSignController = (
         show({ kind: "connect" });
       }
     } catch (error) {
-      show(errorPhase(asLedgerRejection(error).code));
+      show(errorPhase(error));
     } finally {
       if (session) {
         await closeLedgerSessionQuietly(session);
@@ -277,7 +289,7 @@ export const createLedgerSignController = (
         return;
       }
     } catch (error) {
-      show(errorPhase(asLedgerRejection(error).code));
+      show(errorPhase(error));
       return;
     } finally {
       settle();
