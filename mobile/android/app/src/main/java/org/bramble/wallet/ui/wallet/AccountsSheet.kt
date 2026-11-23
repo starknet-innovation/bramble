@@ -54,6 +54,7 @@ import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.select
 import org.bramble.wallet.setGroup
+import org.bramble.wallet.visibleRecords
 
 /**
  * The account drawer (`shell/account-drawer.ts`, `docs/accounts.md` §2.2), port of the iOS
@@ -120,7 +121,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.DrawerContent(
     var filter by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf<String?>(null) }
     val activeGroup = store.groups.firstOrNull { it.id == filter }
-    val visible = activeGroup?.let { group -> store.records.filter { it.id in group.accountIds } } ?: store.records
+    val shown = store.visibleRecords
+    val visible = activeGroup?.let { group -> shown.filter { it.id in group.accountIds } } ?: shown
     DrawerHeader(store, close)
     if (store.groups.isNotEmpty()) GroupFilters(store, filter) { filter = it }
     Column(

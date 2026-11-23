@@ -148,9 +148,13 @@ private struct HitRegion<S: Shape>: ViewModifier {
     }
 }
 
-/// `button.icon-button`: a transparent 40pt circle around one icon, with a 44pt hit region.
+/// `button.icon-button`: a transparent 40pt circle around one icon, with a 44pt hit region. Disabled, it
+/// fades like the disabled `button`.
 struct IconButton: View {
     @Environment(\.skin) private var skin
+    @Environment(\.isEnabled) private var enabled
+    /// The disabled `button` opacity, as `PillButton`'s.
+    private static let disabledOpacity: Double = 0.5
     let icon: BrambleIconName
     let label: String
     var hint: String?
@@ -173,6 +177,7 @@ struct IconButton: View {
                 hit: CGSize(width: size, height: size)
             )
         )
+        .opacity(enabled ? 1 : Self.disabledOpacity)
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")
     }

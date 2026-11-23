@@ -77,6 +77,9 @@ final class SendFlowModel {
     private let trackedTokens: [String]
     let transport: RpcTransport
     private let track: (TransferPlan) -> Void
+    /// The wallet's price cache and display currency, which price the send's activity record as it
+    /// is written (`withSubmittedPrice`); nil records it without a price.
+    private let pricing: (prices: PriceBook, currency: DisplayCurrency)?
     private var driver: SendDriver?
 
     init(
@@ -88,6 +91,7 @@ final class SendFlowModel {
         transport: RpcTransport,
         trackedTokens: [String] = [],
         openingToken: String? = nil,
+        pricing: (prices: PriceBook, currency: DisplayCurrency)? = nil,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
     ) {
         self.core = core
@@ -98,6 +102,7 @@ final class SendFlowModel {
         self.trackedTokens = trackedTokens
         self.transport = transport
         self.track = track
+        self.pricing = pricing
         token = Self.token(openingToken, in: network) ?? network.tokens.first { $0.symbol == "STRK" }
             ?? network.tokens[0]
     }
@@ -283,6 +288,8 @@ final class SendFlowModel {
             amountError = SendCopy.amountInvalid
             return
         }
+        // Before Confirm: the core reads the cached, fresh price only when it writes the record.
+        if let pricing { plan.priceWith(prices: pricing.prices, currency: pricing.currency) }
         track(plan)
         let started = SendDriver(plan: plan, network: network, transport: transport)
         driver = started

@@ -13,9 +13,16 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityKind
+import org.bramble.core.ActivityOrigin
+import org.bramble.core.DisplayCurrency
+import org.bramble.core.FeeUnit
 import org.bramble.core.NetworkId
+import org.bramble.core.SubmittedPrice
+import org.bramble.core.TransactionFee
+import org.bramble.core.TransferDirection
 import org.bramble.core.TxStatus
 import org.bramble.core.explorerTransactionUrl
+import org.bramble.wallet.ui.wallet.recordFacts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Rule
@@ -96,7 +103,51 @@ class ActivityScreenTest {
         r.snapshot("activity")
     }
 
+    /**
+     * The expansion lists the value at submission, then the network fee, then the network; a row
+     * that recorded neither shows the network alone, never an estimate.
+     */
+    @Test
+    fun expandedRowShowsValueAndFee() {
+        val sent =
+            ActivityEntry(
+                accountId = "SN_MAIN:0x1",
+                amount = "1.5",
+                counterparty = COUNTERPARTY,
+                direction = TransferDirection.OUT,
+                failureNotice = null,
+                finalizedOnL1 = null,
+                hash = HASH,
+                kind = ActivityKind.TRANSFER,
+                network = NetworkId.MAINNET,
+                notFoundCount = null,
+                origin = ActivityOrigin.WALLET,
+                status = TxStatus.ACCEPTED,
+                submittedAt = SUBMITTED_AT,
+                summary = "Sent 1.5 STRK",
+                token = "STRK",
+                tokenAddress = STRK,
+            )
+        val priced =
+            sent.copy(
+                feePaid = TransactionFee("8053000000000000", FeeUnit.FRI),
+                submittedPrice = SubmittedPrice(DisplayCurrency.USD, SUBMITTED_AT, UNIT_PRICE),
+            )
+        assertEquals(
+            listOf(
+                "Value at submission" to "\$0.75",
+                "Network fee" to "0.008053 STRK",
+                "Network" to MAINNET_NAME,
+            ),
+            recordFacts(priced, MAINNET_NAME),
+        )
+        assertEquals(listOf("Network" to MAINNET_NAME), recordFacts(sent, MAINNET_NAME))
+    }
+
     private companion object {
+        const val SUBMITTED_AT = 1_790_000_000_000uL
+        const val UNIT_PRICE = 0.5
+        const val MAINNET_NAME = "Starknet Mainnet"
         const val TIMEOUT_MS = 20_000L
         const val HASH = "0x4a1b2c3d4e5f60718293a4b5c6d7e8f9011223344556677889900aabbccddee"
         const val COUNTERPARTY = "0x5b7c2e1f00000000000000000000000000000000000000000000000000c0ffe"

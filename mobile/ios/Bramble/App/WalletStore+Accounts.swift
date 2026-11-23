@@ -27,6 +27,38 @@ extension WalletStore {
         }
     }
 
+    /// This network's accounts the drawer, Send and Manage list (`hiddenAccountIds` left out).
+    var visibleRecords: [AccountRecord] { records.filter { !$0.hidden } }
+
+    /// This network's hidden accounts, which Manage lists with the control that shows them again.
+    var hiddenRecords: [AccountRecord] { records.filter(\.hidden) }
+
+    /// Hides or shows one account (`writeAccountVisibility`). The core refuses hiding the last
+    /// account a network shows and moves the active account off one it hides; its refusal is the
+    /// toast, as the extension shows the background's.
+    func setHidden(_ hidden: Bool, for id: String) async {
+        let core = core, before = activeRecord?.id
+        do {
+            try await work { try core.setAccountHidden(accountId: id, hidden: hidden) }
+            await reloadAccounts()
+            notify(hidden ? "Account hidden" : "Account shown")
+            if activeRecord?.id != before { await refreshBalances(reset: true) }
+        } catch {
+            // Hiding the active account is two writes: the core may have moved the active account
+            // before the hide failed. Re-read, so the app follows the core's active account.
+            await reloadAccounts()
+            if activeRecord?.id != before { await refreshBalances(reset: true) }
+            toast = describe(error)
+        }
+    }
+
+    /// The accounts the vault holds that mobile keeps but does not operate, for Manage's read-only
+    /// section; empty when the read fails (the list only explains, it never gates anything).
+    func unusableAccounts() async -> [UnusableAccount] {
+        let core = core
+        return (try? await work { try core.unusableAccounts() }) ?? []
+    }
+
     /// Switches the active account (the drawer row is the switch control).
     func select(id: String) async {
         let core = core
