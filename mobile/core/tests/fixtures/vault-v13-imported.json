@@ -1,0 +1,81 @@
+{
+  "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+  "password": "parity vault passphrase",
+  "payload": {
+    "accounts": [
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "accountIndex": 0,
+          "addressIndex": 0,
+          "kind": "starknet-bip44"
+        },
+        "id": "SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+        "publicKeyY": "0x42168e85622280f636c3a93e92f6d9daff6e49304b1e5676203feba109944d1"
+      },
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x3098e4c64da6c76200f342fba2efb459b41de24a6d734f70c109232ed9fb1a7",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "kind": "imported-raw-key"
+        },
+        "id": "SN_MAIN:0x3098e4c64da6c76200f342fba2efb459b41de24a6d734f70c109232ed9fb1a7",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x6170371d3bd35fbe266e911cf223a794562204ec037459d057c82f9b6615108"
+      },
+      {
+        "accountContractType": "argent",
+        "deploymentSalt": "0x7f0f90f3fb7079e9c71a4fba57180ce79c5f927593a08b4e17dc9a16ced7986",
+        "address": "0x77e564ba3c982130382e2e490267609f4e37314961e74b16f033816b77b9c56",
+        "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "derivation": {
+          "kind": "imported-raw-key"
+        },
+        "id": "SN_MAIN:0x77e564ba3c982130382e2e490267609f4e37314961e74b16f033816b77b9c56",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x7f0f90f3fb7079e9c71a4fba57180ce79c5f927593a08b4e17dc9a16ced7986"
+      }
+    ],
+    "activeAccountId": "SN_MAIN:0x77e564ba3c982130382e2e490267609f4e37314961e74b16f033816b77b9c56",
+    "originGrants": [],
+    "schemaVersion": 13,
+    "signingKeys": [
+      {
+        "accountId": "SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "privateKey": "0x78936b8dc426c649fccf3a9a8022b9795bdcd558dfb83956d66a25ae76992df"
+      },
+      {
+        "accountId": "SN_MAIN:0x3098e4c64da6c76200f342fba2efb459b41de24a6d734f70c109232ed9fb1a7",
+        "privateKey": "0x62ee99be480699c5db946e1a6cec1e9596daf984823ec045b758dbeb6902c3a"
+      },
+      {
+        "accountId": "SN_MAIN:0x77e564ba3c982130382e2e490267609f4e37314961e74b16f033816b77b9c56",
+        "privateKey": "0x14390b934902f53c7a702ad08ceb0a3b8647057fc614b38d6e40fbbf65ee41"
+      }
+    ],
+    "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+    "accountSecrets": [],
+    "importedSeeds": [],
+    "shadowAccountScopes": [],
+    "multisigStrk20KeyConflicts": [],
+    "multisigStrk20ViewingKeys": []
+  },
+  "scope": "bramble:encrypted-store:bramble:vault",
+  "sealed": {
+    "cipher": "AES-256-GCM",
+    "commit": "U4f3b0Cvk6a7Dkb2KS7Gjg==",
+    "data": "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",
+    "iterations": 600000,
+    "iv": "QiOQAN2Vyv1WoLik",
+    "kdf": "PBKDF2-SHA-256",
+    "lineage": "5bb7dfdb4d6d25374f6610888af3ddc0",
+    "salt": "QiofJkQZm/W84gTn57Fiuw==",
+    "scope": "bramble:encrypted-store:bramble:vault",
+    "version": 3
+  }
+}

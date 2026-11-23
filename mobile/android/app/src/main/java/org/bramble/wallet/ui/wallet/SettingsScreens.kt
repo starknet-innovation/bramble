@@ -165,6 +165,7 @@ fun NetworkScreen(
             color = skin.muted,
             style = textStyle(BrambleTypeScale.label),
         )
+        RpcEndpointSettings(store)
         org.bramble.wallet.coordination
             .CoordinationRelaySettings(store)
     }

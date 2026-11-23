@@ -21,7 +21,6 @@ import org.bramble.core.SecurityStatus
 import org.bramble.core.TransferPlan
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
-import org.bramble.core.supportedNetworks
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.ThemeChoice
 import org.bramble.wallet.security.BiometricVault
@@ -187,8 +186,8 @@ class WalletStore(
         org.bramble.wallet.privacy
             .PrivacyModel()
 
-    /** The core's bundled description of [network] (endpoints, tokens, explorer). */
-    val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
+    /** [network]'s endpoints (the wallet's RPC override first), tokens and explorer. */
+    val networkInfo: NetworkInfo get() = endpointNetwork(network, core)
 
     /** The header's network label ("Starknet" or "Sepolia"). */
     val networkLabel: String get() = NetworkPreference.label(network)
