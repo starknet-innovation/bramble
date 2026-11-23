@@ -239,10 +239,11 @@ Required before review will pass:
   justifications are the most common rejection reason.
 - A **privacy policy** URL if any user data is handled.
 
-Reviewed listing copy, privacy policy, permission justifications, and asset requirements live in
-`docs/chrome-web-store/`. Chrome's August 2026 disclosure policy requires every data collection to
-be disclosed before collection, including local-only diagnostic collection; keep the dashboard,
-listing, privacy policy, and in-product opt-in copy aligned.
+Reviewed listing copy, permission justifications, and asset requirements live in
+`docs/chrome-web-store/`. The privacy policy is <https://bramble.fi/privacy>. Chrome's August
+2026 disclosure policy requires every data collection to be disclosed before collection, including
+local-only diagnostic collection; keep the dashboard, listing, privacy policy, and in-product
+opt-in copy aligned.
 
 ## 5. Chrome Web Store — API credentials and secrets
 
