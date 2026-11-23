@@ -129,6 +129,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Invalid deployment fields",
   "Lock failed",
   "Name update failed",
+  "Notice preference failed",
   "Open funding transfer failed",
   "Phrase validation is unavailable",
   "Prepare Ready multisig transaction failed",

@@ -309,3 +309,13 @@ Deliberately deferred:
 - A destructive account-removal feature. When introduced, it must atomically remove signing keys,
   optional secrets, grants, labels/groups, and account-scoped public caches, with migration and
   rollback tests.
+
+## Schema v14 account provenance
+
+The optional encrypted `accountProvenance` map binds stored account IDs to explicit
+`created` or `imported` origins. Missing entries mean unknown. The adjacent v13→v14
+migration changes only the version; it does not infer origins from derivation fields.
+The validator rejects unsupported origins and bindings to accounts outside the vault.
+Raw-key and seed import writes store origins atomically with their accounts, while
+phrase recovery and ambiguous device additions keep unknown origins. This map is
+background-only analytics metadata and is not part of the public `AccountRef`.

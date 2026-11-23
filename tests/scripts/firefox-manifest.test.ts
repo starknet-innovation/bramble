@@ -46,6 +46,7 @@ describe("firefox manifest derivation", () => {
       "name",
       "version",
       "description",
+      "default_locale",
       "icons",
       "action",
       "author",

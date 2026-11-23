@@ -10,13 +10,14 @@
  * scheme or Ready's `argentx` scheme, as the shared path parser defines them)
  * and Stark field hashes may reach the device. Responses carry public app/key data or a raw
  * signature over the caller-supplied hash; no seed, private key, vault secret,
- * raw transport error, or device identifier crosses the channel.
+ * raw transport message, or device identifier crosses the channel. A failure
+ * may include `cause`, the error's class name only, for the support line.
  */
 
 import { isRecord } from "@bramble/core/json";
 import { isLedgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { isStarkFieldElement } from "@bramble/wallet-model/networks";
-import { isLedgerRejectionCode, type LedgerRejectionCode } from "./errors";
+import { isLedgerCauseToken, isLedgerRejectionCode, type LedgerRejectionCode } from "./errors";
 
 const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -75,6 +76,8 @@ export type LedgerBrokerCommand =
 export type LedgerBrokerResponse =
   | { readonly kind: "ready" }
   | {
+      /** Sanitized error class name. Absent when the failure has none. */
+      readonly cause?: string;
       readonly error: LedgerRejectionCode;
       readonly id: number;
       readonly kind: "response";
@@ -143,5 +146,10 @@ export const isLedgerBrokerResponse = (value: unknown): value is LedgerBrokerRes
   if (value["ok"]) {
     return Object.keys(value).length === 4 && Object.hasOwn(value, "value");
   }
-  return Object.keys(value).length === 4 && isLedgerRejectionCode(value["error"]);
+  if (!isLedgerRejectionCode(value["error"])) return false;
+  const keys = Object.keys(value).length;
+  // Four keys is a failure with no cause. Five is that plus a class-name token.
+  // Anything else, including a raw message stuffed into `cause`, fails closed.
+  if (keys === 4) return !Object.hasOwn(value, "cause");
+  return keys === 5 && isLedgerCauseToken(value["cause"]);
 };

@@ -37,9 +37,9 @@ const vaultOf = (account: Record<string, unknown>, schemaVersion: number) => ({
   signingKeys: [{ accountId: argentxAccount.id, privateKey: "0x456" }],
 });
 
-describe("schema v11 (two steps below current)", () => {
-  test("sits two steps below the current version", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+describe("schema v11 (three steps below current)", () => {
+  test("sits three steps below the current version", () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
   });
 
   test("admits a Ready-scheme account that v10 refuses", () => {
@@ -73,7 +73,7 @@ describe("migration v10 -> v11", () => {
       ...v10,
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
       shadowAccountScopes: [],
     });
   });

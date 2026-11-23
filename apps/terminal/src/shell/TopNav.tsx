@@ -1,11 +1,12 @@
 /**
  * Top navigation bar with real screen navigation and wallet connection state.
  */
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { Check, ChevronDown, Copy, LogOut, WalletCards } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useWallet } from "../wallet/connection/WalletProvider";
 import { walletNetwork } from "../wallet/connection/wallet-connection";
-import { type ScreenId, SCREEN_TABS, shortenAddress } from "./screens";
+import { type ScreenId, SCREEN_TABS } from "./screens";
 
 export type TopNavProps = {
   readonly active: ScreenId;
@@ -37,7 +38,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
   const copyAddress = async (): Promise<void> => {
     if (address === null) return;
     try {
-      await navigator.clipboard.writeText(address);
+      await navigator.clipboard.writeText(addressText(address));
       setCopied(true);
     } catch {
       setCopied(false);
@@ -74,7 +75,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
             <summary className="wallet-session-trigger">
               <span className="wallet-session-dot" aria-hidden />
               <span className="wallet-session-network">{networkLabel}</span>
-              <span className="wallet-session-address">{shortenAddress(address)}</span>
+              <span className="wallet-session-address">{addressLabel(address)}</span>
               <ChevronDown size={13} aria-hidden />
             </summary>
             <div className="wallet-session-menu">
@@ -89,7 +90,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
               </div>
               <div className="wallet-session-account">
                 <span>Active account</span>
-                <code>{address}</code>
+                <code>{addressText(address)}</code>
               </div>
               <div className="wallet-session-actions">
                 <button type="button" onClick={() => void copyAddress()}>

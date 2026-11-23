@@ -85,6 +85,12 @@ describe("onboarding views", () => {
     expect(ledgerOnboardError("Unlock your Ledger, then try again.")).toContain(
       "Unlock your Ledger",
     );
+    const withCode = ledgerOnboardError(
+      "Something else is using your Ledger.",
+      "Support code · device-busy · NetworkError",
+    );
+    expect(withCode).toContain("Support code · device-busy · NetworkError");
+    expect(withCode).toContain('class="hint"');
   });
 
   test("the multi-device picker exposes opaque escaped choices", () => {

@@ -2,6 +2,7 @@
  * Side-panel shell replacement and View Transitions choreography.
  */
 
+import { t } from "../../../i18n/messages";
 import { SIDEPANEL_STYLES } from "../../styles/index";
 import type { NavDirection } from "../navigation/nav-direction";
 import { animateLiveValueChanges, captureLiveValues } from "../sync/live-updates";
@@ -24,7 +25,7 @@ export const createScopeAnnouncer = (doc: Document): HTMLElement => {
  * Message describing which account-scoped data is refreshing after a scope change.
  */
 export const scopeChangeAnnouncement = (change: "account" | "network"): string =>
-  `${change === "network" ? "Network" : "Account"} changed. Updating account balances, activity, and permissions.`;
+  t(change === "network" ? "shell.scope.networkChanged" : "shell.scope.accountChanged");
 
 /**
  * Creates the scene renderer around one mount and its post-render binder.

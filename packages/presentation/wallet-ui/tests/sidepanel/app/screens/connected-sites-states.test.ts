@@ -29,7 +29,12 @@ const status: WalletStatus = {
   networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
   ready: true,
 };
-const site: ConnectedSite = { accountCount: 1, origin: "https://example.com" } as ConnectedSite;
+const site: ConnectedSite = {
+  accountCount: 1,
+  accountIds: ["SN_MAIN:0x1"],
+  multisigIds: [],
+  origin: "https://example.com",
+};
 const EMPTY_CLAIM = "No sites are connected yet";
 
 const render = (markup: string): HTMLElement => {

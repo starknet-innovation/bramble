@@ -66,9 +66,6 @@ export const parseAmount = (value: string, decimals: number): bigint => {
   return raw;
 };
 
-export const short = (value: string): string =>
-  value.length <= 18 ? value : `${value.slice(0, 10)}…${value.slice(-6)}`;
-
 export const formatRaw = (raw: string, decimals: number): string => {
   const value = BigInt(raw);
   const base = 10n ** BigInt(decimals);

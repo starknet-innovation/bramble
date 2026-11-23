@@ -47,7 +47,9 @@ export type SdkNoteMap = {
  * Requires a complete network configuration before an SDK operation can read
  * private state or produce a proof.
  */
-export const requireStrk20Config = (context: Strk20AccountContext): Strk20NetworkConfig => {
+export const requireStrk20Config = (
+  context: Pick<Strk20AccountContext, "config" | "rpcUrls">,
+): Strk20NetworkConfig => {
   // Split: absent routing and an absent endpoint are different operator
   // problems, and reporting one line for both hid which was missing.
   if (!context.config) {

@@ -29,6 +29,7 @@ import {
   handleDeployAccountSponsored,
   handleDeploySponsorship,
 } from "./deploy-account-ops";
+import { handleReadyKeyStatus } from "./ready-key-status";
 import { handleResolveStarkName } from "./stark-name-ops";
 import { handleReviewTransfer, handleTransfer } from "./transfer-ops";
 import type { WalletOpsDeps } from "./wallet-ops-deps";
@@ -213,6 +214,7 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.deployAccountSponsored": handleDeployAccountSponsored,
   "wallet.deploySponsorship": handleDeploySponsorship,
   "wallet.accountSignability": handleAccountSignability,
+  "wallet.readyKeyStatus": handleReadyKeyStatus,
   "wallet.recoverArgentAccount": handleRecoverArgentAccount,
   "wallet.recoverBraavosAccount": handleRecoverBraavosAccount,
   "wallet.reviewArgentRecovery": handleReviewArgentRecovery,

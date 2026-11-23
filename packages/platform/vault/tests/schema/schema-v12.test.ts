@@ -55,9 +55,9 @@ const v12 = (shadowAccountScopes: readonly unknown[]) => ({
   shadowAccountScopes,
 });
 
-describe("schema v12 (one step below current)", () => {
-  test("is one step below the current version", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+describe("schema v12 (two steps below current)", () => {
+  test("is two steps below the current version", () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
     expect(VAULT_MIGRATIONS.some((step) => step.fromVersion === 11 && step.toVersion === 12)).toBe(
       true,
     );
@@ -69,7 +69,7 @@ describe("schema v12 (one step below current)", () => {
       ...v12([]),
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
     });
     // Deterministic: migrating twice from the same input gives the same vault.
     expect(migrateVault(structuredClone(v11))).toEqual(migrateVault(v11));
@@ -85,7 +85,7 @@ describe("schema v12 (one step below current)", () => {
       ...v12([scope]),
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
     });
   });
 

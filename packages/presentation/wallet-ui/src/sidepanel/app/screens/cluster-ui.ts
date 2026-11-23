@@ -5,11 +5,13 @@
  * callbacks and every state read goes through the shared render cache, so this
  * module holds no module-level state.
  */
+
 import { bindNfts } from "../../journeys/collectibles/nft-ui";
 import { bindAllowances } from "../../journeys/portfolio/allowance-ui";
 import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
 import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
+import { bindExperimentalFeatures } from "../../journeys/settings/experimental-features-ui";
 import { bindConnectedSites } from "../../journeys/settings/origins-ui";
 import { bindStakingDirectory } from "../../journeys/staking/staking-directory-ui";
 import { bindHomeStaking } from "../../journeys/staking/staking-home-ui";
@@ -90,6 +92,15 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     wallet,
   });
   bindConnectedSites({ app, render, wallet });
+  bindExperimentalFeatures({
+    app,
+    render,
+    setState: (state) => {
+      cache.experimentalFeatures = state;
+    },
+    status: () => cache.status,
+    wallet,
+  });
   bindTokens({
     app,
     openToken: deps.openToken,

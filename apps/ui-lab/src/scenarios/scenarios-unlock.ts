@@ -21,6 +21,14 @@ const prepareUnlockFailure = async (context: FrameContext): Promise<void> => {
   await nextTurn();
 };
 
+const openForgotPassword = async (context: FrameContext): Promise<void> => {
+  const details = context.app.querySelector<HTMLDetailsElement>("details.gate-forgot");
+  if (details) {
+    details.open = true;
+  }
+  await nextTurn();
+};
+
 export const unlockScenario: WalletScenario = {
   checkpoints: [
     {
@@ -46,6 +54,15 @@ export const unlockScenario: WalletScenario = {
         "The real unlock binding returns a specific inline recovery message and stays locked.",
       prepare: prepareUnlockFailure,
       state: { gate: "locked", result: "error" },
+    },
+    {
+      content: () => locked(lockedStatus),
+      id: "forgot-password",
+      label: "Forgot password",
+      narrative:
+        "The quiet disclosure under Unlock says the password can't be recovered, points to reinstalling and restoring from the recovery phrase, and lists what the phrase leaves behind. Nothing on this screen removes the wallet.",
+      prepare: openForgotPassword,
+      state: { disclosure: "forgot-password", gate: "locked" },
     },
     {
       content: () => locked({ ...lockedStatus, recovery: "unverified" }),

@@ -210,9 +210,9 @@ be true before any publish (automated or manual) can succeed.
   the one-time registration fee.
 - The owning Google account must be a **verified publisher** in good standing
   with **2-Step Verification** enabled (required to publish/update via the API).
-- **Who holds access:** record the owning account and how a new maintainer
-  requests it here. _TODO: no store account exists yet — fill in the owner
-  role/contact when the account is created._
+- **Who holds access:** Tarek owns the Chrome Web Store developer account and
+  the Bramble listing. A maintainer who needs dashboard access, or a change to
+  the `chrome-web-store` environment secrets below, asks Tarek.
 
 ### Create the item / listing
 

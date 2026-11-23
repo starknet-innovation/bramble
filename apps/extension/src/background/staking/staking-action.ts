@@ -21,11 +21,17 @@ import type { TokenConfig } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import { activityToken } from "@bramble/transactions/activity";
+import { reviewEnglish, withReviewText } from "@bramble/transactions/review-messages";
 import { buildStakingCalls, stakingActivitySummary } from "@bramble/transactions/staking-calls";
-import { stakingReviewSentence } from "@bramble/transactions/staking-review";
+import { stakingReviewText, stakingValidatorText } from "@bramble/transactions/staking-review";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
-import { shortAddress } from "@bramble/transactions/verify-decode";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { recordAutoDeployment } from "../accounts/deployment-ops";
 import { signerForContext, verificationContext } from "../accounts/wallet-ops";
@@ -78,6 +84,13 @@ const assetsFor = (context: StakingContext, pool: string) => ({
   knownContracts: [pool],
 });
 
+// The review as English plus, when the panel would accept it, its reference.
+const stakingReview = (input: Parameters<typeof stakingReviewText>[0]) => {
+  const text = stakingReviewText(input);
+  const reference = withReviewText(text).text;
+  return { review: reviewEnglish(text), ...(reference ? { reviewText: reference } : {}) };
+};
+
 /**
  * `wallet.stakingPrepare`: builds, verifies and prices one action, and freezes
  * it for a single confirm.
@@ -122,29 +135,30 @@ export const prepareStakingResponse = async (
   if (!reviewedFee) {
     return { error: "Couldn't estimate the network fee, so nothing was signed. Try again." };
   }
-  // The review names the full verified staker address; Activity the short
-  // form. Neither is ever a directory name.
+  // The review names the full verified staker address, padded; Activity the
+  // short form. Neither is ever a directory name.
   const facts = {
     amount: input.amount,
     symbol: token.symbol,
-    validator: `validator ${input.staker}`,
+    validator: `validator ${addressText(input.staker)}`,
   };
   const unsigned = {
     action: input.action,
     amount: input.amount,
     calls,
     pool: reading.pool.pool,
-    review: stakingReviewSentence({
+    ...stakingReview({
       ...facts,
       account: context.account.address,
       action: input.action,
       member: reading.member,
+      validator: stakingValidatorText(input.staker),
     }),
     reviewedFee,
     summary: stakingActivitySummary({
       ...facts,
       action: input.action,
-      validator: `validator ${shortAddress(input.staker)}`,
+      validator: `validator ${addressLabel(input.staker)}`,
     }),
     // A claim pays STRK whatever the staked token.
     symbol: input.action === "claim" ? "STRK" : token.symbol,

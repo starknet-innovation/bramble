@@ -15,6 +15,7 @@ import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ValueBucket } from "@bramble/transactions/send-routes";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { CURRENCY_SYMBOLS } from "../../shared/fiat";
 import { compareStrkFirst } from "../portfolio/token-flows";
@@ -211,11 +212,24 @@ export const sendBalanceLine = (
   formatted: string | null,
   symbol: string,
 ): string => {
-  const scope = source === "private" ? "Private balance" : "Balance";
-  return formatted === null
-    ? `${scope} unavailable`
-    : `${scope} ${sendBalanceLabel(formatted)} ${symbol}`;
+  const priv = source === "private";
+  if (formatted === null) {
+    return priv ? t("send.balance.privateUnavailable") : t("send.balance.publicUnavailable");
+  }
+  const amount = sendBalanceLabel(formatted);
+  return priv
+    ? t("send.balance.private", { amount, symbol })
+    : t("send.balance.public", { amount, symbol });
 };
+
+/**
+ * The amount card's estimate line for a formatted fiat value; an empty value
+ * (no price, no amount) reads as unknown rather than zero.
+ */
+export const estimatedValueLine = (formatted: string): string =>
+  formatted
+    ? t("send.amount.estimatedValue", { value: formatted })
+    : t("send.amount.estimatedValueUnknown");
 
 /**
  * Currency-aware input prefix for fiat-entry mode.

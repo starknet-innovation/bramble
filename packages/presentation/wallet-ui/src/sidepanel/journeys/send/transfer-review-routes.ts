@@ -12,6 +12,8 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { SendDisclosure, SendRoute } from "@bramble/transactions/send-routes";
+import { uiLocale } from "../../../i18n/locale";
+import { t, th } from "../../../i18n/messages";
 import { formatFri } from "../../shared/parts";
 import { reviewCostSection, reviewFeeSection } from "../../shared/review-render";
 import type { PrivacySponsor } from "../privacy/privacy-preparation-fields";
@@ -19,24 +21,38 @@ import { isStrkRelayFee, relayFeeAmountText } from "../privacy/privacy-relay-fee
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferReview } from "./transfer-submit";
 
-const DISCLOSURE_LABELS: Readonly<Record<SendDisclosure, string>> = {
-  amount: "amount",
-  recipient: "recipient address",
-  sender: "sender address",
-};
-
 // Sender, amount, recipient: the order the sentences read most naturally in.
 const ORDER: readonly SendDisclosure[] = ["sender", "amount", "recipient"];
 
-const sentence = (parts: readonly string[]): string =>
-  parts.length <= 1
-    ? (parts[0] ?? "")
-    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+// At most three items exist (sender, amount, recipient), so a list is one,
+// two or three names in the catalog's own list grammar.
+const list = (parts: readonly string[]): string => {
+  const [first = "", second, third] = parts;
+  if (second === undefined) return first;
+  return third === undefined
+    ? t("review.send.list.two", { first, second })
+    : t("review.send.list.three", { first, second, third });
+};
 
-const clause = (items: readonly SendDisclosure[], predicate: string): string =>
-  items.length === 0
-    ? ""
-    : ` ${sentence(items.map((item) => DISCLOSURE_LABELS[item])).replace(/^./, (first) => first.toUpperCase())} ${items.length === 1 ? "is" : "are"} ${predicate}.`;
+const clause = (items: readonly SendDisclosure[], predicate: "confidential" | "public"): string => {
+  if (items.length === 0) return "";
+  // English starts the sentence with the first item, so it is capitalized;
+  // scripts without case are unchanged.
+  const names = list(items.map((item) => t(`review.send.disclosure.${item}`))).replace(
+    /^./u,
+    (first) => first.toUpperCase(),
+  );
+  return t(`review.send.clause.${predicate}${items.length === 1 ? "One" : "Many"}`, {
+    items: names,
+  });
+};
+
+// English separates sentences with a space; Chinese runs them together.
+const joinSentences = (sentences: readonly string[]): string =>
+  sentences.filter((sentence) => sentence.length > 0).join(uiLocale() === "en" ? " " : "");
+
+const bucketWord = (bucket: string): string =>
+  bucket === "public" || bucket === "private" ? t(`review.send.bucketWord.${bucket}`) : bucket;
 
 /**
  * States what the composed route does with the value and what it exposes, built
@@ -49,10 +65,13 @@ const clause = (items: readonly SendDisclosure[], predicate: string): string =>
 export const routeDisclosureHtml = (route: SendRoute): string => {
   const hidden = ORDER.filter((item) => !route.reveals.includes(item));
   const shown = ORDER.filter((item) => route.reveals.includes(item));
-  const movement = `You are sending from a ${route.source} balance to a ${route.destination} balance.`;
-  return `<section class="decision-layer" aria-label="Visibility">
-    <p class="decision-label">Visibility</p>
-    <p class="review-fee">${escapeHtml(`${movement}${clause(hidden, "confidential")}${clause(shown, "public")}`)}</p>
+  const movement = t("review.send.movementSentence", {
+    destination: bucketWord(route.destination),
+    source: bucketWord(route.source),
+  });
+  return `<section class="decision-layer" aria-label="${th("review.send.visibility")}">
+    <p class="decision-label">${th("review.send.visibility")}</p>
+    <p class="review-fee">${escapeHtml(joinSentences([movement, clause(hidden, "confidential"), clause(shown, "public")]))}</p>
   </section>`;
 };
 
@@ -66,7 +85,7 @@ export type RouteFeeState = {
 };
 
 const feeLine = (label: string, value: string): string =>
-  `<p class="review-fee">${escapeHtml(label)}: ${escapeHtml(value)}</p>`;
+  `<p class="review-fee">${escapeHtml(t("review.send.fee.line", { label, value }))}</p>`;
 
 // What the relay withdraws beyond the pool's own charge. `null` when the two
 // cannot be compared, so no split is invented from an unusable pair.
@@ -97,7 +116,7 @@ const networkFeeHtml = (
       // relay pays, but cannot be split against it or added to it: the two are
       // in different tokens. It is reported whole, in its own token.
       return reviewCostSection(
-        feeLine("Fee taken from your private balance", relayFeeAmountText(relayFee)),
+        feeLine(t("review.send.fee.fromPrivate"), relayFeeAmountText(relayFee)),
       );
     }
     const total = relayFee?.amount;
@@ -109,17 +128,17 @@ const networkFeeHtml = (
       // The withdrawal does not decompose against the known pool fee, so it is
       // reported whole rather than split into parts that were guessed.
       return reviewCostSection(
-        `${feeLine("Fee taken from your private balance", formatFri(total))}${poolFee}`,
+        `${feeLine(t("review.send.fee.fromPrivate"), formatFri(total))}${poolFee}`,
       );
     }
     // A sponsored route costs the pool charge and nothing else, so its total
     // would only repeat the line above it.
     const network = cut === null || cut === 0n ? null : `0x${cut.toString(16)}`;
     return reviewCostSection(
-      `${feeLine("Estimated fee", network === null ? "Sponsored" : formatFri(network))}${poolFee}${
+      `${feeLine(t("review.send.fee.estimated"), network === null ? t("review.send.fee.sponsored") : formatFri(network))}${poolFee}${
         network !== null && poolFeeFri !== undefined
           ? feeLine(
-              "Total fees",
+              t("review.send.fee.total"),
               formatFri(`0x${(BigInt(network) + BigInt(poolFeeFri)).toString(16)}`),
             )
           : ""
@@ -136,7 +155,10 @@ const networkFeeHtml = (
       )
     : "";
   return (
-    estimate || reviewCostSection(`${feeLine("Estimated fee", "charged at submission")}${poolFee}`)
+    estimate ||
+    reviewCostSection(
+      `${feeLine(t("review.send.fee.estimated"), t("review.send.fee.atSubmission"))}${poolFee}`,
+    )
   );
 };
 
@@ -148,7 +170,7 @@ const networkFeeHtml = (
  * charge reading as network gas or as the relay's price.
  */
 export const poolFeeText = (feeBucket: string, amount: string): string =>
-  `Pool fee: ${amount} from your ${feeBucket} balance`;
+  t("review.send.fee.poolFrom", { amount, bucket: bucketWord(feeBucket) });
 
 const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
   route.poolFeeRequired && route.feeBucket !== "none" && poolFeeFri !== undefined
@@ -160,12 +182,15 @@ const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
 // "free" never hides a charge.
 const sponsoredFeeHtml = (sponsor: PrivacySponsor, poolFeeFri: string): string =>
   reviewCostSection(
-    `${feeLine("Fee", `paid by ${sponsor.name}`)}${feeLine("Pool fee", `${formatFri(poolFeeFri)}, paid by ${sponsor.name}`)}${
+    `${feeLine(t("review.send.fee.fee"), t("review.send.fee.paidBy", { sponsor: sponsor.name }))}${feeLine(t("review.send.fee.pool"), t("review.send.fee.amountPaidBy", { amount: formatFri(poolFeeFri), sponsor: sponsor.name }))}${
       sponsor.estimatedNetworkFeeFri === undefined
         ? ""
         : feeLine(
-            "Estimated fee",
-            `${formatFri(sponsor.estimatedNetworkFeeFri)}, paid by ${sponsor.name}`,
+            t("review.send.fee.estimated"),
+            t("review.send.fee.amountPaidBy", {
+              amount: formatFri(sponsor.estimatedNetworkFeeFri),
+              sponsor: sponsor.name,
+            }),
           )
     }`,
   );

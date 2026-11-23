@@ -13,6 +13,7 @@ import type {
   DisplayCurrency,
   ExplorerApiOverrides,
   ExplorerFallback,
+  LanguagePreference,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
@@ -55,6 +56,8 @@ export type WalletPreferences = {
    */
   readonly explorerFallback?: ExplorerFallback;
   readonly groups?: AccountGroups;
+  /** Wallet language; absent reads as `"auto"` (follow the browser). */
+  readonly language?: LanguagePreference;
   /**
    * Ids of accounts the user has hidden. A hidden account leaves the account
    * drawer and the Send/Receive pickers but keeps its grants and its signing
@@ -97,6 +100,11 @@ export type WalletPreferences = {
   readonly tokens: readonly TokenConfig[];
   /** False once the user turns off the Home VIP eligibility notice; absent means shown. */
   readonly vipNotice?: boolean;
+  /**
+   * Accounts whose Home Ready key notice the user dismissed, oldest first.
+   * Absent means none; only the listed accounts hide theirs.
+   */
+  readonly readyKeyNoticeDismissedIds?: readonly string[];
 };
 
 /**
@@ -168,10 +176,13 @@ export type WalletPreferencesStore = {
     readonly approvalSurface?: ApprovalSurfacePreference;
     readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: DisplayCurrency;
+    readonly language?: LanguagePreference;
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
     readonly vipNotice?: boolean;
+    /** An account id whose Ready key notice is dismissed; added to the list. */
+    readonly readyKeyNoticeDismissed?: string;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {
     readonly networkId: StarknetNetworkId;

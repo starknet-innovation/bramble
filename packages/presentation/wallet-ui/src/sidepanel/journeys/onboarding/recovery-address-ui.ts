@@ -8,6 +8,7 @@
  */
 
 import { ADDRESS_IMPORT_REFUSALS } from "@bramble/wallet-model/recovery";
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine } from "../../shared/dom";
 import { networkName, readPastedAddress } from "./recovery-address";
 
@@ -26,12 +27,8 @@ export type RecoveryAddressFinder = {
   readonly reset: () => void;
 };
 
-// A search derives up to a few hundred keys before it can answer no, which
-// takes seconds; the line says so while it runs.
-const SEARCHING_LINE = "Checking this account. This can take a few seconds.";
-
 const notFoundLine = (networkId: string): string =>
-  `No account found at this address on ${networkName(networkId)}. Check the address and network.`;
+  t("onboarding.address.notFound", { network: networkName(networkId) });
 
 // The background's refusal in the reader's words. Not-found names the network
 // searched, which the shared copy table cannot.
@@ -52,7 +49,8 @@ export const bindRecoveryAddressFinder = <Found>(
   let generation = 0;
 
   const showNetwork = (): void => {
-    if (network) network.textContent = `On ${networkName(deps.networkId())}`;
+    if (network)
+      network.textContent = t("onboarding.address.on", { network: networkName(deps.networkId()) });
   };
   const say = (line: string): void => {
     if (result) result.textContent = line;
@@ -71,18 +69,23 @@ export const bindRecoveryAddressFinder = <Found>(
     if ("reason" in pasted) {
       say(
         pasted.reason === "insecure-link"
-          ? "Use the https:// link from the explorer."
-          : "That doesn't look like a Starknet address.",
+          ? t("onboarding.address.explorerLink")
+          : t("onboarding.address.notAddress"),
       );
       return;
     }
     if (pasted.network !== undefined && pasted.network !== networkId) {
-      say(`That link is for ${networkName(pasted.network)}, not ${networkName(networkId)}.`);
+      say(
+        t("onboarding.address.wrongNetwork", {
+          current: networkName(networkId),
+          linked: networkName(pasted.network),
+        }),
+      );
       return;
     }
     const active = generation;
     busy(true);
-    say(SEARCHING_LINE);
+    say(t("onboarding.address.searching"));
     try {
       const found = await deps.lookup(pasted.address);
       if (active === generation) say(deps.onFound(found));

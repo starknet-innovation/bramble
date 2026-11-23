@@ -145,6 +145,13 @@ export const createOfficialStrk20Service = ({
     async prepare(input) {
       return prepare(input);
     },
+    async recordSubmission(input, transactionHash) {
+      const config = requireStrk20Config(input);
+      const nodeUrl = input.rpcUrls[0];
+      if (!nodeUrl) throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      const scope = maturityScope(input, config.poolAddress);
+      await maturity.recordSubmission(providerFor(nodeUrl), scope, transactionHash);
+    },
     async releasePendingWrite(input) {
       const config = requireStrk20Config(input);
       return maturity.releasePendingWrite(maturityScope(input, config.poolAddress));
@@ -186,6 +193,17 @@ export const createOfficialStrk20Service = ({
         config.poolAddress,
         approveCalls([], config.poolAddress, reviewedPoolFee),
         callAndProof,
+      );
+    },
+    async prepareRegistrationCall(input) {
+      // Wallet API 0.10.5 register action via wallet_strk20PrepareInvoke: the
+      // site submits this call, so no pool-fee approve is built here.
+      requireStrk20Config(input);
+      return prepare(
+        { ...input, actions: [], simulate: input.simulate },
+        undefined,
+        strk20RegistrationBuilderFor,
+        "registration",
       );
     },
     async prepareAccountActions(input) {

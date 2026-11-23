@@ -27,14 +27,23 @@ extension.
   The test-Ledger fixtures (`sepolia-stage-ldg.ts`, S-LDG: TA-32…) derive the
   device's keys from its phrase (`ledgerKeypair`); that phrase must belong to a
   test-only device that has never held real funds.
+  The send-suite accounts (`sepolia-stage-txn.ts`, S-TXN: TX-00…TX-10, issue
+  976) are the only Sepolia accounts the nightly sends from: one deployed
+  account per signing shape, plus TX-00, the bank for its throwaway deploy
+  accounts. They run only once `BRAMBLE_DATASET_SEED_S_TXN` is in the seed
+  file, and re-running `matrix-stage-sepolia.ts TX` tops each one back up.
 - `manifest/<network>/` is the dataset ledger, with one file per fixture group. It records
   every account's provenance, expected import outcome and transaction log
   (addresses and transaction hashes only, no key material). The matrix stages
   rewrite it in place, so run `bun run format` after a stage.
 - `verify-dataset.ts` drives the built extension (`bun run build` first)
   through onboarding against live mainnet:
-  `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]`.
-  The `verification*.json` files are dated scorecard snapshots from earlier runs.
+  `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json] [seed filter]`.
+  The filter is a substring of a seed variable (for example `GAPS`) and runs only
+  the matching seeds; `BRAMBLE_DATASET_HEADED=1` shows the browser. When a scan
+  dies, the seed's status keeps the browser's last page errors, console errors
+  and crash or worker-exit events. The `verification*.json` files are dated
+  scorecard snapshots from earlier runs.
 - `verify-sepolia.ts` is the Sepolia counterpart: one fresh profile onboarded
   with S-BRM, switched to Sepolia, then every in-wallet import path (P2…P8, P10)
   driven against the fixtures and scored against the scope doc's "Now" line per
@@ -44,6 +53,17 @@ extension.
   Passing a previous scorecard lists the verdicts that changed; keep a release's
   run as a dated `verification-sepolia-*.json`. It exits non-zero when any
   check fails or errors.
+- `verify-sepolia-sends.ts` (`bun run verify:sepolia:sends`, issue 976) sends
+  a dust STRK self-transfer from every S-TXN account through the built
+  extension and checks each on-chain: a successful receipt, the exact amount
+  moved to self, a balance drop of exactly the fee, and the Activity row. A
+  broadcast firewall lets the wallet send only from the account under check,
+  so the import fixtures are never sent from. Accounts on a release the wallet
+  does not sign for (TX-05 Argent 0.3.1, TX-06 Argent 0.5.0, TX-08 Braavos
+  1.1.0) are checked the other way: Home shows "Read only", the allowlist stays
+  empty and the nonce does not move. TX-10 is skipped until the wallet can
+  import an sncast-shaped account (TA-07). About 0.25 testnet STRK a run;
+  exits non-zero when any check fails.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
   after the other checks, asks you to plug in and unlock the test Ledger, open
@@ -57,8 +77,9 @@ extension.
 - The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
   the Ledger, on the active release branch against the newest committed
   scorecard, so a failing import path blocks the release like any other nightly
-  gate. Until the `BRAMBLE_SEPOLIA_SEEDS` repository secret exists the gate is
-  skipped and the summary lists it under "Not run", never as passed. It reads
+  gate. The `BRAMBLE_SEPOLIA_SEEDS` repository secret has been set since
+  2026-11-10; if it is ever removed, the gate is skipped and the summary lists
+  it under "Not run", never as passed. It reads
   the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
   secret, which holds only the eleven lines the runner reads:
   `BRAMBLE_DATASET_SEED_S_{BRM,SCR,BRV,RDY,XVS,W15,W18,W21}` and

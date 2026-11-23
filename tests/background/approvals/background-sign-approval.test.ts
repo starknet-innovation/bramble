@@ -48,7 +48,7 @@ const vault = {
   importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 13,
+  schemaVersion: 14,
   multisigStrk20KeyConflicts: [],
   multisigStrk20ViewingKeys: [],
   shadowAccountScopes: [],

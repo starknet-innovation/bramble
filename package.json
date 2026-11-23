@@ -12,6 +12,7 @@
   "scripts": {
     "build": "bun run --filter @bramble/extension build",
     "build:firefox": "bun run --filter @bramble/extension build:firefox",
+    "build-for-amo": "node scripts/build-for-amo.ts",
     "build:all": "bun run --filter @bramble/extension build:all",
     "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
     "check:audit": "bun audit --audit-level=high",
@@ -44,12 +45,14 @@
     "test:e2e:install": "playwright install chromium",
     "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
     "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
+    "test:e2e:mainnet:multisig": "bun run scripts/mainnet-wallet-e2e.ts multisig",
     "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
     "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
     "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
     "vendor:ledger-app": "bun run scripts/vendor-ledger-app.ts",
     "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
-    "verify:sepolia": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts"
+    "verify:sepolia": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
+    "verify:sepolia:sends": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia-sends.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
@@ -69,6 +72,7 @@
   },
   "dependencies": {
     "@bramble/core": "workspace:*",
+    "@bramble/flags": "workspace:*",
     "@bramble/kms-krusty": "workspace:*",
     "@bramble/ledger-protocol": "workspace:*",
     "@bramble/multisig": "workspace:*",
@@ -84,7 +88,7 @@
     "@bramble/wallet-ui": "workspace:*",
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
-    "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+    "@starknetfoundation/krusty-kms-wasm": "3.1.0",
     "starknet": "10.8.0"
   },
   "overrides": {

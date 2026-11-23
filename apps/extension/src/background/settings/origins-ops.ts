@@ -1,7 +1,7 @@
 /**
  * Connected-sites permission operations dispatched from the background message
- * handler: listing the origins with persisted grants and revoking one. Both
- * are privileged and require an unlocked session.
+ * handler: listing the origins with persisted grants and revoking a site, or
+ * one account from it. Both are privileged and require an unlocked session.
  */
 import { connectedSitesFromVault } from "@bramble/vault/origin-grants";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -31,6 +31,29 @@ const connectedSites = async (deps: OriginOpsDeps): Promise<RuntimeResponse> => 
   const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
   if (!authorized.isCurrent()) return { error: "wallet locked" };
   return { ok: true, sites: mergeConnectedSites(connectedSitesFromVault(vault), extra) };
+};
+
+const revokeOrigin = async (
+  deps: OriginOpsDeps,
+  input: { readonly accountId?: string; readonly origin: string },
+): Promise<RuntimeResponse> => {
+  const passphrase = deps.session.getPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  if (!deps.wallet.revokeOrigin) {
+    return { error: "wallet unavailable" };
+  }
+  // One id may name a vault account or a multisig, so it is removed from
+  // both grant stores; each only removes, and an id it lacks is a no-op.
+  const sites = await deps.wallet.revokeOrigin({
+    ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
+    origin: input.origin,
+    vaultPassphrase: passphrase,
+  });
+  await deps.multisigGrants?.revoke(input.origin, passphrase, input.accountId);
+  const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
+  return { ok: true, sites: mergeConnectedSites(sites, extra) };
 };
 
 /**
@@ -67,20 +90,7 @@ export const handleOriginOps = async (
     if (!input) {
       return { error: "invalid revoke origin request" };
     }
-    const passphrase = deps.session.getPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    if (!deps.wallet.revokeOrigin) {
-      return { error: "wallet unavailable" };
-    }
-    const sites = await deps.wallet.revokeOrigin({
-      origin: input.origin,
-      vaultPassphrase: passphrase,
-    });
-    await deps.multisigGrants?.revoke(input.origin, passphrase);
-    const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
-    return { ok: true, sites: mergeConnectedSites(sites, extra) };
+    return revokeOrigin(deps, input);
   }
 
   return null;

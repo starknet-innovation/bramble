@@ -10,6 +10,7 @@ const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
   ".dev-profile",
+  ".mainnet-multisig-e2e",
   ".git",
   ".impeccable",
   ".playwright-cli",
@@ -299,6 +300,9 @@ for (const file of await walk(".")) {
   if (
     isProductionSource(file) &&
     file !== "packages/platform/vault/src/encrypted-store.ts" &&
+    // Feature-flag rollout bucket: one uniform draw per install, stored
+    // locally, never transmitted (rule 4 of the bramble-ff client contract).
+    file !== "apps/extension/src/background/flags/install-bucket.ts" &&
     /\bcrypto\.getRandomValues\b/.test(text)
   ) {
     failures.push(`${file} must keep raw random bytes behind crypto/storage boundaries`);

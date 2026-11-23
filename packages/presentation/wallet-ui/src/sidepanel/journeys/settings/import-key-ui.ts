@@ -9,6 +9,7 @@
  * not listed, the user can paste its address instead (issue 779).
  */
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { onNetworkChange } from "../../shared/network-change";
 import { bindReadyKeyAddressFinder } from "../onboarding/ready-key-address-finder";
@@ -20,8 +21,8 @@ import {
 } from "../onboarding/ready-key-session";
 import type { SettingsUiDeps } from "./settings-ui";
 
-const IMPORT_LABEL = "Import account";
-const IMPORT_PICKED_LABEL = "Import selected";
+const importLabel = (): string => t("settings.importKey.import");
+const importPickedLabel = (): string => t("settings.importKey.importSelected");
 
 /**
  * Binds the "Import private key" form: on submit, sends the pasted key to the
@@ -75,7 +76,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     },
     networkId: deps.networkId,
     onFound: () => {
-      setLabel(IMPORT_PICKED_LABEL);
+      setLabel(importPickedLabel());
       refreshGate();
     },
     session,
@@ -86,7 +87,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
   const dropPicker = (): void => {
     session.invalidate();
     finder.withdraw();
-    setLabel(IMPORT_LABEL);
+    setLabel(importLabel());
     buttonBusy(submitButton, false);
   };
 
@@ -108,8 +109,8 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
   deploymentSaltInput?.addEventListener("input", dropPicker);
 
   const fail = (error: unknown): void => {
-    showToast(errorDetails(error, "Import failed"), "error", form);
-    if (result) result.textContent = errorLine(error, "Import failed");
+    showToast(errorDetails(error, t("settings.importKey.failed")), "error", form);
+    if (result) result.textContent = errorLine(error, t("settings.importKey.failed"));
     buttonBusy(submitButton, false);
     refreshGate();
   };
@@ -127,8 +128,8 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     if (!privateKey || !isCreatableAccountContractType(accountContractType)) {
       if (result) {
         result.textContent = privateKey
-          ? "Choose a supported account contract"
-          : "Enter a private key to import";
+          ? t("onboarding.create.unsupportedContract")
+          : t("settings.importKey.missingKey");
       }
       return;
     }
@@ -141,7 +142,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     // No list, or one built for other inputs (the network can change under
     // it): list the accounts for the inputs as they are now.
     if (accountContractType === "argent" && !session.matches()) {
-      setLabel(IMPORT_LABEL);
+      setLabel(importLabel());
       void session
         .discover(
           (snapshot) =>
@@ -167,7 +168,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
           if (result) result.textContent = "";
           finder.offer("listed");
           buttonBusy(submitButton, false);
-          setLabel(IMPORT_PICKED_LABEL);
+          setLabel(importPickedLabel());
           refreshGate();
         }, discoveryFailed);
       return;
@@ -200,7 +201,13 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
           result.textContent = "";
         }
         const count = picked?.length ?? 1;
-        showToast(count > 1 ? `${count} accounts imported` : "Account imported", "success", form);
+        showToast(
+          count > 1
+            ? t("settings.importKey.importedMany", { count: String(count) })
+            : t("settings.importKey.imported"),
+          "success",
+          form,
+        );
         await deps.render(await deps.refresh());
       }, fail);
   });

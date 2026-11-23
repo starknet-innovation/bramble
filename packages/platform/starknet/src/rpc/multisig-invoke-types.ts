@@ -17,7 +17,16 @@ export type ArgentMultisigAccountInput = {
 };
 
 /**
- * Storage and request budgets for one frozen multisig transaction.
+ * Storage budget for one frozen multisig transaction.
+ *
+ * This is the stored proposal, not a Starknet rule and not the dapp invoke
+ * review. A dapp invoke has no call-count limit. A proposal is prepared,
+ * stored, and gift-wrapped for the other signers. `executeCalldataFelts` is
+ * the Cairo 1 encoding of this budget: one length felt, three felts per call
+ * (to, selector, calldata length), then `totalCalldataFelts`.
+ * 1 + 16 * 3 + 512 = 561. Changing `calls` means recomputing that encoding and
+ * re-checking the stored intent against the 32 KiB Nostr application payload,
+ * so this budget stays at 16.
  */
 export const ARGENT_MULTISIG_INVOKE_LIMITS = {
   calls: 16,

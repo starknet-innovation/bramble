@@ -1,0 +1,6 @@
+{
+  "extensionDescription": {
+    "message": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
+    "description": "Store listing summary: the manifest description. Chrome caps it at 132 characters."
+  }
+}

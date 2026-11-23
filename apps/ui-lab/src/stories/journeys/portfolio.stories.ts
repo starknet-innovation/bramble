@@ -79,6 +79,30 @@ export const VipEligible: LabStory = {
     await expect(notice?.querySelector("input, form, textarea")).toBeNull();
   },
 };
+// A Ready account restored before Krusty 3.0: Home states the consequence once,
+// Move funds (Send) comes before Back up key (reveal), and the notice can be
+// dismissed for this account.
+export const ReadyKeyNotice: LabStory = {
+  args: { checkpointId: "ready-key-notice", scenarioId: "portfolio" },
+  name: "Ready key from an older release",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const notice = body?.querySelector("[data-ready-key-notice]");
+    await expect(notice).toHaveTextContent("Back up this account's key");
+    const actions = [...(notice?.querySelectorAll(".ready-key-notice-actions button") ?? [])];
+    await expect(actions.map((button) => button.textContent?.trim())).toEqual([
+      "Move funds",
+      "Back up key",
+    ]);
+    await expect(actions[0]).toHaveAttribute("data-view", "send");
+    await expect(actions[1]).toHaveAttribute("data-view", "reveal");
+    await expect(notice?.querySelector("#ready-key-notice-hide")).toHaveTextContent(
+      "Don't show again",
+    );
+  },
+};
 export const PricesOffline = checkpointStory("Prices unavailable", "portfolio", "prices-offline");
 export const BalanceFailed = checkpointStory(
   "Balance refresh failed",

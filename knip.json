@@ -4,6 +4,7 @@
     "config": [
       "playwright.config.ts",
       "playwright.mainnet.config.ts",
+      "playwright.mainnet-multisig.config.ts",
       "playwright.mainnet-wallet.config.ts"
     ]
   },

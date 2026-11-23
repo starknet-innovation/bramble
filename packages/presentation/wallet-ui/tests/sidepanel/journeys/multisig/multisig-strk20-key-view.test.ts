@@ -17,8 +17,9 @@ describe("multisig private balances", () => {
       EMPTY_MULTISIG_PORTFOLIO,
     );
     expect(html).toContain("Private balances");
+    // Catalog text is escaped into the template, so the apostrophe is an entity.
     expect(html).toContain(
-      "Anyone with the viewing key can see all of this multisig's private activity.",
+      "Anyone with the viewing key can see all of this multisig&#39;s private activity.",
     );
     expect(html).toContain("Create key");
     expect(html).toContain("Share key");

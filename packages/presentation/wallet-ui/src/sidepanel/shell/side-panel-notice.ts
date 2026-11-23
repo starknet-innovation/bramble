@@ -5,17 +5,17 @@
  * it. Built with DOM calls and text only, like the update banner.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { t } from "../../i18n/messages";
 import { isPopupSurface } from "../shared/dom";
 
 /** Notice title. */
-export const SIDE_PANEL_NOTICE_TITLE = "Bramble opens as a popup here";
+export const sidePanelNoticeTitle = (): string => t("shell.sidePanel.title");
 
 /** Notice body: why, and where to change it. */
-export const SIDE_PANEL_NOTICE_BODY =
-  "This browser doesn't show side panels. Change this in Settings → Request display.";
+export const sidePanelNoticeBody = (): string => t("shell.sidePanel.body");
 
 /** The dismiss control. */
-export const SIDE_PANEL_NOTICE_DISMISS = "Got it";
+export const sidePanelNoticeDismiss = (): string => t("shell.sidePanel.dismiss");
 
 const NOTICE_ID = "side-panel-notice";
 
@@ -89,13 +89,13 @@ export const startSidePanelNotice = async ({
   const copy = doc.createElement("span");
   copy.className = "callout-copy";
   const title = doc.createElement("strong");
-  title.textContent = SIDE_PANEL_NOTICE_TITLE;
+  title.textContent = sidePanelNoticeTitle();
   const body = doc.createElement("p");
-  body.textContent = SIDE_PANEL_NOTICE_BODY;
+  body.textContent = sidePanelNoticeBody();
   copy.append(title, body);
   const dismiss = doc.createElement("button");
   dismiss.type = "button";
-  dismiss.textContent = SIDE_PANEL_NOTICE_DISMISS;
+  dismiss.textContent = sidePanelNoticeDismiss();
   dismiss.addEventListener("click", () => {
     holder.remove();
     void notice.dismissSidePanelNotice();

@@ -56,7 +56,7 @@ const codes = (recipient: string, entrypoint?: string): readonly string[] =>
 describe("token-contract recipient", () => {
   test("flags STRK sent to the STRK token contract", () => {
     const report = sendTo(STRK_TOKEN_ADDRESS);
-    expect(report.flags).toContainEqual({
+    expect(report.flags.map(({ code, message }) => ({ code, message }))).toContainEqual({
       code: "token-contract-recipient",
       message: "This is a token contract, not a wallet. Tokens sent here are usually lost.",
     });

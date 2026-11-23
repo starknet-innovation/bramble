@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { JSON_BUDGETS } from "@bramble/core/json";
-import { createMemoryStore, storageBudgetFor } from "@bramble/store/kv";
+import { createMemoryStore, STRK20_PROOF_KEY_PREFIX, storageBudgetFor } from "@bramble/store/kv";
 
 const VAULT_STORE_KEY = "bramble:vault";
 const VAULT_MIGRATION_STORE_KEY = "bramble:vault-migration";
@@ -18,6 +18,16 @@ describe("storageBudgetFor", () => {
   test("gives the vault envelope and its staging copy the at-rest budget", () => {
     expect(storageBudgetFor(VAULT_STORE_KEY)).toBe(JSON_BUDGETS.storage);
     expect(storageBudgetFor(VAULT_MIGRATION_STORE_KEY)).toBe(JSON_BUDGETS.storage);
+  });
+
+  test("gives only proof-bytes keys the one-proof budget", () => {
+    expect(storageBudgetFor(`${STRK20_PROOF_KEY_PREFIX}intent:sn-main:0x1:0x2`)).toBe(
+      JSON_BUDGETS.strk20Proof,
+    );
+    // The shared multisig row and a look-alike prefix stay on the provider budget.
+    for (const key of ["bramble:argent-multisig-strk20:v1", "bramble:multisig-strk20-proofs"]) {
+      expect(storageBudgetFor(key)).toBe(JSON_BUDGETS.provider);
+    }
   });
 
   test("keeps every other key, the vault's own records included, on the provider budget", () => {

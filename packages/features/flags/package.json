@@ -1,0 +1,24 @@
+{
+  "name": "@bramble/flags",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./canonical": "./src/canonical.ts",
+    "./catalog": "./src/catalog.ts",
+    "./contract": "./src/contract.ts",
+    "./evaluate": "./src/evaluate.ts",
+    "./overrides": "./src/overrides.ts",
+    "./state": "./src/state.ts",
+    "./verify": "./src/verify.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@bramble/core": "workspace:*",
+    "@bramble/store": "workspace:*"
+  }
+}

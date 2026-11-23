@@ -17,21 +17,22 @@ built for the source revision; a zip built elsewhere with a different Bun does n
 reproduce, which is the pin mismatch recorded in
 [#352](https://github.com/starknet-innovation/bramble/issues/352).
 
-- **Bun 1.4.4** (<https://bun.sh>)
+- **Bun 1.4.4** (<https://bun.sh>), which `npm run build-for-amo` installs for you
 - **Node.js 24** with the **npm** it ships (`bun run vendor:privacy` runs `npm ci`)
 - `git` and `zip`
 - Network access: `bun install`, `vendor:argent` and `vendor:privacy` fetch pinned
   upstream sources.
 
-Mozilla reviews source builds on Ubuntu; the steps below need nothing beyond the tools
-above. With Bun 1.4.4 they were verified on the `v0.10.10` source (macOS arm64): two
-clean rebuilds produced byte-identical `bramble-firefox-0.10.10.zip` files. The
-earlier pin, Bun 1.3.3, was verified the same way on `v0.10.5`. A release reproduces
-only with the Bun its revision pins: releases pinned to Bun 1.3.3 need that release,
-and those built before any pin (for example `v0.10.3`, built with Bun 1.4.2) do not
-reproduce with this recipe. Before submitting,
-confirm that a rebuild on Ubuntu matches the submitted archive's checksum, which is the
-check the reviewer will perform.
+Mozilla reviews source builds on Ubuntu. On the `v0.10.10` source with Bun 1.3.3,
+`npm run build-for-amo` (Node.js 24, no Bun installed beforehand) produced the same
+zip on macOS arm64 and in an x86_64 Ubuntu 24.04 container. The manual steps matched
+it byte for byte. Two clean rebuilds with Bun 1.4.4 on macOS arm64 also produced
+byte-identical archives to each other. A release reproduces only with the Bun
+version its source revision pins. Releases built before the pin, such as
+`v0.10.3` with Bun 1.4.2, need their original build toolchain.
+
+Before submitting, confirm that a rebuild on Ubuntu matches the submitted
+archive's checksum, which is the check the reviewer will perform.
 
 ## The submitted archive
 
@@ -41,7 +42,26 @@ The file submitted to AMO is the CI-built Gecko package for the release revision
 request into `main`. The same artifact carries `bramble-firefox-<version>.zip.sha256`;
 that checksum is the one to give the reviewer. Do not submit a locally built zip.
 
+## One command
+
+From the unpacked source archive, with only Node.js 24 (and its npm), `git` and `zip`
+installed:
+
+```sh
+npm run build-for-amo
+```
+
+This is the script AMO's automated source builder looks for. It needs no Bun on the
+machine: `scripts/build-for-amo.ts` installs the exact Bun named by `packageManager` into
+a temporary directory, initialises a git repository on `main` when the source has no
+`.git`, and runs the steps below unchanged. The result is
+`artifacts/bramble-firefox-<version>.zip` and its `.sha256`, and the unpacked build in
+`dist-firefox/`. It ignores the caller's npm settings, because `npm run` passes them to
+nested installs as flags.
+
 ## Steps
+
+The same build by hand, which is what `build-for-amo` runs.
 
 ```sh
 # 1. Unpack the source archive into a fresh git repository.

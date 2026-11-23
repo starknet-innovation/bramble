@@ -7,6 +7,7 @@
 import { STRK20_GATEWAY_BASE } from "@bramble/privacy/config";
 import type { Strk20Service } from "@bramble/privacy/service";
 import type { KeyValueStore } from "@bramble/store/kv";
+import type { AccountAnalytics } from "./account-analytics";
 
 /** Persistent, non-secret installation metadata kept outside the vault. */
 export const ANALYTICS_INSTALLATION_ID_KEY = "bramble:analytics-installation-id";
@@ -18,6 +19,8 @@ const INSTALLATION_HEADER = "X-MC-Installation-ID";
 const VERSION_HEADER = "X-MC-App-Version";
 const PLATFORM_HEADER = "X-MC-Platform";
 const RELEASE_CHANNEL_HEADER = "X-MC-Release-Channel";
+const ACCOUNT_HEADER = "X-MC-Account-ID";
+const PROVENANCE_HEADER = "X-MC-Account-Provenance";
 const FLOW_HEADER = "X-MC-Flow-ID";
 const ANALYTICS_HEADERS = [
   INSTALLATION_HEADER,
@@ -25,6 +28,8 @@ const ANALYTICS_HEADERS = [
   PLATFORM_HEADER,
   RELEASE_CHANNEL_HEADER,
   FLOW_HEADER,
+  ACCOUNT_HEADER,
+  PROVENANCE_HEADER,
 ] as const;
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -62,6 +67,10 @@ export const runNestedGatewayAnalyticsService = <T>(
 ): Promise<T> => run(nestedFlowServices.get(service) ?? service);
 
 type GatewayAnalyticsOptions = {
+  readonly account?: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => Promise<AccountAnalytics | null>;
   readonly enabled: () => boolean | Promise<boolean>;
   readonly http: GatewayHttp;
   readonly metadata: GatewayAnalyticsMetadata;
@@ -151,6 +160,7 @@ export const analyticsReleaseChannel = (
  * metadata reject redirects so identifiers cannot escape the gateway origin.
  */
 export const createGatewayAnalytics = ({
+  account,
   enabled,
   http,
   metadata,
@@ -185,12 +195,44 @@ export const createGatewayAnalytics = ({
     return installationId;
   };
 
-  const addAnalyticsHeaders = async (input: RequestInfo | URL, headers: Headers): Promise<void> => {
+  const addAccountHeaders = async (
+    input: RequestInfo | URL,
+    headers: Headers,
+    init?: RequestInit,
+  ): Promise<void> => {
+    // The SDK can outlive a timed-out operation. Never infer an account from
+    // whichever operation currently holds the global flow queue.
+    if (isStrk20GatewayRequest(input)) return;
+    try {
+      const details = await account?.(input, init);
+      if (
+        details &&
+        /^[0-9a-f]{64}$/.test(details.id) &&
+        ["created", "imported", "unknown"].includes(details.provenance)
+      ) {
+        headers.set(ACCOUNT_HEADER, details.id);
+        headers.set(PROVENANCE_HEADER, details.provenance);
+      }
+    } catch {
+      /* Optional account attribution is unavailable. */
+    }
+  };
+
+  const addAnalyticsHeaders = async (
+    input: RequestInfo | URL,
+    headers: Headers,
+    init?: RequestInit,
+  ): Promise<void> => {
     if (!(await isEnabled()) || !metadataIsValid(metadata)) {
       return;
     }
     const id = await readInstallationId();
     if (id === null || !(await isEnabled())) {
+      return;
+    }
+    await addAccountHeaders(input, headers, init);
+    if (!(await isEnabled())) {
+      stripAnalyticsHeaders(headers);
       return;
     }
     headers.set(INSTALLATION_HEADER, id);
@@ -208,7 +250,7 @@ export const createGatewayAnalytics = ({
     if (!isGatewayRequest(input)) {
       return http(input, stripped ? { ...init, headers } : init);
     }
-    await addAnalyticsHeaders(input, headers);
+    await addAnalyticsHeaders(input, headers, init);
     return http(input, {
       ...init,
       headers,
@@ -217,6 +259,8 @@ export const createGatewayAnalytics = ({
   };
 
   const withFlow = async <T>(run: () => Promise<T>): Promise<T> => {
+    // With analytics off there is no flow id to scope, so operations keep
+    // running concurrently; only consented flows are serialized.
     if (!(await isEnabled())) return run();
     let release = (): void => undefined;
     const previous = flowQueue;
@@ -254,9 +298,11 @@ export const withGatewayAnalyticsFlows = (
   const poolFee = service.poolFee;
   const prepareAccountActions = service.prepareAccountActions;
   const prepareRegistration = service.prepareRegistration;
+  const prepareRegistrationCall = service.prepareRegistrationCall;
   const register = service.register;
   const registrationStatus = service.registrationStatus;
   const shadowAccountCommitment = service.shadowAccountCommitment;
+  const submitAcceptedRelay = service.submitAcceptedRelay;
   const wrapped: Strk20Service = {
     ...service,
     prepare: (input) => withFlow(() => service.prepare(input)),
@@ -264,12 +310,18 @@ export const withGatewayAnalyticsFlows = (
     quoteActions: (input) => withFlow(() => service.quoteActions(input)),
     submitActions: (input) => withFlow(() => service.submitActions(input)),
     submitPrepared: (input) => withFlow(() => service.submitPrepared(input)),
+    ...(submitAcceptedRelay
+      ? { submitAcceptedRelay: (input) => withFlow(() => submitAcceptedRelay(input)) }
+      : {}),
     ...(poolFee ? { poolFee: (input) => withFlow(() => poolFee(input)) } : {}),
     ...(prepareAccountActions
       ? { prepareAccountActions: (input) => withFlow(() => prepareAccountActions(input)) }
       : {}),
     ...(prepareRegistration
       ? { prepareRegistration: (input) => withFlow(() => prepareRegistration(input)) }
+      : {}),
+    ...(prepareRegistrationCall
+      ? { prepareRegistrationCall: (input) => withFlow(() => prepareRegistrationCall(input)) }
       : {}),
     ...(register ? { register: (input) => withFlow(() => register(input)) } : {}),
     ...(registrationStatus

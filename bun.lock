@@ -6,6 +6,7 @@
       "name": "bramble",
       "dependencies": {
         "@bramble/core": "workspace:*",
+        "@bramble/flags": "workspace:*",
         "@bramble/kms-krusty": "workspace:*",
         "@bramble/ledger-protocol": "workspace:*",
         "@bramble/multisig": "workspace:*",
@@ -21,7 +22,7 @@
         "@bramble/wallet-model": "workspace:*",
         "@bramble/wallet-protocol": "workspace:*",
         "@bramble/wallet-ui": "workspace:*",
-        "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+        "@starknetfoundation/krusty-kms-wasm": "3.1.0",
         "starknet": "10.8.0",
       },
       "devDependencies": {
@@ -46,6 +47,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bramble/core": "workspace:*",
+        "@bramble/flags": "workspace:*",
         "@bramble/kms-krusty": "workspace:*",
         "@bramble/ledger-browser": "workspace:*",
         "@bramble/ledger-protocol": "workspace:*",
@@ -149,6 +151,14 @@
         "typescript": "7.0.2",
         "vite": "8.3.3",
         "wrangler": "4.145.0",
+      },
+    },
+    "packages/features/flags": {
+      "name": "@bramble/flags",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bramble/core": "workspace:*",
+        "@bramble/store": "workspace:*",
       },
     },
     "packages/features/multisig": {
@@ -319,6 +329,7 @@
         "@bramble/core": "workspace:*",
         "@bramble/ledger-protocol": "workspace:*",
         "@bramble/multisig": "workspace:*",
+        "@bramble/permissions": "workspace:*",
         "@bramble/portfolio": "workspace:*",
         "@bramble/privacy": "workspace:*",
         "@bramble/settings": "workspace:*",
@@ -401,6 +412,8 @@
     "@bramble/core": ["@bramble/core@workspace:packages/foundation/core"],
 
     "@bramble/extension": ["@bramble/extension@workspace:apps/extension"],
+
+    "@bramble/flags": ["@bramble/flags@workspace:packages/features/flags"],
 
     "@bramble/kms-krusty": ["@bramble/kms-krusty@workspace:packages/platform/kms-krusty"],
 
@@ -830,7 +843,7 @@
 
     "@starknet-io/types-js": ["@starknet-io/types-js@0.7.10", "", {}, "sha512-1VtCqX4AHWJlRRSYGSn+4X1mqolI1Tdq62IwzoU2vUuEE72S1OlEeGhpvd6XsdqXcfHmVzYfj8k1XtKBQqwo9w=="],
 
-    "@starknetfoundation/krusty-kms-wasm": ["@starknetfoundation/krusty-kms-wasm@0.11.0", "", {}, "sha512-WB2aZmZB1AsrgP78s7TTMmRiMqRPgOAKys23OS0MIFWVsCMID+IenmmuTWqr6eG8LA4rMrcr9L9uTVEGUuKNyg=="],
+    "@starknetfoundation/krusty-kms-wasm": ["@starknetfoundation/krusty-kms-wasm@3.1.0", "", {}, "sha512-SfTgkF16lLaIpEtg7TLUt8133JXN0V1Q7bQlK1PjmkuY/mJVVPHE8HUeTE/zMoUGqH79FKtAtatcwTVLORTi7Q=="],
 
     "@storybook/addon-a11y": ["@storybook/addon-a11y@10.6.2", "", { "dependencies": { "@storybook/global": "^5.0.0", "axe-core": "^4.2.0" }, "peerDependencies": { "storybook": "^10.6.2" } }, "sha512-zleS+btwrTRcUf3opbZntKsEt6PTqAtxsek08tx5jh5fRvd6wWmtnwW3uaBcypfIKnheTB3KGljJwFX+Mc+Umg=="],
 

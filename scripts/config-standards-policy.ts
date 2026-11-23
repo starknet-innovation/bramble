@@ -49,6 +49,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/core": "workspace:*",
+  "@bramble/flags": "workspace:*",
   "@bramble/kms-krusty": "workspace:*",
   "@bramble/ledger-protocol": "workspace:*",
   "@bramble/multisig": "workspace:*",
@@ -64,11 +65,13 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  "@starknetfoundation/krusty-kms-wasm": "3.1.0",
   starknet: "10.8.0",
 };
 
 export const PINNED_RUNTIME_FILES = [
+  "_locales/en/messages.json",
+  "_locales/zh_CN/messages.json",
   "background/index.js",
   "brand/onboarding-landscape.webp",
   "content/index.js",
@@ -92,9 +95,36 @@ export const PINNED_RUNTIME_FILES = [
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
+/**
+ * Exactly what `files.includes` in biome.json must say: the whole repository,
+ * minus generated output, vendored code, separately checked apps, and local
+ * browser profiles.
+ */
+export const EXPECTED_BIOME_INCLUDES = [
+  "**",
+  "!.claude",
+  "!.dev-profile",
+  "!.mainnet-multisig-e2e",
+  "!.impeccable",
+  "!.playwright-cli",
+  "!apps/terminal",
+  "!apps/ui-lab",
+  "!apps/website",
+  "!bun.lock",
+  "!dist",
+  "!dist-firefox",
+  "!node_modules",
+  "!output",
+  "!playwright-report",
+  "!test-results",
+  "!vendor",
+] as const;
+
 export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
   ".dev-profile/",
+  // The mainnet multisig round keeps two wallet profiles and its record here.
+  ".mainnet-multisig-e2e/",
   // Bun auto-loads a bare `.env`, which makes it the natural place a developer
   // puts BRAMBLE_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
   // reaching a commit.
@@ -141,6 +171,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run --filter @bramble/extension build",
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
+  "build-for-amo": "node scripts/build-for-amo.ts",
   check:
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
@@ -177,6 +208,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:ledger": "bun run tests/e2e/ledger/run-speculos.ts",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
   "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
+  "test:e2e:mainnet:multisig": "bun run scripts/mainnet-wallet-e2e.ts multisig",
   "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
   "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
@@ -185,6 +217,9 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   // Live Sepolia scorecard: needs the git-ignored seed file, so never a gate.
   "verify:sepolia":
     "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
+  // Live Sepolia send run (issue 976): spends testnet STRK from S-TXN, so never a gate.
+  "verify:sepolia:sends":
+    "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia-sends.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {

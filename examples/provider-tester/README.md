@@ -35,7 +35,7 @@ Then:
 
 | Step | Method | What to confirm |
 | --- | --- | --- |
-| 1 Detect | metadata | `id: bramble`, `name: Bramble`, `version: 0.1.0`, inline icon |
+| 1 Detect | metadata | `id: bramble`, `name: Bramble`, `version`: the installed extension version (as in Settings), inline icon |
 | 2 Connect | `wallet_requestAccounts` | wallet prompts a **Connection request**; returns addresses after Approve |
 | 3 Authz | `mc_accounts`, `wallet_getPermissions` | `isPreauthorized: true` and `["accounts"]` once connected |
 | 4 Chain id | `wallet_requestChainId` | `0x534e5f4d41494e` (Mainnet) / `0x534e5f5345504f4c4941` (Sepolia) |

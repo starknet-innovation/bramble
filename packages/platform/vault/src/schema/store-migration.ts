@@ -3,10 +3,12 @@
  * steps live in `migrations.ts`; this module owns the storage side effects that
  * can only run after unlock supplies the vault passphrase.
  */
+
 import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import type { EncryptedStore } from "../encrypted-store";
 import { migrateVault } from "./migrations";
-import { isVaultV13, type Vault } from "./schema";
+import { isVaultV14, type Vault } from "./schema";
 
 /**
  * Browser storage key for the primary encrypted wallet vault.
@@ -35,7 +37,7 @@ const readVerified = async (
   expected: Vault,
 ): Promise<Vault> => {
   const candidate = await store.read(vaultPassphrase);
-  if (!isVaultV13(candidate) || !sameVault(candidate, expected)) {
+  if (!isVaultV14(candidate) || !sameVault(candidate, expected)) {
     throw new WalletError("Vault migration verification failed");
   }
   return candidate;
@@ -69,10 +71,15 @@ const recoverStagedVault = async (
   if (!(await stores.staging.exists())) {
     return null;
   }
-  const staged = await stores.staging.read(vaultPassphrase);
-  if (!isVaultV13(staged)) {
+  const candidate = await stores.staging.read(vaultPassphrase);
+  // Absence must not migrate to an empty vault over an unreadable primary.
+  if (
+    !isRecord(candidate) ||
+    !Number.isSafeInteger(candidate["schemaVersion"]) ||
+    Number(candidate["schemaVersion"]) < 1
+  )
     return null;
-  }
+  const staged = migrateVault(candidate);
   // The staged copy verified against its own records, so it is the current
   // vault even when the primary cannot be verified; a plain write would refuse
   // to replace that primary, and the user would be stuck with neither.
@@ -118,7 +125,7 @@ export const readMigratedVault = async (
   if (stored === undefined) {
     return vault;
   }
-  if (isVaultV13(stored)) {
+  if (isVaultV14(stored)) {
     if (await stores.staging.exists()) {
       await removeVerified(stores.staging);
     }

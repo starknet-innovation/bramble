@@ -10,6 +10,7 @@ snfoundry.toml
 target/
 test-results/
 .dev-profile/
+.mainnet-multisig-e2e/
 output/
 vendor/argent-contracts/
 vendor/starknet-privacy/
@@ -19,6 +20,7 @@ vendor/ledger-app-bin/
 .env
 .env*.local
 .DS_Store
+.idea
 /dist.zip
 .claude/*
 !.claude/skills

@@ -7,6 +7,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { addressText } from "@bramble/wallet-model/networks";
+import {
+  STRK20_PREPARE_REGISTER_SUMMARY,
+  STRK20_SIMULATE_REGISTER_SUMMARY,
+} from "@bramble/wallet-protocol/strk20";
 import type { ArgentMultisigView } from "../../../../src/popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
@@ -57,7 +62,7 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).not.toContain("request-technical");
     // The familiar display name leads, stacked over the address it shares.
     expect(html).toContain(`<strong>${accountDisplayName(account, null)}</strong>`);
-    expect(html).toContain(`title="${active?.address}"`);
+    expect(html).toContain(`title="${addressText(active?.address ?? "")}"`);
     expect(html).toContain(`<dt>Network</dt><dd>${status.network}</dd>`);
     expect(html).toContain(`data-approval-account="${status.activeAccountId}"`);
     expect(html).toContain(`data-approval-action="approve"`);
@@ -195,6 +200,19 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).not.toContain("No additional wallet warnings");
   });
 
+  test("a simulated register card is titled and labelled as a simulation", () => {
+    const card = (first: string) =>
+      approvalCard({ id: ID, kind: "strk20-register", origin: ORIGIN, summaries: [first] }, status);
+    const simulated = card(STRK20_SIMULATE_REGISTER_SUMMARY);
+    expect(simulated).toContain("Simulate private-balance activation</p>");
+    expect(simulated).toContain("(no submittable proof)");
+    expect(simulated).toContain(
+      'type="button"><svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>Simulate</button>',
+    );
+    expect(simulated).not.toContain("Activate");
+    expect(card(STRK20_PREPARE_REGISTER_SUMMARY)).toContain("Activate private balances");
+  });
+
   test("strk20-invoke request shows the private-transaction copy and call summaries", () => {
     const approval: PendingApproval = {
       actionReviews: [
@@ -236,7 +254,7 @@ describe("approvalCard renders each approval kind", () => {
     // A listed relay fee is a charge, so the card must not claim there is none.
     expect(html).not.toContain("charges no fee");
     expect(html).toContain("no public wallet fee");
-    expect(html).toContain("0x99");
+    expect(html).toContain(addressText("0x99"));
     expect(html).toContain("3 actions · including relay fee");
     expect(html).toContain("public deposit approval");
     expect(html).toContain("Split the deposit and private actions");
@@ -291,6 +309,9 @@ describe("approvalCard renders each approval kind", () => {
 
       expect(html).toContain(input.title);
       expect(html).toContain("Exact private request");
+      // The hint states the consequence, so it shows beside the summary lines.
+      expect(html).toContain(input.hint);
+      expect(html.indexOf("Exact private request")).toBeLessThan(html.indexOf(input.hint));
       expect(html).toContain("Technical details");
       expect(html).toContain(input.action);
     });
@@ -308,6 +329,8 @@ describe("approvalCard renders each approval kind", () => {
     );
 
     expect(html).toContain("Share all private token balances");
+    expect(html).toContain("reveals every private token balance discovered for this account");
+    expect(html).not.toContain("reveals only the listed");
     expect(html).not.toContain("No additional wallet warnings");
   });
 
@@ -321,7 +344,7 @@ describe("approvalCard renders each approval kind", () => {
     const html = approvalCard(approval, status);
 
     expect(html).toContain("Network switch request");
-    expect(html).toContain("asking to change the wallet's active network");
+    expect(html).toContain("asking to change the wallet&#39;s active network");
     expect(html).toContain("Switch to Starknet Sepolia");
     expect(html).toContain("Switch network");
   });
@@ -439,7 +462,7 @@ describe("approvalCard renders each approval kind", () => {
 
     // The account id's network prefix never leaks into the shown value.
     expect(html).toContain(
-      `<dt>Account</dt><dd><code title="${account.address}">0x1234…bcde</code><button class="icon-button ghost copy-inline" data-copy="${account.address}" type="button" aria-label="Copy account address"`,
+      `<dt>Account</dt><dd><code title="${addressText(account.address)}">0x0123…bcde</code><button class="icon-button ghost copy-inline" data-copy="${addressText(account.address)}" type="button" aria-label="Copy account address"`,
     );
     expect(html).not.toContain("SN_MAI…");
     expect(html).not.toContain(`data-copy="${account.id}"`);

@@ -85,9 +85,9 @@ describe("collectTransactionHistory", () => {
     const entries = await collectTransactionHistory(fakeRpc(), scanArgs);
     expect(entries.map((entry) => entry.hash)).toEqual(["0xb22", "0xa11"]);
     const [out, incoming] = entries;
-    expect(out?.summary).toBe("Sent 0.5 ETH to 0x7770…0abc");
+    expect(out?.summary).toBe("Sent 0.5 ETH to 0x0777…0abc");
     expect(out?.submittedAt).toBe((1_700_000_000 + 101) * 1000);
-    expect(incoming?.summary).toBe("Received 1 ETH from 0x7770…0abc");
+    expect(incoming?.summary).toBe("Received 1 ETH from 0x0777…0abc");
     expect(incoming?.status).toBe("accepted");
   });
 
@@ -230,7 +230,7 @@ describe("collectTransactionHistory", () => {
     expect(entries.map((entry) => entry.hash)).toEqual(["0x5a1", "0x5a1"]);
     expect(entries.map((entry) => entry.token).sort()).toEqual(["ETH", "USDC"]);
     const summaries = entries.map((entry) => entry.summary).sort();
-    expect(summaries).toEqual(["Received 2500 USDC from 0x7770…0abc", "Sent 1 ETH to 0x7770…0abc"]);
+    expect(summaries).toEqual(["Received 2500 USDC from 0x0777…0abc", "Sent 1 ETH to 0x0777…0abc"]);
   });
 
   test("drops a node-derived row that fails boundary validation, keeping the rest", async () => {

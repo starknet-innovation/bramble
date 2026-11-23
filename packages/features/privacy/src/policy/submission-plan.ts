@@ -1,6 +1,7 @@
 /** Frozen STRK20 submission routes shared by policy and review summaries. */
 
 import type { FeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
+import type { Call } from "starknet";
 import type { PaymasterAuthorizationReview } from "../paymaster/paymaster-typed-data";
 
 /**
@@ -65,4 +66,21 @@ export type Strk20SponsoredShieldPlan = {
   readonly mode: "sponsored-deposit";
   readonly sponsor: string;
   readonly typedData: unknown;
+};
+
+/**
+ * Outcome of a pool submission: the broadcast transaction, plus the ERC20
+ * approvals that submission granted so the caller can track them.
+ *
+ * A deposit (and the pool fee) is pulled by the pool, so entering the pool
+ * necessarily approves it to spend the account's PUBLIC balance. Those grants
+ * are ordinary standing allowances owned by the submitting account, and the
+ * allowance manager can only show or revoke a residual one if the submitter
+ * reports it — reconstructing it from the actions at the call site would be a
+ * second definition of the pool's own approval rule. `allowanceGrants` is
+ * absent (never a lie) for a submission that approves nothing.
+ */
+export type Strk20SubmissionResult = {
+  readonly allowanceGrants?: readonly Call[];
+  readonly transactionHash: string;
 };

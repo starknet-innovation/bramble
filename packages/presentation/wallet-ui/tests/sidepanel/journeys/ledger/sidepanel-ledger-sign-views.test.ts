@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { addressText } from "@bramble/wallet-model/networks";
 import type {
   LedgerSignRequestSummary,
   WalletStatus,
@@ -44,9 +45,9 @@ describe("ledgerSignScreen", () => {
     expect(html).toContain("Account 3");
     expect(html).toContain("Starknet Mainnet");
     // The signer line shows the account's address (never the id's network
-    // prefix) truncated, with the full address on hover.
+    // prefix) truncated, with the full padded address on hover.
     const address = request.accountId.slice(request.accountId.indexOf(":") + 1);
-    expect(html).toContain(`<code title="${address}">0x1234…bcde</code>`);
+    expect(html).toContain(`<code title="${addressText(address)}">0x0123…bcde</code>`);
     expect(html).not.toContain("SN_MAI…");
   });
 
@@ -71,6 +72,13 @@ describe("ledgerSignScreen", () => {
     expect(html).toContain("You may have rejected the request, or Blind signing may be off.");
     expect(html).toContain("data-ledger-retry");
     expect(html).toContain("data-ledger-cancel");
+    const withCode = render({
+      code: "unexpected-device-error",
+      kind: "error",
+      message: "x",
+      supportCode: "Support code · unexpected-device-error · InvalidStateError",
+    });
+    expect(withCode).toContain("Support code · unexpected-device-error · InvalidStateError");
     expect(html).not.toContain('data-liquid-dots="ledger"');
   });
 

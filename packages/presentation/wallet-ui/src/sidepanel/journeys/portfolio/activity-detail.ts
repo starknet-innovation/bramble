@@ -11,21 +11,23 @@ import { escapeHtml } from "@bramble/core/html";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import {
+  addressText,
   DEFAULT_TRACKED_TOKENS,
   STARKNET_NETWORKS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
+import { t } from "../../../i18n/messages";
 import { formatFiat } from "../../shared/fiat";
 import { formatFri, inlineCopyButton } from "../../shared/parts";
 
 const fact = (term: string, value: string): string =>
   `<div><dt>${escapeHtml(term)}</dt><dd>${value}</dd></div>`;
 
-// A whole identifier with its copy control, shown in full: the expansion is
-// where the user reads an address, so it is not shortened there.
+// A whole address with its copy control, shown in full and padded: the
+// expansion is where the user reads an address, so it is not shortened there.
 const identifier = (value: string, copyLabel: string): string =>
-  `<code>${escapeHtml(value)}</code>${inlineCopyButton(value, copyLabel)}`;
+  `<code>${escapeHtml(addressText(value))}</code>${inlineCopyButton(addressText(value), copyLabel)}`;
 
 // The decimals of a fee token, from the bundled set or the user's tracked
 // tokens. A gasless fee is stored in base units without its scale, so a token
@@ -51,7 +53,7 @@ export const activityFeeText = (
   tracked: readonly TokenConfig[] = [],
 ): string | null => {
   if (entry.feePayer === "sponsor") {
-    return "Sponsored";
+    return t("portfolio.activity.sponsored");
   }
   try {
     if (entry.userFee) {
@@ -84,8 +86,10 @@ const submittedValueText = (entry: ActivityEntry): string | null => {
 };
 
 /** The counterparty fact, with the whole address on screen and copyable. */
-export const counterpartyFact = (role: string, address: string): string =>
-  fact(role, identifier(address, `Copy ${role.toLowerCase()} address`));
+export const counterpartyFact = (
+  text: { readonly copy: string; readonly term: string },
+  address: string,
+): string => fact(text.term, identifier(address, text.copy));
 
 /**
  * The value at submission, fee, network and token contract facts, each only
@@ -100,11 +104,14 @@ export const activityRecordFacts = (
   const network = STARKNET_NETWORKS[entry.networkId]?.name;
   const value = submittedValueText(entry);
   return [
-    value === null ? "" : fact("Value at submission", escapeHtml(value)),
-    fee === null ? "" : fact("Network fee", escapeHtml(fee)),
-    network === undefined ? "" : fact("Network", escapeHtml(network)),
+    value === null ? "" : fact(t("portfolio.activity.valueAtSubmission"), escapeHtml(value)),
+    fee === null ? "" : fact(t("portfolio.activity.networkFee"), escapeHtml(fee)),
+    network === undefined ? "" : fact(t("portfolio.activity.network"), escapeHtml(network)),
     entry.tokenAddress === undefined
       ? ""
-      : fact("Token contract", identifier(entry.tokenAddress, "Copy token contract address")),
+      : fact(
+          t("portfolio.activity.tokenContract"),
+          identifier(entry.tokenAddress, t("portfolio.activity.copyTokenContract")),
+        ),
   ].join("");
 };

@@ -53,4 +53,24 @@ describe("locked gate view", () => {
     expect(html).toContain("Site request waiting");
     expect(html).toContain("https://terminal.example");
   });
+
+  test("offers forgot-password guidance that removes nothing (issue 903)", () => {
+    const html = locked(lockedStatus(true));
+    // A collapsed, repaint-persistent disclosure under Unlock: text only.
+    expect(html).toContain(
+      '<details class="disclosure gate-forgot" data-disclosure="unlock-forgot-password">',
+    );
+    expect(html).toContain("Forgot password?");
+    // Catalog text is escaped into the template; the rendered text is unchanged.
+    expect(html).toContain("Bramble can&#39;t recover or reset it. It&#39;s never stored.");
+    expect(html).toContain("Accounts from imported keys or other recovery phrases");
+    expect(html).toContain("Ledger accounts (add them again with your device)");
+    expect(html).toContain(
+      "Without your recovery phrase, removing Bramble loses access to its funds for good.",
+    );
+    // No wallet-removing control lives on the unlock screen (issues 456, 715):
+    // the form's one button is still Unlock.
+    expect(html.match(/<button\b/g)).toHaveLength(1);
+    expect(html).not.toContain("data-action");
+  });
 });

@@ -5,7 +5,7 @@ import {
   bindHomeUi,
   bindReceiveWalletCard,
   confirmationOutcome,
-  DEPLOY_RECEIPT_COPY,
+  deployReceiptCopy,
   outcomeReceiptFor,
   paintOutcomeReceipt,
 } from "@bramble/wallet-ui/lab";
@@ -38,7 +38,7 @@ const paintDeployAnswer =
     paintOutcomeReceipt(
       context.app,
       "deploy-success",
-      outcomeReceiptFor(confirmationOutcome(chainStatus), DEPLOY_RECEIPT_COPY, DEPLOY_HASH),
+      outcomeReceiptFor(confirmationOutcome(chainStatus), deployReceiptCopy(), DEPLOY_HASH),
       "SN_MAIN",
     );
   };
@@ -295,6 +295,22 @@ export const portfolioScenario: WalletScenario = {
         "A complete dollar total at or above $10,000 adds a quiet line under the total: a link out to Starknet VIP and a way to turn it off. Decided on this device; nothing is sent.",
       prepare: bindFixtureHome,
       state: { currency: "usd", notice: "vip", thresholdUsd: 10_000 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          changes: journeyChanges,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          signability: { preFixReadyKey: true, readOnly: false },
+        }),
+      id: "ready-key-notice",
+      label: "Ready key from an older release",
+      narrative:
+        "A Ready account restored before Krusty 3.0 holds a key its phrase no longer finds. Home says so once, offers Move funds before the key backup, and can be dismissed for this account.",
+      prepare: bindFixtureHome,
+      state: { notice: "ready-key", signability: "pre-fix Ready key" },
     },
     {
       content: () =>

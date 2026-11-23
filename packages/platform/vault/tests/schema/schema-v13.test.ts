@@ -51,15 +51,18 @@ const v13 = (
   schemaVersion: 13,
 });
 
-describe("schema v13 (current)", () => {
-  test("is the current version, reached by exactly one adjacent step", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
-    expect(VAULT_MIGRATIONS.at(-1)).toMatchObject({ fromVersion: 12, toVersion: 13 });
+describe("schema v13 (historical)", () => {
+  test("retains its adjacent historical step", () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
+    expect(VAULT_MIGRATIONS.find((step) => step.fromVersion === 12)).toMatchObject({
+      fromVersion: 12,
+      toVersion: 13,
+    });
   });
 
   test("old: a v12 vault migrates to empty collections and nothing else", () => {
     expect(isVaultV12(v12)).toBe(true);
-    expect(migrateVault(v12) as unknown).toEqual(v13([]));
+    expect(migrateVault(v12) as unknown).toEqual({ ...v13([]), schemaVersion: 14 });
     expect(migrateVault(structuredClone(v12))).toEqual(migrateVault(v12));
     expect(isVaultV12({ ...v12, multisigStrk20ViewingKeys: [] })).toBe(false);
   });
@@ -75,7 +78,7 @@ describe("schema v13 (current)", () => {
         ),
       ),
     ).toBe(true);
-    expect(migrateVault(v13([key])) as unknown).toEqual(v13([key]));
+    expect(migrateVault(v13([key])) as unknown).toEqual({ ...v13([key]), schemaVersion: 14 });
   });
 
   test("invalid: a bad key, a foreign chain, or a conflict without a key fails closed", () => {
