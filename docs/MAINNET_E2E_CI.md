@@ -222,18 +222,17 @@ about 0.005 USDC, and no STRK (`docs/GASLESS_FEES.md`). A standard run is
 capped at 0.2 STRK and 0.05 USDC.
 
 STRK20 tier, set `vars.MAINNET_E2E_STRK20=true`, add the discovery and prover
-secrets, and fund about **25 STRK** (minimum **21 STRK**, maximum **30 STRK**,
-per-run cap **22 STRK**). The lifecycle deposits 0.05 STRK. A local mainnet
+secrets, and fund about **36 STRK** (minimum **32 STRK**, maximum **40 STRK**,
+per-run cap **32 STRK**). The lifecycle deposits 0.05 STRK. A local mainnet
 run of v0.10.11 (November 2026) spent about **27 STRK**: four 4.5 STRK pool
 fees (register, deposit, transfer, withdraw, at the fee documented in
 [STRK20_PRIVACY.md](STRK20_PRIVACY.md)), plus about 2.2 STRK of gas per proof
 transaction. Each proof transaction declares a maximum fee of about 5.4 STRK,
 and the account must hold the 4.5 STRK pool fee plus that gas when it runs;
 otherwise the gateway's pre-submit simulation refuses it with 400
-`transaction_rejected`. That cost is above the per-run cap and the minimum
-balance here, which were set against an earlier 12–16 STRK estimate. Part of
-the deposit stays private. USDC limits stay on the
-standard tier. After a normal STRK20 run the balance is below 21 STRK; that
+`transaction_rejected`. The minimum is the run plus that headroom. Part of the
+deposit stays private. USDC limits stay on the standard tier. After a normal
+STRK20 run the balance is below 32 STRK; that
 passes `post` and the next preflight asks for a top-up.
 
 **The STRK20 tier must stay off.** Leave `vars.MAINNET_E2E_STRK20` unset
