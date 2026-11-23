@@ -10,10 +10,20 @@
  * arrives by recovery); the creation path then adds OpenZeppelin index 1 and an Argent on this
  * wallet's own ladder on Mainnet, and OpenZeppelin index 0 on Sepolia.
  * `bun run mobile:parity` writes it; `bun run check` fails on drift. Every value is public.
+ *
+ * `vault-v13-imported.json` (wallet-core P3, private-key import) is a second vault from the same
+ * service: recovery restores OpenZeppelin index 0 on Mainnet from the phrase, then
+ * `importRawKeyAccount` adds one OpenZeppelin and one Argent account from raw keys (derivation
+ * `imported-raw-key`, the key in `signingKeys`, the Argent one active). The pasted keys are the
+ * phrase's own OpenZeppelin keys at indexes 7 and 8, derived by the extension's `deriveAccount`:
+ * no key outside the published phrase enters a fixture, and nothing at those indexes holds funds.
+ * The imported accounts sit at their family's default class with no salt; an address-picked
+ * (`address`) or multi-release (`classHashes`) import is left out (mobile imports neither).
  */
 
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { deriveAccount } from "@bramble/vault/accounts";
 import {
   createEncryptedStore,
   decryptJson,
@@ -36,14 +46,23 @@ export const VAULT_PARITY_SCOPE = `bramble:encrypted-store:${VAULT_STORE_KEY}`;
 const vaultPassphrase = VAULT_PARITY_PASSWORD;
 const mnemonic = PARITY_MNEMONIC;
 
+/** Repository-relative path of the imported-key vault fixture (wallet-core P3). */
+export const VAULT_IMPORTED_FIXTURE_PATH = "mobile/core/tests/fixtures/vault-v13-imported.json";
+
+const kmsFor = async () => createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
+
+/** The extension's vault service over a fresh memory store. */
+const vaultService = async (store: KeyValueStore) =>
+  createWalletVaultService({
+    encryptedStore: createEncryptedStore(store, VAULT_STORE_KEY),
+    kms: await kmsFor(),
+    migrationStore: createEncryptedStore(createMemoryStore(), VAULT_MIGRATION_STORE_KEY),
+  });
+
 /** Builds the vault through the extension's service and returns the store it wrote. */
 const writeParityVault = async (): Promise<KeyValueStore> => {
   const store = createMemoryStore();
-  const service = createWalletVaultService({
-    encryptedStore: createEncryptedStore(store, VAULT_STORE_KEY),
-    kms: createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm")),
-    migrationStore: createEncryptedStore(createMemoryStore(), VAULT_MIGRATION_STORE_KEY),
-  });
+  const service = await vaultService(store);
   // Recovery only writes into an empty vault (it is the import path), so it goes first.
   await service.recoverAccounts({
     mnemonic,
@@ -79,6 +98,41 @@ const writeParityVault = async (): Promise<KeyValueStore> => {
   return store;
 };
 
+/** The phrase's OpenZeppelin key at `accountIndex`, as the extension derives it. */
+const phraseKey = async (accountIndex: number): Promise<string> =>
+  (
+    await deriveAccount(await kmsFor(), {
+      accountContractType: "openzeppelin",
+      accountIndex,
+      mnemonic,
+      networkId: "SN_MAIN",
+    })
+  ).privateKey;
+
+/** A phrase wallet with OpenZeppelin index 0, then two raw-key imports, through the service. */
+const writeImportedVault = async (): Promise<KeyValueStore> => {
+  const store = createMemoryStore();
+  const service = await vaultService(store);
+  await service.recoverAccounts({
+    mnemonic,
+    networkId: "SN_MAIN",
+    selections: [{ accountContractType: "openzeppelin", accountIndex: 0 }],
+    vaultPassphrase,
+  });
+  for (const [accountContractType, index] of [
+    ["openzeppelin", 7],
+    ["argent", 8],
+  ] as const) {
+    await service.importRawKeyAccount({
+      accountContractType,
+      networkId: "SN_MAIN",
+      privateKey: await phraseKey(index),
+      vaultPassphrase,
+    });
+  }
+  return store;
+};
+
 /** What the fixture holds: the inputs, the decrypted payload, and the envelope it was sealed in. */
 export type VaultParity = {
   readonly mnemonic: string;
@@ -88,13 +142,11 @@ export type VaultParity = {
   readonly sealed: unknown;
 };
 
-/**
- * Writes the vault afresh and returns its payload, keeping `committedSealed` when the extension
- * still opens it to that same payload (a fresh seal draws a new salt, IV, lineage and commit, so
- * re-sealing every run would churn the fixture with no change in meaning).
- */
-export const computeVaultParity = async (committedSealed?: unknown): Promise<VaultParity> => {
-  const sealed = await (await writeParityVault()).get(VAULT_STORE_KEY);
+const parityOf = async (
+  written: Promise<KeyValueStore>,
+  committedSealed: unknown,
+): Promise<VaultParity> => {
+  const sealed = await (await written).get(VAULT_STORE_KEY);
   if (!isEncryptedEnvelope(sealed)) throw new Error("the vault service wrote no envelope");
   const payload = await decryptJson(sealed, vaultPassphrase, VAULT_PARITY_SCOPE);
   const keep = await sealedIsCurrent(committedSealed, payload, vaultPassphrase, VAULT_PARITY_SCOPE);
@@ -106,3 +158,15 @@ export const computeVaultParity = async (committedSealed?: unknown): Promise<Vau
     sealed: keep ? committedSealed : sealed,
   };
 };
+
+/**
+ * Writes the vault afresh and returns its payload, keeping `committedSealed` when the extension
+ * still opens it to that same payload (a fresh seal draws a new salt, IV, lineage and commit, so
+ * re-sealing every run would churn the fixture with no change in meaning).
+ */
+export const computeVaultParity = (committedSealed?: unknown): Promise<VaultParity> =>
+  parityOf(writeParityVault(), committedSealed);
+
+/** {@link computeVaultParity} for the imported-key vault (`vault-v13-imported.json`). */
+export const computeImportedVaultParity = (committedSealed?: unknown): Promise<VaultParity> =>
+  parityOf(writeImportedVault(), committedSealed);

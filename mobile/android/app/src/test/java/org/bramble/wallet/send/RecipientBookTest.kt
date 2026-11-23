@@ -79,6 +79,14 @@ class RecipientBookTest {
         assertEquals(listOf("Alice"), book.filtered("${ADDRESS_PREFIX}9").contacts.map { it.label })
     }
 
+    @Test
+    fun namedPrefersAnExactName() {
+        assertEquals(listOf("Alice"), book.named(" alice ").map { it.label })
+        assertEquals(listOf("Amber Otter", "Brisk Heron"), book.named("r").map { it.label }.take(2))
+        assertEquals(emptyList<RecipientRow>(), book.named(" "))
+        assertEquals(emptyList<RecipientRow>(), book.named("fricoben.stark"))
+    }
+
     private companion object {
         const val ADDRESS_PREFIX = "0x5b7c2e1f00000000000000000000000000000000000000000000000000c0ff"
         const val CLASS_HASH = "0x61dac032f228abef9c6626f995015233097ae253a7f72d68552db02f2971b8f"

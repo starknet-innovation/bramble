@@ -112,6 +112,7 @@ struct NetworkView: View {
             }
             Text("Switching selects or derives an account on the target network.")
                 .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+            RpcEndpointDisclosure()
             CoordinationRelayDisclosure()
             Spacer()
         }
