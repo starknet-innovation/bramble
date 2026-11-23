@@ -17,8 +17,9 @@ import org.junit.runner.RunWith
 /**
  * "Import private key" from the drawer's Add account, port of the iOS `ImportKeyTests`, on the
  * offline [FixtureNode] with the real core: an invalid key and a duplicate show the core's reason,
- * a valid key imports and becomes active, and the field is empty after every attempt and after
- * leaving. The orchestrator gives the test a fresh vault.
+ * a refused key stays in the field to correct, a valid key imports and becomes active, and the
+ * field is empty after success, after leaving and after a lock. The orchestrator gives the test a
+ * fresh vault.
  *
  * The key is wallet-core's own test vector (`tests/key_import.rs`, `key_of(LEGAL, 0)`): the
  * published "legal winner" phrase's key at index 0, never a real wallet's. Snapshots are taken
@@ -44,9 +45,11 @@ class ImportKeyTest {
         if (shoot) snapshot("import-key-form")
     }
 
-    private fun assertFieldEmpty() {
-        onView(withContentDescription(FIELD)).check(matches(withText("")))
+    private fun assertField(text: String) {
+        onView(withContentDescription(FIELD)).check(matches(withText(text)))
     }
+
+    private fun assertFieldEmpty() = assertField("")
 
     @Test
     fun invalidLeaveImportAndDuplicate() {
@@ -61,8 +64,7 @@ class ImportKeyTest {
         r.typeSecret(FIELD, "0x0")
         r.expectToast("Invalid private key") { r.tap("Import account") }
         r.waitForText("Invalid private key")
-        assertFieldEmpty()
-        r.snapshot("import-key-invalid")
+        assertField("0x0")
 
         // Leaving drops the key: back to the chooser and in again finds the field empty.
         r.typeSecret(FIELD, LEGAL_KEY)
@@ -82,15 +84,25 @@ class ImportKeyTest {
         r.waitForText(first)
         r.snapshot("drawer-imported")
 
-        // The same key again is refused in the core's words, and the field is emptied.
+        // The same key again is refused in the core's words, and stays to be corrected.
         r.tap("Add account")
         r.tap("Import an existing account")
         r.tap("Private key")
         assertFieldEmpty()
         r.typeSecret(FIELD, LEGAL_KEY)
         r.expectToast("Account already exists") { r.tap("Import account") }
-        assertFieldEmpty()
+        assertField(LEGAL_KEY)
         assertEquals(imported?.id, r.onMain { activeRecord?.id })
+
+        // A lock tears the form down with the key in it; after unlocking the field is empty.
+        r.onMain { lock() } // what ProcessLifecycleOwner.onStop does
+        // A frame on the unlock screen first: a lock and unlock in one frame would never dispose
+        // the form, which no real unlock (typed on that screen) can do.
+        r.waitForText("Welcome back")
+        r.onMain { unlock(PublicWallet.PASSPHRASE) }
+        r.waitForHome()
+        r.openImportKey()
+        assertFieldEmpty()
         assertEquals(0, node.writes.get())
     }
 

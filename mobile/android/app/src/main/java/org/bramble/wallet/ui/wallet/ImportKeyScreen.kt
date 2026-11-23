@@ -56,9 +56,10 @@ fun ImportAccountChooser(
  * `importKeyFlow`, twin of iOS `ImportKeyForm` (Bramble account only: the core imports no Ready key
  * and takes no salt). The key goes through the hardened [BrambleField] as a phrase word does:
  * readable, no suggestions or personalised learning, no autofill, no copy or cut, kept out of saved
- * state, and the clipboard emptied after a paste. The key leaves state when the import is sent and
- * when the form leaves composition; a lock removes the wallet's screens with it. The extension's
- * hint on how the vault stores the key is left out (`COPY_STYLE.md` rules 4 and 5).
+ * state, and the clipboard emptied after a paste. A refused key stays for the user to correct; the
+ * key leaves state on success and when the form leaves composition, and a lock removes the
+ * wallet's screens with it. The extension's hint on how the vault stores the key is left out
+ * (`COPY_STYLE.md` rules 4 and 5).
  */
 @Composable
 fun ImportKeyForm(
@@ -79,14 +80,15 @@ fun ImportKeyForm(
             result = "Enter a private key to import"
             return
         }
-        key = ""
         result = null
         // The store's scope, not the form's: leaving mid-import must not cancel the reload and
         // toast after the core has already sealed the account.
         store.appScope.launch {
             runCatching { store.importPrivateKey(privateKey) }
-                .onSuccess { imported() }
-                .onFailure { refused ->
+                .onSuccess {
+                    key = ""
+                    imported()
+                }.onFailure { refused ->
                     if (refused !is CancellationException) result = describe(refused)
                     store.showError(refused)
                 }

@@ -1,9 +1,10 @@
 import XCTest
 
 /// "Import private key" from the drawer's Add account, offline (the `unfunded` fixture node): an
-/// invalid key and a duplicate show the core's reason, a valid key imports and becomes active, and
-/// the field is empty after every attempt and after leaving. Starts from a reset vault and removes
-/// the wallet at the end, so the import is not left in the wallet other suites share.
+/// invalid key and a duplicate show the core's reason and stay in the field to correct, a valid key
+/// imports and becomes active, and the field is empty after success, after leaving and after a
+/// lock. Starts from a reset vault and removes the wallet at the end, so the import is not left in
+/// the wallet other suites share.
 ///
 /// The key is wallet-core's own test vector (`tests/key_import.rs`, `key_of(LEGAL, 0)`): the
 /// published "legal winner" phrase's key at index 0, never a real wallet's. Snapshots are taken
@@ -34,10 +35,11 @@ final class ImportKeyTests: XCTestCase {
         UITest.type("0x0", into: field(app))
         UITest.tap(app.buttons["Import account"])
         UITest.wait(app.staticTexts["Invalid private key"])
-        assertEmpty(app)
+        assertField(app, holds: "0x0")
         snapshot(app, "import-key-invalid")
 
         // Leaving drops the key: back to the chooser and in again finds the field empty.
+        clear(field(app))
         UITest.type(legalKey, into: field(app))
         UITest.tap(app.buttons["Back"])
         UITest.tap(app.buttons["Private key"])
@@ -54,7 +56,7 @@ final class ImportKeyTests: XCTestCase {
         UITest.wait(UITest.labelled(app, containing: first))
         snapshot(app, "drawer-imported")
 
-        // The same key again is refused in the core's words, and the field is emptied.
+        // The same key again is refused in the core's words, and stays to be corrected.
         UITest.tap(app.buttons["Add account"])
         UITest.tap(app.buttons["Import an existing account"])
         UITest.tap(app.buttons["Private key"])
@@ -62,13 +64,20 @@ final class ImportKeyTests: XCTestCase {
         UITest.type(legalKey, into: field(app))
         UITest.tap(app.buttons["Import account"])
         UITest.wait(app.staticTexts["Account already exists"])
+        assertField(app, holds: legalKey)
+
+        // Backgrounding locks with the key in the field; after unlocking the field is empty.
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        UITest.unlock(app)
+        XCTAssertEqual(headerName(app), imported)
+        openImportKey(app)
         assertEmpty(app)
         // Out through the sheet's own controls (a swipe only drops the keyboard).
         UITest.tap(app.buttons["Back"])
         UITest.tap(app.buttons["Back"])
         UITest.tap(app.buttons["Close Add account"])
         UITest.tap(app.buttons["Close accounts"])
-        XCTAssertEqual(headerName(app), imported)
         UITest.removeWallet(app)
     }
 
@@ -95,6 +104,20 @@ final class ImportKeyTests: XCTestCase {
         let value = field(app).value as? String ?? ""
         let empty = value.isEmpty || value == "0x…"
         XCTAssertTrue(empty, "the key field is empty, not \(value.count) characters", line: line)
+    }
+
+    /// The field still holds `text` (compared, never printed).
+    private func assertField(_ app: XCUIApplication, holds text: String, line: UInt = #line) {
+        // A Boolean, not XCTAssertEqual, so a failure never prints the key.
+        let holds = (field(app).value as? String) == text
+        XCTAssertTrue(holds, "the refused key stays in the field", line: line)
+    }
+
+    /// Deletes what the field holds.
+    private func clear(_ field: XCUIElement) {
+        let count = (field.value as? String)?.count ?? 0
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count))
     }
 
     /// The active account's name from the header's value ("<name>, <network>").

@@ -32,8 +32,9 @@ struct ImportAccountChooser: View {
 /// 5). The
 /// key field takes the phrase entry's handling: no autocorrect, capitalisation or AutoFill, an
 /// ASCII keyboard (third-party keyboards are blocked app-wide), blurred while the screen is
-/// captured, and the clipboard emptied after a paste. The key leaves view state when the import is
-/// sent and when the form leaves the screen; a lock removes the wallet's screens with it.
+/// captured, and the clipboard emptied after a paste. A refused key stays for the user to correct;
+/// the key leaves view state on success and when the form leaves the screen, and a lock removes
+/// the wallet's screens with it.
 struct ImportKeyForm: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -92,11 +93,11 @@ struct ImportKeyForm: View {
             result = "Enter a private key to import"
             return
         }
-        key = ""
         result = nil
         Task {
             do {
                 try await store.importPrivateKey(privateKey)
+                key = ""
                 imported()
             } catch {
                 result = describe(error)
