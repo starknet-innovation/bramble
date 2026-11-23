@@ -94,9 +94,8 @@ struct KeyValueRow: View {
     }
 }
 
-/// `textareaField`: `BrambleField`'s flat fill over several lines, for pasted wallet cards and the
-/// imported private key. No edge, stroke or shadow (the flat-field rule); an invalid card takes the
-/// danger fill and ink. No content type, so nothing typed is offered to AutoFill.
+/// `textareaField`: `BrambleField`'s flat fill over several lines, for pasted wallet cards. No
+/// edge, stroke or shadow (the flat-field rule); an invalid card takes the danger fill and ink.
 struct BrambleTextArea: View {
     @Environment(\.skin) private var skin
     let label: String
@@ -121,7 +120,6 @@ struct BrambleTextArea: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.asciiCapable)
-                .textContentType(nil)
                 .brambleText(BrambleTypeScale.mono, mono: true)
                 .foregroundStyle(invalid ? skin.danger : skin.text)
                 .padding(BrambleMetrics.Field.padding)

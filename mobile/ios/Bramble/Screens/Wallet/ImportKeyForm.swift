@@ -29,12 +29,11 @@ struct ImportAccountChooser: View {
 
 /// `importKeyFlow` (Bramble account only: the core imports no Ready key and takes no salt; the
 /// extension's hint on how the vault stores the key is left out, per `COPY_STYLE.md` rules 4 and
-/// 5). The
-/// key field takes the phrase entry's handling: no autocorrect, capitalisation or AutoFill, an
-/// ASCII keyboard (third-party keyboards are blocked app-wide), blurred while the screen is
-/// captured, and the clipboard emptied after a paste. A refused key stays for the user to correct;
-/// the key leaves view state on success and when the form leaves the screen, and a lock removes
-/// the wallet's screens with it.
+/// 5). The key goes into `KeyTextView`: no correction, prediction or AutoFill, an ASCII keyboard
+/// (third-party keyboards are blocked app-wide), no copy, cut, share or drag-out, blurred while the
+/// screen is captured, and the clipboard emptied after a paste. A refused key stays for the user to
+/// correct; the key leaves view state on success and when the form leaves the screen, and a lock
+/// removes the wallet's screens with it.
 struct ImportKeyForm: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -43,6 +42,10 @@ struct ImportKeyForm: View {
     @State private var key = ""
     @State private var result: String?
     @State private var captured = false
+
+    private static let fieldLabel = "Raw Starknet private key"
+    /// Gap between the label and the field, as `BrambleTextArea`.
+    private static let stackSpacing: CGFloat = 6
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Onboarding.fieldsGap) {
@@ -57,11 +60,25 @@ struct ImportKeyForm: View {
             Text("Your recovery phrase won’t restore this account. Keep a copy of this key.")
                 .brambleText(BrambleTypeScale.caption)
                 .foregroundStyle(skin.danger)
-            BrambleTextArea(
-                label: "Raw Starknet private key",
-                placeholder: "0x…",
-                text: keyBinding
-            )
+            VStack(alignment: .leading, spacing: Self.stackSpacing) {
+                Text(Self.fieldLabel)
+                    .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
+                    .foregroundStyle(skin.muted)
+                    .accessibilityHidden(true)
+                ZStack(alignment: .topLeading) {
+                    if key.isEmpty {
+                        Text("0x…")
+                            .brambleText(BrambleTypeScale.mono, mono: true)
+                            .foregroundStyle(skin.muted)
+                            .accessibilityHidden(true)
+                    }
+                    KeyTextView(text: keyBinding, label: Self.fieldLabel, color: UIColor(skin.text))
+                }
+                .frame(minHeight: BrambleMetrics.Field.height, alignment: .topLeading)
+                .padding(BrambleMetrics.Field.padding)
+                .padding(.vertical, BrambleSpace.md)
+                .background(skin.elevated, in: FieldShape())
+            }
             .blur(radius: captured ? maskedWordBlur : 0)
             .privacySensitive()
             PillButton("Import account", icon: .wallet, busy: store.busy, action: submit)
@@ -104,5 +121,71 @@ struct ImportKeyForm: View {
                 store.toast = describe(error)
             }
         }
+    }
+}
+
+/// The key's input. SwiftUI's `TextField` cannot refuse copy, so this is a UIKit text view that
+/// offers only paste, select and select all, cannot drag its text out, and lets no correction,
+/// prediction, smart punctuation or AutoFill see what is typed.
+private struct KeyTextView: UIViewRepresentable {
+    @Binding var text: String
+    let label: String
+    let color: UIColor
+
+    func makeUIView(context: Context) -> PasteOnlyTextView {
+        let view = PasteOnlyTextView()
+        view.delegate = context.coordinator
+        view.accessibilityLabel = label
+        view.autocorrectionType = .no
+        view.spellCheckingType = .no
+        view.autocapitalizationType = .none
+        view.smartQuotesType = .no
+        view.smartDashesType = .no
+        view.smartInsertDeleteType = .no
+        view.inlinePredictionType = .no
+        view.keyboardType = .asciiCapable
+        view.textContentType = nil
+        view.textDragInteraction?.isEnabled = false
+        view.backgroundColor = .clear
+        view.isScrollEnabled = false
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.adjustsFontForContentSizeCategory = true
+        view.font = UIFontMetrics.default.scaledFont(
+            for: BrambleTypography.uiFont(size: BrambleTypeScale.mono.size, weight: BrambleWeight.regular, mono: true)
+        )
+        return view
+    }
+
+    func updateUIView(_ view: PasteOnlyTextView, context: Context) {
+        context.coordinator.text = $text
+        if view.text != text { view.text = text }
+        view.textColor = color
+    }
+
+    /// Wraps the key to the width SwiftUI offers and grows with it, rather than scrolling one line.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: PasteOnlyTextView, context _: Context) -> CGSize? {
+        let width = proposal.width ?? uiView.bounds.width
+        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: fitted.height)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) { self.text = text }
+
+        func textViewDidChange(_ textView: UITextView) { text.wrappedValue = textView.text }
+    }
+}
+
+/// A text view whose edit menu holds only paste, select and select all: copy, cut, share, look up
+/// and translate would each hand the key to the pasteboard or another process.
+final class PasteOnlyTextView: UITextView {
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        let allowed = [#selector(paste(_:)), #selector(select(_:)), #selector(selectAll(_:))]
+        return allowed.contains(action) && super.canPerformAction(action, withSender: sender)
     }
 }

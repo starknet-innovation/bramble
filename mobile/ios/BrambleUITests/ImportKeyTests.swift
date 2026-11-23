@@ -99,11 +99,10 @@ final class ImportKeyTests: XCTestCase {
         return field.waitForExistence(timeout: 3) ? field : app.textViews[fieldLabel]
     }
 
-    /// The field holds nothing typed: its value is empty or the placeholder.
+    /// The field holds nothing typed.
     private func assertEmpty(_ app: XCUIApplication, line: UInt = #line) {
         let value = field(app).value as? String ?? ""
-        let empty = value.isEmpty || value == "0x…"
-        XCTAssertTrue(empty, "the key field is empty, not \(value.count) characters", line: line)
+        XCTAssertTrue(value.isEmpty, "the key field is empty, not \(value.count) characters", line: line)
     }
 
     /// The field still holds `text` (compared, never printed).
