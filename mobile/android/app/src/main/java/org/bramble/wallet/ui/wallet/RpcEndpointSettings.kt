@@ -72,9 +72,9 @@ fun RpcEndpointSettings(store: WalletStore) {
 }
 
 /**
- * Saves [typed] as [target]'s endpoint, with the notice or the refusal. [shown] gets what is stored
- * only while [target] is still selected: the field shows the selected network's endpoint, and a
- * switch meanwhile has reloaded it.
+ * Saves [typed] as [target]'s endpoint, with the notice or the refusal. [shown] gets what is stored,
+ * and [refused] the refusal, only while [target] is still selected: the field shows the selected
+ * network's endpoint, and a switch meanwhile has reloaded it.
  */
 private suspend fun WalletStore.saveEndpoint(
     target: NetworkId,
@@ -87,7 +87,10 @@ private suspend fun WalletStore.saveEndpoint(
             showNotice(if (saved == null) "RPC endpoint reset" else "RPC endpoint saved")
             if (network == target) shown(saved)
         }.onFailure { failure ->
-            if (failure !is CancellationException) refused(rpcOverrideRefusal(failure).also { showToast(it) })
+            if (failure !is CancellationException) {
+                val refusal = rpcOverrideRefusal(failure).also { showToast(it) }
+                if (network == target) refused(refusal)
+            }
         }
 }
 

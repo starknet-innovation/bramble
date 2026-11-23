@@ -44,6 +44,8 @@ struct RpcEndpointDisclosure: View {
         result = nil
     }
 
+    /// Saves the field as the tapped network's endpoint. The field and its line change only while that
+    /// network is still selected: a switch meanwhile has reloaded them for the new one (`load`).
     private func save() {
         busy = true
         let network = store.network, typed = url
@@ -52,12 +54,14 @@ struct RpcEndpointDisclosure: View {
             do {
                 let saved = try await store.saveRpcOverride(typed, for: network)
                 store.notify(saved == nil ? "RPC endpoint reset" : "RPC endpoint saved")
+                guard store.network == network else { return }
                 url = saved ?? ""
                 custom = saved != nil
                 result = nil
             } catch {
-                result = Self.refusal(error)
-                store.toast = result
+                let refusal = Self.refusal(error)
+                store.toast = refusal
+                if store.network == network { result = refusal }
             }
         }
     }
