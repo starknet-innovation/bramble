@@ -1,17 +1,11 @@
 name: Nightly
 
-# Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
-# This is the heaviest tier of the layered CI model: full E2E (Playwright),
-# the live Sepolia import-path run (issue 821), live Sepolia sends and first
-# deploys (issue 976), dependency audit, the extension build, and a placeholder
-# for perf/regression checks (none exist in-repo yet — the step is an explicit
-# NO-OP, never a fake pass). It writes a categorized summary and, on failure, upserts ONE tracking
-# issue for the release.
-#
-# Active-branch resolution order:
-#   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
-#   2. otherwise the highest-semver `release/vX.Y[.Z]` branch;
-#   3. if neither exists, exit cleanly with a note (nothing to run).
+# Full-suite nightly for the active release branch (DEVELOPMENT.md).
+# Covers Playwright E2E, Sepolia imports (#821), Sepolia sends and deploys
+# (#976), dependency audit and the extension build. Performance checks are a no-op.
+# Summarizes results and upserts one tracking issue per release on failure.
+# Uses vars.ACTIVE_RELEASE_BRANCH if set, otherwise the highest-semver
+# release/vX.Y[.Z] branch. If neither exists, exits cleanly with a note.
 on:
   schedule:
     # 03:00 UTC daily.
@@ -151,8 +145,7 @@ jobs:
           node-version: 24
       - run: bun install --frozen-lockfile
 
-      # --- Gates. Each runs to completion (continue-on-error) so the summary
-      # --- can categorize every result; the job is failed explicitly at the end.
+      # Collect every gate result before failing the job explicitly.
       - name: Verify privacy and contract toolchain
         id: vendor
         continue-on-error: true
@@ -177,26 +170,16 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
-      # Each package's own suite, run from its directory with its own script.
-      # Pull-request CI runs these files only inside the root coverage run,
-      # under the shared root preload; this keeps proving that each package's
-      # tests pass on their own, without relying on anything that preload sets.
+      # Run each package's suite without the root coverage run's shared preload.
       - name: Per-package test suites
         id: packages
         continue-on-error: true
         run: bun run --filter './packages/**' test
-      # Live Sepolia run of every in-wallet import path against the issue-821
-      # test accounts (tools/vendor-dataset/verify-sepolia.ts). It sends nothing:
-      # a broadcast firewall aborts every send. Its testnet-only seed file is a
-      # secret only this step sees: written owner-only to the
-      # runner's temp directory and removed when the step ends. The run's own
-      # redactor keeps seeds and derived keys out of every line it prints. It
-      # records no tape and uploads nothing: this is a public repository, and
-      # a run's network traffic is not for publishing (replay is local-only).
-      # Until the secret is configured the gate is skipped: the summary lists it
-      # under "Not run" and says not to promote, and it is never shown as passed.
-      # Any other skip (an earlier hard failure) counts as failing. Only a
-      # boolean leaves this step; the secret itself reaches the live step alone.
+      # Sepolia import paths (#821) use a firewall that aborts every broadcast.
+      # Only the live step sees the testnet seed, in an owner-only temp file it removes.
+      # The runner redacts seeds and derived keys, uploads nothing, and records no tape.
+      # Only a configuration boolean leaves the seed check. A missing secret
+      # is reported as "Not run" with a promotion warning. Other skips fail.
       - name: Sepolia seeds configured
         id: sepolia_seeds
         env:
