@@ -17,7 +17,12 @@ import {
 } from "../routing/message-inputs";
 import { readAddDeclareTransactionInput } from "../transactions/declare-ops";
 
-type ApprovalSurfaceRequest = { readonly origin: string; readonly silent: boolean };
+type ApprovalSurfaceRequest = {
+  /** A connection request (`wallet.requestAccounts`). */
+  readonly connect: boolean;
+  readonly origin: string;
+  readonly silent: boolean;
+};
 
 /**
  * Reuses the execution boundary's exact parser for each surface-capable dapp
@@ -25,11 +30,13 @@ type ApprovalSurfaceRequest = { readonly origin: string; readonly silent: boolea
  */
 export const readApprovalSurfaceRequest = (message: unknown): ApprovalSurfaceRequest | null => {
   const accounts = readRequestAccountsInput(message);
-  if (accounts) return accounts;
+  if (accounts) return { ...accounts, connect: true };
 
   const sign = readSignTypedDataInput(message);
   if (sign) {
-    return isTypedDataShape(sign.typedData) ? { origin: sign.origin, silent: false } : null;
+    return isTypedDataShape(sign.typedData)
+      ? { connect: false, origin: sign.origin, silent: false }
+      : null;
   }
 
   const parsed =
@@ -42,5 +49,5 @@ export const readApprovalSurfaceRequest = (message: unknown): ApprovalSurfaceReq
     readStrk20PrepareMessage(message) ??
     readStrk20InvokeMessage(message) ??
     readStrk20ShadowAccountMessage(message);
-  return parsed ? { origin: parsed.origin, silent: false } : null;
+  return parsed ? { connect: false, origin: parsed.origin, silent: false } : null;
 };
