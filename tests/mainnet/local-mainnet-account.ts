@@ -3,8 +3,9 @@
  * The signing key stays in the ready result and is never copied into a
  * message. Naming the account is the opt-in: the acknowledgement defaults to
  * given and the RPC to the Foundation's public endpoint. CI, a wrong
- * acknowledgement, a refused RPC, a non-mainnet chain, and an account class
- * this wallet will not import all stop before a browser starts.
+ * acknowledgement, a refused RPC, a non-mainnet chain, an address the wallet
+ * will not derive from the key, and an account class this wallet will not
+ * import all stop before a browser starts.
  */
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -17,7 +18,7 @@ import {
   STARKNET_NETWORKS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import { RpcProvider } from "starknet";
+import { ec, hash, RpcProvider } from "starknet";
 import {
   type GaslessE2eEnv,
   loadGaslessMainnetAccount,
@@ -148,6 +149,27 @@ const assertChain = async (rpcUrl: string, probe: LocalMainnetProbe): Promise<st
     : `BRAMBLE_MAINNET_E2E_RPC_URL returned chain ${chainId}, not Starknet mainnet.`;
 };
 
+/**
+ * The OpenZeppelin address the wallet derives when it imports `privateKey`:
+ * salt 0x0, constructor calldata `[publicKey]`, deployer 0. Pure; the key is
+ * not returned or logged.
+ */
+export const walletOpenZeppelinAddress = (privateKey: string): string =>
+  hash.calculateContractAddressFromHash(
+    "0x0",
+    OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+    [ec.starkCurve.getStarkKey(privateKey)],
+    0,
+  );
+
+const assertWalletAddress = (address: string, privateKey: string): string | null => {
+  const derived = walletOpenZeppelinAddress(privateKey);
+  if (sameFelt(derived, address)) {
+    return null;
+  }
+  return `The account ${address} is not the address the wallet derives from its key (${derived}, OpenZeppelin with salt 0x0), so the wallet would import a different account. Create it with sncast account create --salt 0x0. See docs/MAINNET_E2E.md.`;
+};
+
 const assertClass = async (
   rpcUrl: string,
   address: string,
@@ -213,6 +235,10 @@ export const loadLocalMainnetAccount = async (input: {
   }
   if (!isStarkPrivateKey(loaded.account.privateKey)) {
     return { kind: "error", message: "The account key is not a valid Stark signing key." };
+  }
+  const addressError = assertWalletAddress(loaded.account.address, loaded.account.privateKey);
+  if (addressError !== null) {
+    return { kind: "error", message: addressError };
   }
   const probe = input.probe ?? defaultProbe();
   const chainError = await assertChain(rpcUrl, probe);

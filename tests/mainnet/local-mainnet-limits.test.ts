@@ -24,22 +24,24 @@ import {
 } from "./local-mainnet-limits";
 
 describe("local mainnet spend caps", () => {
-  test("keeps the self-transfer at dust and the fee cap at 0.02 STRK", () => {
+  test("keeps the self-transfer at dust and the fee cap at 0.2 STRK", () => {
     expect(selfTransferRaw(STRK_TOKEN_DECIMALS)).toBe(
       parseTokenAmount(SELF_TRANSFER_AMOUNT, STRK_TOKEN_DECIMALS),
     );
     expect(selfTransferRaw(18)).toBe(1_000_000_000_000n);
-    expect(parseTokenAmount(MAX_TX_FEE_STRK, STRK_TOKEN_DECIMALS)).toBe(20_000_000_000_000_000n);
+    expect(parseTokenAmount(MAX_TX_FEE_STRK, STRK_TOKEN_DECIMALS)).toBe(200_000_000_000_000_000n);
   });
 
   test("accepts a STRK fee on the cap and refuses a larger one or a missing one", () => {
-    expect(checkDisplayedStrkFee("Estimated fee: 0.02 STRK", MAX_TX_FEE_STRK)).toEqual({
+    expect(checkDisplayedStrkFee("Estimated fee: 0.2 STRK", MAX_TX_FEE_STRK)).toEqual({
       kind: "ok",
-      raw: 20_000_000_000_000_000n,
+      raw: 200_000_000_000_000_000n,
     });
-    expect(checkDisplayedStrkFee("Estimated fee: 0.020001 STRK", MAX_TX_FEE_STRK).kind).toBe(
+    expect(checkDisplayedStrkFee("Estimated fee: 0.200001 STRK", MAX_TX_FEE_STRK).kind).toBe(
       "over",
     );
+    // Current mainnet estimates for the transfer and the multicall fit.
+    expect(checkDisplayedStrkFee("Estimated fee: 0.121 STRK", MAX_TX_FEE_STRK).kind).toBe("ok");
     expect(checkDisplayedStrkFee("Estimating network fee…", MAX_TX_FEE_STRK).kind).toBe("missing");
     expect(checkDisplayedStrkFee("Estimated fee: 1 WEI", MAX_TX_FEE_STRK).kind).toBe("missing");
   });
