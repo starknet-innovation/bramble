@@ -26,6 +26,7 @@ import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-pa
 import { ACTIVITY_PARITY_FIXTURE_PATH, renderActivityParity } from "./mobile-parity-activity";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
+import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
 import {
   computeImportedVaultParity,
   computeVaultParity,
@@ -125,6 +126,10 @@ for (const [path, compute] of [
 
 await writeFile(ACTIVITY_PARITY_FIXTURE_PATH, await renderActivityParity());
 console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);
+
+// The RPC override rules (P4), recomputed in full.
+await writeFile(SETTINGS_PARITY_FIXTURE_PATH, await renderSettingsParity());
+console.log(`wrote ${SETTINGS_PARITY_FIXTURE_PATH}`);
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
