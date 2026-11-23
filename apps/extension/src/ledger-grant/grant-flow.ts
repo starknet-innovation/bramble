@@ -118,3 +118,39 @@ export const ledgerGrantDiagnostic = (
       : `saved grants ${diagnostics.grantedDeviceCount}`;
   return `Support code · ${supportCode} · ${api} · ${grants}`;
 };
+
+/**
+ * How long a device close may delay closing the hardware tab. The same bound
+ * the side panel uses before it stops waiting on a transport teardown. Past
+ * this, the tab still closes: the grant page has already cancelled its idle
+ * timer, so nothing else would.
+ */
+const LEDGER_GRANT_RELEASE_BUDGET_MS = 2_000;
+
+/**
+ * Frees the Ledger before closing the hardware tab. A release already running
+ * is returned unchanged, so a second caller waits until the device is free.
+ * Closing the tab first destroys the document and drops the panel lock while
+ * the claim can still be draining. A device close that fails, or that does not
+ * finish within {@link LEDGER_GRANT_RELEASE_BUDGET_MS}, still closes the tab.
+ */
+export const ledgerGrantRelease = (
+  current: Promise<void> | null,
+  freeDevice: () => Promise<void>,
+  closeTab: () => Promise<void>,
+  budgetMs: number = LEDGER_GRANT_RELEASE_BUDGET_MS,
+): Promise<void> => {
+  if (current) return current;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      Promise.resolve().then(closeTab).then(resolve, reject);
+    };
+    timer = setTimeout(finish, budgetMs);
+    freeDevice().then(finish, finish);
+  });
+};

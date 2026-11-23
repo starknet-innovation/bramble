@@ -19,13 +19,13 @@
  * signs) every account at its own path.
  */
 
-import { asLedgerRejection, LedgerRejection } from "@bramble/ledger-protocol/errors";
-import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
 import {
-  closeLedgerSessionQuietly,
-  type LedgerDeviceChoice,
-  type LedgerDeviceSession,
-} from "@bramble/ledger-protocol/session";
+  asLedgerRejection,
+  LedgerRejection,
+  ledgerErrorSupportCode,
+} from "@bramble/ledger-protocol/errors";
+import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
+import type { LedgerDeviceChoice, LedgerDeviceSession } from "@bramble/ledger-protocol/session";
 import type {
   AccountContractType,
   LedgerAccountRef,
@@ -40,12 +40,14 @@ import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { uiLocale } from "../../../i18n/locale";
 import { friendlyError } from "../../runtime/friendly-error";
 import { ADD_ACCOUNT_FAILED, isPhraselessAddRefusal } from "../../runtime/friendly-error-shared";
+import { createLedgerDeviceGate, isLedgerReadAborted } from "./device-gate";
 import {
   type LedgerCandidate,
   type LedgerCandidateState,
   type LedgerOnboardAddKind,
   type LedgerOnboardController,
   type LedgerOnboardControllerDeps,
+  type LedgerOnboardView,
   ledgerCandidateActive,
   ledgerCandidateSelectable,
 } from "./onboard-types";
@@ -97,10 +99,29 @@ export const createLedgerOnboardController = (
   let nextIndex = 0;
   let busy = false;
   let flowEpoch = 0;
-  // "Show more" mid-page is queued, not dropped; the button stays busy until it's in.
   let pageLoading = false;
   let readingMore = false;
-  let moreQueued = false;
+  let moreQueued = false; // "Show more" mid-page is queued; the button stays busy.
+  let pendingConnect = false;
+  let listTicket = 0;
+  let listing = false; // `busy` held only by a listing; Cancel/Connect may drop it.
+  const gate = createLedgerDeviceGate();
+
+  const deviceError = (error: unknown): Extract<LedgerOnboardView, { kind: "error" }> => {
+    const rejection = asLedgerRejection(error);
+    const supportCode = ledgerErrorSupportCode(rejection);
+    return {
+      kind: "error",
+      message: ledgerMessageIn(rejection.code, uiLocale()),
+      ...(supportCode ? { supportCode } : {}),
+    };
+  };
+
+  const flushConnect = (): void => {
+    if (!pendingConnect || busy || gate.isBusy()) return;
+    pendingConnect = false;
+    startConnect();
+  };
 
   const resetState = (): void => {
     flowEpoch += 1;
@@ -171,17 +192,13 @@ export const createLedgerOnboardController = (
       ),
     );
 
-  // Reads one page end to end: obtain a session, enumerate the page SILENTLY,
-  // release the transport (account state + creation are background ops, no
-  // device), derive addresses, append them pending, then fold in on-chain state.
-  // The session owns the browser transport so it is closed on every outcome — the
-  // device is never left claimed — and any failure maps to a typed error state.
+  // One page: the gate opens, reads, and closes the device before derivation.
   const loadPage = async (
     obtain: () => Promise<LedgerDeviceSession>,
     startIndex: number,
     initial: boolean,
   ): Promise<void> => {
-    if (busy) {
+    if (busy || gate.isBusy()) {
       return;
     }
     const epoch = flowEpoch;
@@ -191,19 +208,17 @@ export const createLedgerOnboardController = (
     if (initial) {
       deps.render({ kind: "reading" });
     }
-    let session: LedgerDeviceSession | null = null;
     try {
-      session = await obtain();
-      // One device round per scheme, in order: the transport is a serial pipe.
-      const pages: (readonly [LedgerEip2645Application, readonly LedgerPubKeyEntry[]])[] = [];
-      for (const scheme of schemes) {
-        pages.push([
-          scheme,
-          await deps.enumerate(session.client, startIndex, session.readiness, scheme),
-        ]);
-      }
-      await closeLedgerSessionQuietly(session);
-      session = null;
+      const pages = await gate.read(obtain, async (session) => {
+        const read: (readonly [LedgerEip2645Application, readonly LedgerPubKeyEntry[]])[] = [];
+        for (const scheme of schemes) {
+          read.push([
+            scheme,
+            await deps.enumerate(session.client, startIndex, session.readiness, scheme),
+          ]);
+        }
+        return read;
+      });
       // Ready and Braavos both own their Ledger accounts at the `argentx`
       // scheme, so a key read there derives one account of each family — the
       // same device key, two classes, two addresses — and the on-chain probe
@@ -230,29 +245,23 @@ export const createLedgerOnboardController = (
       }
     } catch (error) {
       moreQueued = false;
-      if (epoch === flowEpoch) {
-        deps.render({
-          kind: "error",
-          message: ledgerMessageIn(asLedgerRejection(error).code, uiLocale()),
-        });
+      if (!isLedgerReadAborted(error) && epoch === flowEpoch) {
+        deps.render(deviceError(error));
       }
     } finally {
-      if (session) {
-        await closeLedgerSessionQuietly(session);
-      }
       busy = false;
       pageLoading = false;
       readingMore = false;
       if (moreQueued && epoch === flowEpoch) {
         moreQueued = false;
         void loadPage(obtainMore, nextIndex, false);
+      } else {
+        flushConnect();
       }
     }
   };
 
-  // The first page runs the gesture-gated picker; further pages reconnect the
-  // already-granted device SILENTLY, falling back to the picker only if the
-  // device is no longer connected (the "Show more" click supplies the gesture).
+  // Further pages reconnect silently; the "Show more" click is the gesture.
   const obtainConnected = async (deviceId?: string): Promise<LedgerDeviceSession> =>
     (await deps.connector.openConnected(deviceId)) ?? deps.connector.request();
 
@@ -260,21 +269,27 @@ export const createLedgerOnboardController = (
     obtainConnected(selectedDeviceId ?? undefined);
 
   const startConnect = (): void => {
+    pendingConnect = false;
     resetState();
     const epoch = flowEpoch;
+    const ticket = ++listTicket;
     const list = deps.connector.listConnected;
     if (!list) {
       void loadPage(() => deps.connector.request(), 0, true);
       return;
     }
-    busy = true;
+    busy = listing = true;
     deps.render({ kind: "reading" });
+    const settleList = (): boolean => {
+      if (ticket !== listTicket) return false;
+      busy = listing = false;
+      if (epoch === flowEpoch) return true;
+      flushConnect();
+      return false;
+    };
     void list().then(
       (connected) => {
-        busy = false;
-        if (epoch !== flowEpoch) {
-          return;
-        }
+        if (!settleList()) return;
         devices = connected;
         if (connected.length > 1) {
           deps.render({ devices: connected, kind: "devices" });
@@ -288,13 +303,7 @@ export const createLedgerOnboardController = (
         );
       },
       (error) => {
-        busy = false;
-        if (epoch === flowEpoch) {
-          deps.render({
-            kind: "error",
-            message: ledgerMessageIn(asLedgerRejection(error).code, uiLocale()),
-          });
-        }
+        if (settleList()) deps.render(deviceError(error));
       },
     );
   };
@@ -369,6 +378,7 @@ export const createLedgerOnboardController = (
       }
     } finally {
       busy = false;
+      flushConnect();
     }
   };
 
@@ -398,6 +408,7 @@ export const createLedgerOnboardController = (
       );
     } finally {
       busy = false;
+      flushConnect();
     }
   };
 
@@ -445,13 +456,22 @@ export const createLedgerOnboardController = (
       void runAddSelected();
     },
     cancel() {
+      pendingConnect = false;
       resetState();
+      listTicket += 1;
       deps.onCancel();
       deps.render(null);
+      void gate.release();
+      if (listing) busy = listing = false; // A read or add clears its own `busy`.
     },
     choose,
     chooseDevice,
     connect() {
+      // A hung list is restarted; any other run queues this for its finally.
+      if ((busy && !listing) || gate.isBusy()) {
+        pendingConnect = true;
+        return;
+      }
       startConnect();
     },
     loadMore() {
@@ -467,8 +487,6 @@ export const createLedgerOnboardController = (
       deps.render({ kind: "chooser" });
     },
     start() {
-      // First-run "Set up with a Ledger" creates Bramble accounts and finds
-      // existing Ready and Braavos ones, as a recovery-phrase setup does.
       openConnect(LEDGER_EIP2645_APPLICATION, [
         LEDGER_EIP2645_APPLICATION,
         READY_EIP2645_APPLICATION,

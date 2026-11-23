@@ -165,7 +165,8 @@ describe("serveLedgerBroker", () => {
     });
     await tick();
     expect(fake.posts[1]).toEqual({
-      error: "device-busy",
+      cause: "BrokerBusy",
+      error: "replug",
       id: 2,
       kind: "response",
       ok: false,
@@ -196,6 +197,33 @@ describe("serveLedgerBroker", () => {
       ok: false,
     });
     expect(JSON.stringify(fake.posts)).not.toContain("secret-library-detail");
+  });
+
+  test("sends the error class name and never its message", async () => {
+    const fake = createFakeChannel();
+    const client = okClient();
+    const error = new Error("The device is already open. serial-hidden");
+    error.name = "InvalidStateError";
+    serveLedgerBroker(
+      fake.channel,
+      {
+        ...client,
+        getAppVersion: async () => {
+          throw error;
+        },
+      },
+      () => undefined,
+    );
+    fake.emit({ id: 1, kind: "command", method: "getAppVersion" });
+    await tick();
+    expect(fake.posts[1]).toEqual({
+      cause: "InvalidStateError",
+      error: "replug",
+      id: 1,
+      kind: "response",
+      ok: false,
+    });
+    expect(JSON.stringify(fake.posts)).not.toContain("serial-hidden");
   });
 
   test("detaches and closes once on the exact close command", () => {
