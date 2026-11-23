@@ -205,10 +205,14 @@ internal suspend fun runRelay(
                 plan.relayEnded(relay)
                 break
             }
-            withTimeoutOrNull(left) { done.await() }
+            // Short slices, so a next page's moved deadline takes effect when it is earlier.
+            withTimeoutOrNull(minOf(left, DEADLINE_POLL_MS)) { done.await() }
         }
     } finally {
         socket.cancel()
         client.dispatcher.executorService.shutdown()
     }
 }
+
+/** How often the relay wait re-reads its deadline, which a next page moves. */
+private const val DEADLINE_POLL_MS = 250L
