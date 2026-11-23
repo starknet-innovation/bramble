@@ -13,15 +13,14 @@ import org.bramble.core.maxPrivacyResponseBytes
 import org.bramble.core.maxRpcResponseBytes
 import org.bramble.core.rpcVerifyChainId
 import org.bramble.wallet.GatewayAnalytics
+import org.bramble.wallet.RpcClient
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 private const val CONNECT_TIMEOUT_MS = 15_000
 
-/** The discovery `Post` waits longer for its answer than an RPC read. */
+/** The discovery `Post` waits longer for its answer than an RPC read (`RpcClient.post`, 15 s). */
 private const val POST_READ_TIMEOUT_MS = 60_000
-
-private const val RPC_READ_TIMEOUT_MS = 15_000
 
 /** Statuses whose body is read from the input stream; any other is read from the error stream. */
 private val HTTP_SUCCESS = 200..299
@@ -158,26 +157,11 @@ class PrivacyDriver(
             .getOrElse { PrivacyReply.TransportFailure(id, now()) }
     }
 
+    /** The app's one bounded RPC path ([RpcClient.post]): analytics headers and diagnostics included. */
     private fun rpcPost(
         url: URL,
         body: String,
-    ): String {
-        val connection = url.openConnection() as HttpsURLConnection
-        try {
-            connection.requestMethod = "POST"
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = RPC_READ_TIMEOUT_MS
-            connection.useCaches = false
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json")
-            GatewayAnalytics.apply(connection)
-            connection.outputStream.use { it.write(body.toByteArray()) }
-            check(connection.responseCode == HttpsURLConnection.HTTP_OK) { "http ${connection.responseCode}" }
-            return connection.inputStream.use { bounded(it, maxRpcResponseBytes().toInt()) }.decodeToString()
-        } finally {
-            connection.disconnect()
-        }
-    }
+    ): String = RpcClient.post(url, body, maxBytes = maxRpcResponseBytes().toInt())
 
     /** Reads at most [limit] bytes; a longer reply is a transport failure. */
     private fun bounded(
