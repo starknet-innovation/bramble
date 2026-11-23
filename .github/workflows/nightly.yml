@@ -3,10 +3,9 @@ name: Nightly
 # Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
 # This is the heaviest tier of the layered CI model: full E2E (Playwright),
 # the live Sepolia import-path run (issue 821), live Sepolia sends and first
-# deploys (issue 976), dependency audit, the extension build, and a placeholder
-# for perf/regression checks (none exist in-repo yet — the step is an explicit
-# NO-OP, never a fake pass). It writes a categorized summary and, on failure, upserts ONE tracking
-# issue for the release.
+# deploys (issue 976), dependency audit and the extension build. The report job
+# sorts failures into new, still failing and fixed against the open tracking
+# issue, upserts that ONE issue for the release, and closes it once green.
 #
 # Active-branch resolution order:
 #   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
@@ -108,6 +107,8 @@ jobs:
       properties: ${{ steps.properties.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
+      e2e_failed: ${{ steps.e2e_results.outputs.failed }}
+      e2e_flaky: ${{ steps.e2e_results.outputs.flaky }}
       sepolia: ${{ steps.sepolia.outcome }}
       sepolia_configured: ${{ steps.sepolia_seeds.outputs.configured }}
       sepolia_txn: ${{ steps.sepolia_txn.outcome }}
@@ -171,7 +172,49 @@ jobs:
       - name: Full E2E (Playwright)
         id: e2e
         continue-on-error: true
-        run: bun run test:e2e
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/e2e.json
+        run: bun run test:e2e --reporter=github,list,json
+      # Test titles for the report: failed after every retry, or flaky (passed
+      # on a retry). Capped; the report job treats them as untrusted text.
+      - name: E2E test results
+        id: e2e_results
+        if: always()
+        continue-on-error: true
+        run: |
+          bun -e '
+            const fs = require("node:fs");
+            const file = `${process.env.RUNNER_TEMP}/e2e.json`;
+            const failed = [];
+            const flaky = [];
+            const walk = (suite) => {
+              for (const spec of suite.specs ?? []) {
+                for (const test of spec.tests ?? []) {
+                  const name = `${spec.file}: ${spec.title}`;
+                  if (test.status === "unexpected") failed.push(name);
+                  if (test.status === "flaky") flaky.push(name);
+                }
+              }
+              for (const child of suite.suites ?? []) walk(child);
+            };
+            if (fs.existsSync(file)) walk(JSON.parse(fs.readFileSync(file, "utf8")));
+            const out = (key, list) =>
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${JSON.stringify(list.slice(0, 20))}\n`);
+            out("failed", failed);
+            out("flaky", flaky);
+          '
+      # Runs before either Sepolia step, so nothing they write can be in it. The
+      # E2E suite has no network and uses only the published test phrase.
+      - name: Upload E2E debug files
+        if: steps.e2e.outcome == 'failure'
+        continue-on-error: true # a failed upload must not skip the gates below
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-e2e-debug
+          path: test-results/
+          retention-days: 7
+          overwrite: true # a re-run attempt reuses the name
+          if-no-files-found: ignore
       - name: Deterministic security property suite
         id: properties
         continue-on-error: true
@@ -269,96 +312,6 @@ jobs:
           bun tools/vendor-dataset/verify-sepolia-deploys.ts || status=1
           exit "$status"
 
-      - name: Categorized summary
-        if: always()
-        env:
-          BRANCH: ${{ needs.resolve.outputs.branch }}
-          VENDOR: ${{ steps.vendor.outcome }}
-          BUILD: ${{ steps.build.outcome }}
-          AUDIT: ${{ steps.audit.outcome }}
-          PROPERTIES: ${{ steps.properties.outcome }}
-          E2E_INSTALL: ${{ steps.e2e_install.outcome }}
-          E2E: ${{ steps.e2e.outcome }}
-          SEPOLIA: ${{ steps.sepolia.outcome }}
-          SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
-          SEPOLIA_TXN: ${{ steps.sepolia_txn.outcome }}
-          SEPOLIA_TXN_CONFIGURED: ${{ steps.sepolia_txn_seed.outputs.configured }}
-        run: |
-          set -euo pipefail
-          declare -A GATES=(
-            ["Verify upstreams (Argent+Privacy)"]="$VENDOR"
-            ["Extension build"]="$BUILD"
-            ["Dependency audit (bun audit)"]="$AUDIT"
-            ["Security property suite"]="$PROPERTIES"
-            ["E2E browser install"]="$E2E_INSTALL"
-            ["Full E2E (Playwright)"]="$E2E"
-            ["Sepolia import paths (live)"]="$SEPOLIA"
-            ["Sepolia sends and deploys (live)"]="$SEPOLIA_TXN"
-          )
-          failing=()
-          passing=()
-          not_run=()
-          # Not run only when the check step saw no secret; any other skip fails.
-          if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then
-            unset 'GATES[Sepolia import paths (live)]'
-            not_run+=("Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured")
-          fi
-          if [ "$SEPOLIA_TXN" = "skipped" ] && [ "$SEPOLIA_TXN_CONFIGURED" = "false" ]; then
-            unset 'GATES[Sepolia sends and deploys (live)]'
-            not_run+=("Sepolia sends and deploys (live): the BRAMBLE_SEPOLIA_TXN_SEED secret is not configured")
-          fi
-          for name in "${!GATES[@]}"; do
-            if [ "${GATES[$name]}" = "success" ]; then passing+=("$name"); else failing+=("$name (${GATES[$name]})"); fi
-          done
-          {
-            echo "## Nightly — \`$BRANCH\`"
-            echo ""
-            echo "### Newly failing / failing this run"
-            if [ "${#failing[@]}" -eq 0 ]; then
-              echo "_None — all executed gates passed._"
-            else
-              for f in "${failing[@]}"; do echo "- ${f}"; done
-            fi
-            echo ""
-            echo "### Passing"
-            if [ "${#passing[@]}" -eq 0 ]; then echo "_None._"; else for p in "${passing[@]}"; do echo "- ${p}"; done; fi
-            echo ""
-            if [ "${#not_run[@]}" -gt 0 ]; then
-              echo "### Not run"
-              for n in "${not_run[@]}"; do echo "- ${n}"; done
-              echo ""
-            fi
-            echo "### Known failures"
-            echo "_Not auto-classified. A failure is only 'known' once triaged against"
-            echo "the nightly tracking issue below; treat everything under 'Newly"
-            echo "failing' as new until then._"
-            echo ""
-            echo "### Flaky"
-            echo "_Cannot be determined from a single run — flakiness needs run history"
-            echo "(re-run comparison). Not classified here._"
-            echo ""
-            echo "### Regressions"
-            echo "_Cannot be determined from a single run — a regression needs a known-good"
-            echo "baseline from prior runs. Not classified here._"
-            echo ""
-            echo "### Release-blocking"
-            echo "Any failing gate above blocks promoting \`$BRANCH\` to \`main\`. Vendor,"
-            echo "build, E2E, Sepolia import-path and Sepolia send/deploy failures are release-blocking;"
-            echo "a \"Sepolia bank low\" failure means refill the bank, not a wallet bug; a dependency-audit"
-            echo "failure is release-blocking per CONTRIBUTING.md (high/critical advisory)."
-            echo ""
-            echo "### Recommended next work"
-            if [ "${#failing[@]}" -eq 0 ] && [ "${#not_run[@]}" -gt 0 ]; then
-              echo "- Do not promote this release branch to main until every gate has run:"
-              echo "  configure the secrets listed under Not run (tools/vendor-dataset/README.md)."
-            elif [ "${#failing[@]}" -eq 0 ]; then
-              echo "- Proceed with the release-completion checklist in RELEASING.md."
-            else
-              echo "- Triage the failing gates above against the nightly tracking issue."
-              echo "- Do not promote this release branch to main until they are green."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Fail the job if any gate failed
         if: always()
         env:
@@ -396,7 +349,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: Upsert nightly tracking issue
+      - name: Report and track
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           BRANCH: ${{ needs.resolve.outputs.branch }}
@@ -406,6 +359,8 @@ jobs:
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
+          E2E_FAILED: ${{ needs.nightly.outputs.e2e_failed }}
+          E2E_FLAKY: ${{ needs.nightly.outputs.e2e_flaky }}
           SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
           SEPOLIA_CONFIGURED: ${{ needs.nightly.outputs.sepolia_configured }}
           SEPOLIA_TXN: ${{ needs.nightly.outputs.sepolia_txn }}
@@ -413,39 +368,105 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const branch = process.env.BRANCH;
+            const env = process.env;
+            const branch = env.BRANCH;
             const gates = [
-              ["Verify upstreams (Argent+Privacy)", process.env.VENDOR],
-              ["Extension build", process.env.BUILD],
-              ["Dependency audit (bun audit)", process.env.AUDIT],
-              ["Security property suite", process.env.PROPERTIES],
-              ["E2E browser install", process.env.E2E_INSTALL],
-              ["Full E2E (Playwright)", process.env.E2E],
-              ["Sepolia import paths (live)", process.env.SEPOLIA],
-              ["Sepolia sends and deploys (live)", process.env.SEPOLIA_TXN],
+              { name: "Verify upstreams (Argent+Privacy)", outcome: env.VENDOR },
+              { name: "Extension build", outcome: env.BUILD },
+              { name: "Dependency audit (bun audit)", outcome: env.AUDIT },
+              { name: "Security property suite", outcome: env.PROPERTIES },
+              { name: "E2E browser install", outcome: env.E2E_INSTALL },
+              { name: "Full E2E (Playwright)", outcome: env.E2E },
+              { name: "Sepolia import paths (live)", outcome: env.SEPOLIA,
+                secret: "BRAMBLE_SEPOLIA_SEEDS", configured: env.SEPOLIA_CONFIGURED },
+              { name: "Sepolia sends and deploys (live)", outcome: env.SEPOLIA_TXN,
+                secret: "BRAMBLE_SEPOLIA_TXN_SEED", configured: env.SEPOLIA_TXN_CONFIGURED },
             ];
             // Skipped because its secret is unset: not run, not failed. Any other skip fails.
-            const sepoliaNotRun =
-              process.env.SEPOLIA === "skipped" && process.env.SEPOLIA_CONFIGURED === "false";
-            const sepoliaTxnNotRun =
-              process.env.SEPOLIA_TXN === "skipped" && process.env.SEPOLIA_TXN_CONFIGURED === "false";
-            const failing = gates.filter(
-              ([name, outcome]) =>
-                outcome !== "success" &&
-                !(name === "Sepolia import paths (live)" && sepoliaNotRun) &&
-                !(name === "Sepolia sends and deploys (live)" && sepoliaTxnNotRun),
-            );
+            const notRun = gates.filter((g) => g.secret && g.outcome === "skipped" && g.configured === "false");
+            const failingGates = gates.filter((g) => !notRun.includes(g) && g.outcome !== "success");
+
+            // Test titles come from release-branch code: untrusted. Keep them
+            // strings, cap them, and render them only inside code spans.
+            const strings = (value, max = 20) =>
+              Array.isArray(value) ? value.filter((t) => typeof t === "string").slice(0, max) : [];
+            const parse = (raw) => { try { return JSON.parse(raw || "[]"); } catch { return []; } };
+            const code = (text) => "`" + text.replace(/[`\r\n]/g, "'").slice(0, 200) + "`";
+            const failedTests = strings(parse(env.E2E_FAILED));
+            const flakyTests = strings(parse(env.E2E_FLAKY));
+
+            const failing = [
+              ...failingGates.map((g) => `gate: ${g.name}`),
+              ...failedTests.map((t) => `test: ${t}`),
+            ];
+            const show = (key) => {
+              const name = key.slice(6); // after "gate: " or "test: "
+              if (key.startsWith("test: ")) return `- ${code(name)}`;
+              const gate = failingGates.find((g) => g.name === name);
+              return gate ? `- ${name} (${gate.outcome || "no result"})` : `- ${name}`;
+            };
+
+            // The open tracking issue is the baseline: a hidden state line lists
+            // what was failing last time. No open issue means nothing is known.
             const title = `Nightly: ${branch} — failing checks`;
-            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: "open", labels: "ci-cd", per_page: 100,
+            });
+            const existing = open.find((item) => item.title === title && !item.pull_request);
+            const stateLine = /<!-- nightly-state: (.*) -->\s*$/; // last line; titles sit above it
+            const known = existing ? strings(parse(stateLine.exec(existing.body || "")?.[1]), 100) : [];
+            const newly = failing.filter((key) => !known.includes(key));
+            const still = failing.filter((key) => known.includes(key));
+            const fixed = known.filter((key) => !failing.includes(key));
+
+            const runUrl = `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`;
+            const section = (heading, lines) => (lines.length ? ["", `### ${heading}`, ...lines] : []);
+            const report = [
+              `Nightly run for \`${branch}\`: ${runUrl}`,
+              ...section("New failures", newly.map(show)),
+              ...section("Still failing", still.map(show)),
+              ...section("Fixed since last run", fixed.map(show)),
+              ...section("Flaky (passed on retry)", flakyTests.map((t) => `- ${code(t)}`)),
+              ...section("Not run", notRun.map((g) => `- ${g.name}: the ${g.secret} secret is not configured`)),
+              "",
+              failing.length
+                ? "Do not promote this branch to `main` until it is green. \"Sepolia bank low\" means refill the bank, not a wallet bug."
+                : notRun.length
+                  ? "Do not promote this branch to `main` until every gate has run (tools/vendor-dataset/README.md)."
+                  : "All gates passed. Continue with RELEASING.md.",
+            ];
+            await core.summary.addRaw(report.join("\n")).write();
 
             if (failing.length === 0) {
-              core.info("Nightly all green — no tracking issue created.");
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number, body: `Green in ${runUrl}`,
+                });
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, state: "closed", state_reason: "completed",
+                });
+                core.info(`Closed tracking issue #${existing.number}.`);
+              }
               return;
             }
 
+            // Dashes escaped so no test title can end the HTML comment early.
+            const state = JSON.stringify(failing).replace(/-/g, "\\u002d");
+            const body = [
+              ...report,
+              "",
+              "This issue is updated by `.github/workflows/nightly.yml` each night and closed when the branch is green.",
+              `<!-- nightly-state: ${state} -->`,
+            ].join("\n");
+
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info(`Updated tracking issue #${existing.number}.`);
+              return;
+            }
             // Best-effort: assign the milestone matching the branch version.
             let milestoneNumber;
-            const version = branch.replace(/^release\//, ""); // e.g. "v0.4"
+            const version = branch.replace(/^release\//, "");
             try {
               const milestones = await github.paginate(github.rest.issues.listMilestones, {
                 owner, repo, state: "all", per_page: 100,
@@ -457,43 +478,9 @@ jobs:
             } catch (error) {
               core.warning(`Could not list milestones: ${error.status || error.message}`);
             }
-
-            const body = [
-              `Automated nightly run for \`${branch}\` reported failing checks.`,
-              "",
-              `**Run:** ${runUrl}`,
-              `**Last updated:** ${new Date().toISOString()}`,
-              "",
-              "### Failing gates",
-              ...failing.map(([name, outcome]) => `- ${name} (${outcome})`),
-              ...(sepoliaNotRun || sepoliaTxnNotRun ? ["", "### Not run"] : []),
-              ...(sepoliaNotRun
-                ? ["- Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured"]
-                : []),
-              ...(sepoliaTxnNotRun
-                ? ["- Sepolia sends and deploys (live): the BRAMBLE_SEPOLIA_TXN_SEED secret is not configured"]
-                : []),
-              "",
-              "See the run's job summary for the full categorized report",
-              "(newly failing / known / flaky / regressions / release-blocking).",
-              "",
-              "This issue is upserted by `.github/workflows/nightly.yml`; it is",
-              "updated in place each night and should be closed once the branch is green.",
-            ].join("\n");
-
-            const existingList = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: "open", labels: "ci-cd", per_page: 100,
+            const created = await github.rest.issues.create({
+              owner, repo, title, body,
+              labels: ["ci-cd", "release"],
+              ...(milestoneNumber ? { milestone: milestoneNumber } : {}),
             });
-            const existing = existingList.find((item) => item.title === title && !item.pull_request);
-
-            if (existing) {
-              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
-              core.info(`Updated tracking issue #${existing.number}.`);
-            } else {
-              const created = await github.rest.issues.create({
-                owner, repo, title, body,
-                labels: ["ci-cd", "release"],
-                ...(milestoneNumber ? { milestone: milestoneNumber } : {}),
-              });
-              core.info(`Created tracking issue #${created.data.number}.`);
-            }
+            core.info(`Created tracking issue #${created.data.number}.`);
