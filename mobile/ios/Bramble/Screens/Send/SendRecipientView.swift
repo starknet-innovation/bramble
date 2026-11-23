@@ -36,6 +36,7 @@ struct SendRecipientView: View {
                     invalid: model.recipientError != nil
                 ) { proceed(known) }
                 StatusLine(text: model.recipientError, tone: .danger)
+                StatusLine(text: model.recipientNote)
             }
             addressBook(shownContacts, offersSave: SendRecipients.offersSave(typed: query, rows: known))
             ForEach(shownFolders) { folder in folderList(folder) }
@@ -43,7 +44,7 @@ struct SendRecipientView: View {
                 StatusLine(text: SendCopy.noMatchingRecipient)
             }
             PillButton(SendCopy.continueWithAddress) { proceed(known) }
-                .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || model.resolvingName)
         }
         .task { await store.coordination.refresh() }
     }
@@ -84,8 +85,9 @@ struct SendRecipientView: View {
     }
 
     /// Continue: a typed address that is already listed reads as the row it matches, the same as
-    /// tapping that row would.
+    /// tapping that row would; other text is a listed name or a Starknet name
+    /// (`SendFlowModel.continueWithTyped`).
     private func proceed(_ known: [SendRecipients.Row]) {
-        model.continueWithRecipient(label: SendRecipients.knownLabel(of: model.recipientInput, in: known))
+        Task { await model.continueWithTyped(known: known) { store.network } }
     }
 }

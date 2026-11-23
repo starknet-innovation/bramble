@@ -37,7 +37,7 @@ extension PortfolioStore {
             return nil
 
         case let .failed(message):
-            return message
+            return redactEndpoints(text: message)
 
         case .transport, nil:
             return tokenNetworkError()
@@ -69,7 +69,7 @@ extension PortfolioStore {
             return .success(tokens)
 
         case let .failed(message):
-            return .failure(DiscoveryFailure(message: message))
+            return .failure(DiscoveryFailure(message: redactEndpoints(text: message)))
 
         case .transport, nil:
             return .failure(DiscoveryFailure(message: tokenNetworkError()))

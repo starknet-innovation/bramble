@@ -5,6 +5,7 @@ import org.bramble.core.TokenBalance
 import org.bramble.core.TokenMetaOutcome
 import org.bramble.core.balanceRequests
 import org.bramble.core.discoveryJudge
+import org.bramble.core.redactEndpoints
 import org.bramble.core.tokenAddAddress
 import org.bramble.core.tokenMetadataJudge
 import org.bramble.core.tokenMetadataRequests
@@ -48,7 +49,7 @@ suspend fun PortfolioStore.addToken(input: String): String? {
     return when {
         gen != readGeneration -> ADD_FAILED
         outcome is TokenMetaOutcome.Token -> track(outcome)
-        outcome is TokenMetaOutcome.Failed -> outcome.message
+        outcome is TokenMetaOutcome.Failed -> redactEndpoints(outcome.message)
         else -> tokenNetworkError()
     }
 }
@@ -98,7 +99,7 @@ suspend fun PortfolioStore.discoverTokens(): Result<List<TokenBalance>> {
     return when {
         gen != readGeneration -> Result.success(emptyList())
         outcome is DiscoveryOutcome.Found -> Result.success(outcome.tokens)
-        outcome is DiscoveryOutcome.Failed -> Result.failure(DiscoveryFailure(outcome.message))
+        outcome is DiscoveryOutcome.Failed -> Result.failure(DiscoveryFailure(redactEndpoints(outcome.message)))
         else -> Result.failure(DiscoveryFailure(tokenNetworkError()))
     }
 }

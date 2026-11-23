@@ -153,7 +153,9 @@ bound to the vault session generation (`lock_epoch`), so any lock, idle lock or 
 reviewed plan. The send UI test (`BrambleUITests/SendFlowTests`) runs on the offline fixture
 transport (`-uiTestOfflineFixtures ready|undeployed|unfunded|feeFailure`, DEBUG only), whose
 nonce, estimate and class-hash replies are generated from the extension's recorded send path; it
-never taps "Confirm and send". A real mainnet send is opt-in and never run in CI:
+never taps "Confirm and send". The custom RPC endpoint (Settings → Network) and Starknet-name
+recipients: [docs/endpoints-and-names.md](docs/endpoints-and-names.md). A real mainnet send is
+opt-in and never run in CI:
 
 ```bash
 TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_SEND_ACK="I understand this broadcasts a real mainnet transaction" \

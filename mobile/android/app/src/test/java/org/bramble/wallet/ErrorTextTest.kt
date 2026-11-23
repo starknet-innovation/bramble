@@ -13,7 +13,8 @@ class ErrorTextTest {
     @Test
     fun mapsCoreErrorsToIosWording() {
         assertEquals("Incorrect passphrase", describe(CoreException.WrongPassword()))
-        assertEquals("Invalid recovery phrase", describe(CoreException.InvalidInput("invalid recovery phrase")))
+        // The JVM suite has no native core, so the core's `redactEndpoints` is stood in for here.
+        assertEquals("Invalid recovery phrase", describe(CoreException.InvalidInput("invalid recovery phrase")) { it })
         assertEquals("A wallet already exists on this device", describe(CoreException.WalletExists()))
         assertEquals("The wallet is locked", describe(CoreException.Locked()))
         val generic = "Something went wrong. Try again."
@@ -23,6 +24,21 @@ class ErrorTextTest {
         assertEquals(generic, describe(CoreException.Rpc("bad id")))
         assertEquals(generic, describe(CoreException.BiometricUnavailable()))
         assertEquals(generic, describe(IllegalStateException("typed secret words")))
+    }
+
+    @Test
+    fun passThroughTextIsRedacted() {
+        // A core refusal is the one text `describe` passes through; it goes through the core's
+        // `redactEndpoints` (stood in for: the JVM suite has no native core; CoreBridgeTest runs
+        // the real one), so an override URL carrying a key never reaches the screen.
+        val seen = mutableListOf<String>()
+        val text =
+            describe(CoreException.InvalidInput("refused https://rpc.example/v0_10/KEY")) {
+                seen += it
+                it.replace("https://rpc.example/v0_10/KEY", "[endpoint]")
+            }
+        assertEquals(listOf("Refused https://rpc.example/v0_10/KEY"), seen)
+        assertEquals("Refused [endpoint]", text)
     }
 
     @Test

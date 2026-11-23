@@ -12,20 +12,32 @@ import java.math.BigInteger
 // `transfer-review-markup.ts` (`reviewRisksHtml`) and `shared/review-render.ts`
 // (`reviewFeeSection`): pure over the core plan's review, so the JVM tests hold it to the copy.
 
+/** `.send-review-source` under a recipient resolved from a Starknet name. */
+const val RESOLVED_SOURCE = "Resolved from Starknet ID"
+
+/** `NEW_RECIPIENT_WARNING`: a name resolved to an address no listed row has. */
+const val NEW_RECIPIENT_WARNING = "New recipient. Check the full address before you send."
+
 /**
- * The review's warnings (`reviewRisksHtml`): each risk flag's message, then the note that a first
- * send also deploys the account. Empty when there is nothing to warn about, and the risks panel
- * is then not shown at all.
+ * The review's warnings (`reviewRisksHtml`): the note that a name-resolved recipient is new, each
+ * risk flag's message, then the note that a first send also deploys the account. Empty when there
+ * is nothing to warn about, and the risks panel is then not shown at all.
  */
-fun reviewRisks(review: TransferReview): List<String> =
-    review.flags.map { flag ->
-        when (flag) {
-            ReviewFlag.SELF_TRANSFER -> SendCopy.selfTransfer
-            ReviewFlag.TOKEN_CONTRACT_RECIPIENT -> SendCopy.tokenContractRecipient
-            ReviewFlag.ADDRESS_POISONING -> SendCopy.poisonedRecipient
-        }
-    } +
+fun reviewRisks(
+    review: TransferReview,
+    newResolvedRecipient: Boolean = false,
+): List<String> =
+    listOfNotNull(NEW_RECIPIENT_WARNING.takeIf { newResolvedRecipient }) +
+        review.flags.map(::flagMessage) +
         listOfNotNull(SendCopy.deployNote.takeIf { review.requiresDeployment })
+
+/** One risk flag's alert line. */
+private fun flagMessage(flag: ReviewFlag): String =
+    when (flag) {
+        ReviewFlag.SELF_TRANSFER -> SendCopy.selfTransfer
+        ReviewFlag.TOKEN_CONTRACT_RECIPIENT -> SendCopy.tokenContractRecipient
+        ReviewFlag.ADDRESS_POISONING -> SendCopy.poisonedRecipient
+    }
 
 /** The Cost box's content (`reviewFeeSection`), first matching state wins. */
 sealed interface ReviewCost {

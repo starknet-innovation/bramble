@@ -27,8 +27,23 @@ final class SendFlowModel {
     }
 
     private(set) var stage: Stage = .recipient
-    var recipientInput = "" { didSet { recipientError = nil } }
+    var recipientInput = "" { didSet { recipientError = nil; recipientNote = nil } }
     private(set) var recipientError: String?
+    /// The Starknet-name readout under the field (`#send-recipient-note`): "Resolving …" while the
+    /// read runs, then why it did not commit. Any keystroke retires it.
+    var recipientNote: String?
+    /// True while a typed Starknet name is being resolved (StarkNameLookup.swift).
+    var resolvingName = false
+    /// Set when the recipient came from a resolved Starknet name (`recipientResolvedFrom`): the
+    /// review shows the full address it resolved to, and warns when no listed row has it.
+    private(set) var resolvedName: ResolvedName?
+
+    /// The review's facts about a name-resolved recipient.
+    struct ResolvedName: Equatable {
+        /// No contact or account of the user's lists the address (`isNewResolvedRecipient`).
+        let isNew: Bool
+    }
+
     private(set) var recipient: String?
     /// The name of the row the recipient came from (a saved contact or one of the user's own
     /// accounts), never typed text; nil shows the truncated address instead.
@@ -60,7 +75,7 @@ final class SendFlowModel {
     private let balances: [String: String]
     /// The tracked tokens on this network the review warns about paying (`trustedTokenAddresses`).
     private let trackedTokens: [String]
-    private let transport: RpcTransport
+    let transport: RpcTransport
     private let track: (TransferPlan) -> Void
     /// The wallet's price cache and display currency, which price the send's activity record as it
     /// is written (`withSubmittedPrice`); nil records it without a price.
@@ -167,6 +182,16 @@ final class SendFlowModel {
         }
         recipient = canonical
         recipientLabel = label
+        resolvedName = nil
+        dropPlan()
+        stage = .details
+    }
+
+    /// A Starknet name's address, under the canonical name (never the typed spelling).
+    func takeResolvedName(_ address: String, name: String, isNew: Bool) {
+        recipient = address
+        recipientLabel = name
+        resolvedName = ResolvedName(isNew: isNew)
         dropPlan()
         stage = .details
     }
