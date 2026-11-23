@@ -27,7 +27,9 @@ struct ImportAccountChooser: View {
     }
 }
 
-/// `importKeyFlow` (Bramble account only: the core imports no Ready key and takes no salt). The
+/// `importKeyFlow` (Bramble account only: the core imports no Ready key and takes no salt; the
+/// extension's hint on how the vault stores the key is left out, per `COPY_STYLE.md` rules 4 and
+/// 5). The
 /// key field takes the phrase entry's handling: no autocorrect, capitalisation or AutoFill, an
 /// ASCII keyboard (third-party keyboards are blocked app-wide), blurred while the screen is
 /// captured, and the clipboard emptied after a paste. The key leaves view state when the import is
@@ -51,14 +53,13 @@ struct ImportKeyForm: View {
             Text("Anyone with this key controls the account.")
                 .brambleText(BrambleTypeScale.caption)
                 .foregroundStyle(skin.danger)
-            Text("Your recovery phrase does not restore this account. This key is its only backup.")
+            Text("Your recovery phrase won’t restore this account. Keep a copy of this key.")
                 .brambleText(BrambleTypeScale.caption)
                 .foregroundStyle(skin.danger)
             BrambleTextArea(
                 label: "Raw Starknet private key",
                 placeholder: "0x…",
-                text: keyBinding,
-                hint: "The key is validated and stored inside the encrypted vault, never in plain settings."
+                text: keyBinding
             )
             .blur(radius: captured ? maskedWordBlur : 0)
             .privacySensitive()

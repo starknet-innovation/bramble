@@ -57,7 +57,8 @@ fun ImportAccountChooser(
  * and takes no salt). The key goes through the hardened [BrambleField] as a phrase word does:
  * readable, no suggestions or personalised learning, no autofill, no copy or cut, kept out of saved
  * state, and the clipboard emptied after a paste. The key leaves state when the import is sent and
- * when the form leaves composition; a lock removes the wallet's screens with it.
+ * when the form leaves composition; a lock removes the wallet's screens with it. The extension's
+ * hint on how the vault stores the key is left out (`COPY_STYLE.md` rules 4 and 5).
  */
 @Composable
 fun ImportKeyForm(
@@ -103,7 +104,7 @@ fun ImportKeyForm(
             style = textStyle(BrambleTypeScale.caption),
         )
         Text(
-            "Your recovery phrase does not restore this account. This key is its only backup.",
+            "Your recovery phrase won’t restore this account. Keep a copy of this key.",
             color = skin.danger,
             style = textStyle(BrambleTypeScale.caption),
         )
@@ -120,7 +121,6 @@ fun ImportKeyForm(
                 key = value
             },
             kind = SecretKind.WORD,
-            hint = "The key is validated and stored inside the encrypted vault, never in plain settings.",
             onSubmit = ::submit,
         )
         PillButton("Import account", icon = BrambleIconName.WALLET, busy = store.busy, onClick = ::submit)
