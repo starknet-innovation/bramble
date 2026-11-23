@@ -71,20 +71,26 @@ fun ImportKeyForm(
     val context = LocalContext.current
     var key by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<String?>(null) }
+    // Set before the import starts, so a second tap (or the keyboard's Done) cannot pass while
+    // store.busy is still false and send the same key twice.
+    var submitting by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { key = "" } }
 
     fun submit() {
         val privateKey = key.trim()
-        if (store.busy) return
+        if (store.busy || submitting) return
         if (privateKey.isEmpty()) {
             result = "Enter a private key to import"
             return
         }
         result = null
+        submitting = true
         // The store's scope, not the form's: leaving mid-import must not cancel the reload and
         // toast after the core has already sealed the account.
         store.appScope.launch {
-            runCatching { store.importPrivateKey(privateKey) }
+            val outcome = runCatching { store.importPrivateKey(privateKey) }
+            submitting = false
+            outcome
                 .onSuccess {
                     key = ""
                     imported()
@@ -125,7 +131,7 @@ fun ImportKeyForm(
             kind = SecretKind.WORD,
             onSubmit = ::submit,
         )
-        PillButton("Import account", icon = BrambleIconName.WALLET, busy = store.busy, onClick = ::submit)
+        PillButton("Import account", icon = BrambleIconName.WALLET, busy = store.busy || submitting, onClick = ::submit)
         StatusLine(result, StatusTone.DANGER)
     }
 }

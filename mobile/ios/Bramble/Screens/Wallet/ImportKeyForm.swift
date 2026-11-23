@@ -42,6 +42,9 @@ struct ImportKeyForm: View {
     @State private var key = ""
     @State private var result: String?
     @State private var captured = false
+    /// Set before the import's `Task` starts, so a second tap cannot pass while `store.busy` is
+    /// still false and send the same key twice.
+    @State private var submitting = false
 
     private static let fieldLabel = "Raw Starknet private key"
     /// Gap between the label and the field, as `BrambleTextArea`.
@@ -81,7 +84,7 @@ struct ImportKeyForm: View {
             }
             .blur(radius: captured ? maskedWordBlur : 0)
             .privacySensitive()
-            PillButton("Import account", icon: .wallet, busy: store.busy, action: submit)
+            PillButton("Import account", icon: .wallet, busy: store.busy || submitting, action: submit)
             StatusLine(text: result, tone: .danger)
             Spacer(minLength: 0)
         }
@@ -104,14 +107,16 @@ struct ImportKeyForm: View {
     }
 
     private func submit() {
-        guard !store.busy else { return }
+        guard !store.busy, !submitting else { return }
         let privateKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !privateKey.isEmpty else {
             result = "Enter a private key to import"
             return
         }
         result = nil
+        submitting = true
         Task {
+            defer { submitting = false }
             do {
                 try await store.importPrivateKey(privateKey)
                 key = ""
