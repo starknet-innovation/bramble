@@ -143,7 +143,12 @@ extension WalletStore {
 
     /// The network name for an account on the groups checklist.
     func networkName(of record: AccountRecord) -> String {
-        supportedNetworks().first { $0.network == record.network }?.name ?? ""
+        networkName(of: record.network)
+    }
+
+    /// The display name of a network ("Starknet Mainnet"); empty for one the catalog lacks.
+    func networkName(of network: NetworkId) -> String {
+        supportedNetworks().first { $0.network == network }?.name ?? ""
     }
 }
 

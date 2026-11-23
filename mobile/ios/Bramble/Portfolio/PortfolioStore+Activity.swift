@@ -38,11 +38,12 @@ extension PortfolioStore {
         recomputeGroups()
     }
 
-    /// The day groups the Activity screen renders. The tracked tokens resolve each row's token
-    /// mark; rows carry no fiat figure, so prices are not an input.
+    /// The day groups the Activity screen renders, and the entry behind each row. The tracked
+    /// tokens resolve each row's token mark; rows carry no fiat figure, so prices are not an input.
     func recomputeGroups() {
         guard let scope, let view = activityView else {
             groups = []
+            groupEntries = []
             return
         }
         groups = activityGroups(
@@ -50,6 +51,12 @@ extension PortfolioStore {
             tracked: preferences.tracked(network: scope.network.network).map(\.token),
             nowMs: clock()
         )
+        // `activity_groups` builds one row per entry, in order, and only splits them by day.
+        var rest = view.entries[...]
+        groupEntries = groups.map { group in
+            defer { rest = rest.dropFirst(group.rows.count) }
+            return Array(rest.prefix(group.rows.count))
+        }
     }
 
     // The explorer lane: an answering page is authoritative; any failure falls through silently.

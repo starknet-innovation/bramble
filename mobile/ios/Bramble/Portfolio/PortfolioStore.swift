@@ -57,6 +57,9 @@ final class PortfolioStore {
     private(set) var tracked: [TrackedToken] = []
     var activityView: ActivityView?
     var groups: [ActivityDayGroup] = []
+    /// The stored entry behind each row of `groups`, in the same shape. A row cannot be found by
+    /// its hash: a swap's legs are separate entries that share one.
+    var groupEntries: [[ActivityEntry]] = []
     var historyLoading = false
     /// Bumped on every scope change and on lock; in-flight results compare against it.
     var generation = 0
@@ -318,6 +321,7 @@ final class PortfolioStore {
         tracked = []
         activityView = nil
         groups = []
+        groupEntries = []
         historyLoading = false
     }
 }
