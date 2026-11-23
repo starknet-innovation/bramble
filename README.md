@@ -43,7 +43,7 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 
 | Tool | Version | Install | Needed for |
 | --- | --- | --- | --- |
-| [Bun](https://bun.sh) | 1.3.3 | [bun.sh](https://bun.sh/) | all |
+| [Bun](https://bun.sh) | 1.4.4 | [bun.sh](https://bun.sh/) | all |
 | [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | Terminal contract |
 | [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/getting-started/installation.html) | 0.59.0 **exactly** | `asdf install starknet-foundry 0.59.0` | Terminal contract tests |
 

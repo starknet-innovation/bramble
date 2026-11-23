@@ -44,7 +44,7 @@ const REQUIRED_PATHS = [
 
 const CHECKOUT = { action: "actions/checkout", if: null, with: { "persist-credentials": false } };
 const NIGHTLY_CHECKOUT = { ...CHECKOUT, with: NIGHTLY_TARGET_CHECKOUT_WITH };
-const BUN = { action: "oven-sh/setup-bun", if: null, with: { "bun-version": "1.3.3" } };
+const BUN = { action: "oven-sh/setup-bun", if: null, with: { "bun-version": "1.4.4" } };
 const NODE = { action: "actions/setup-node", if: null, with: { "node-version": 24 } };
 const TRACES = {
   action: "actions/upload-artifact",
@@ -187,8 +187,8 @@ const stepFailures = (job: string, steps: readonly unknown[], path: string): str
     ) {
       failures.push(`${path} must not leave a checkout token in .git/config`);
     }
-    if (uses?.startsWith("oven-sh/setup-bun@") && record(step["with"])["bun-version"] !== "1.3.3") {
-      failures.push(`${path} must use the repository's pinned Bun 1.3.3`);
+    if (uses?.startsWith("oven-sh/setup-bun@") && record(step["with"])["bun-version"] !== "1.4.4") {
+      failures.push(`${path} must use the repository's pinned Bun 1.4.4`);
     }
     // A conditional step can be skipped while its text stays in place; only
     // the failure-trace upload may be conditional.
