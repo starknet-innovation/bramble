@@ -25,12 +25,16 @@ are separate. This suite covers the wallet UI.
 - The RPC must answer mainnet's chain id. A URL that does not is not used.
 - The account must already be deployed as OpenZeppelin class
   `0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381`
-  (the class this wallet imports). `sncast account create --type oz` without
-  that class hash derives a different address. The suite checks the on-chain
+  (the class this wallet imports), at the address the wallet derives from the
+  key: salt `0x0`, constructor calldata `[public key]`. `sncast account create
+  --type oz` without that class hash, or without `--salt 0x0` (sncast picks a
+  random salt by default), derives a different address that the wallet can
+  never import. The loader checks the address against salt `0x0` before any
+  chain read or browser. The suite checks the on-chain
   class before it opens a browser, and checks the imported address before it
   sends. A mismatch does not submit.
 - Self-transfers use `0.000001` of the token. That principal comes back to the
-  same account. A review whose displayed STRK fee is above `0.02` STRK, or that
+  same account. A review whose displayed STRK fee is above `0.2` STRK, or that
   is not priced in STRK, is not submitted.
 - A gasless quote is submitted only for USDC, USDT, or DAI at or under `0.02`,
   ETH at or under `0.00002`, or WBTC at or under `0.000002`. Any other symbol,
@@ -55,15 +59,19 @@ are separate. This suite covers the wallet UI.
 | --- | --- |
 | Balances | Nothing. Compares the home rows to `balanceOf`. |
 | SNIP-12 sign | Nothing. `is_valid_signature` is a call. |
-| STRK self-transfer | The network fee only, capped at 0.02 STRK on the review. |
+| STRK self-transfer | The network fee only, capped at 0.2 STRK on the review. |
 | ETH self-transfer | The same, and only when the account holds at least 0.000001 ETH. Otherwise it is skipped. |
 | Dapp invoke | One fee, same cap. One dust STRK self-transfer. |
 | Dapp multicall | One fee, same cap. Two dust STRK self-transfers in one transaction. |
 | Gasless send | A fee-token quote inside the caps above, or nothing if no such quote is shown. STRK balance is expected to stay put. |
 
-Four priced transactions at the cap is 0.08 STRK, plus at most one gasless
-quote. A normal mainnet fee is well under the cap. 0.5 STRK on the account
-covers several full runs. The dust principal returns; the fee does not.
+The cap applies to the fee the review displays, which is the RPC estimate,
+not the charge. In November 2026 a dust STRK self-transfer showed about
+0.081 STRK and was charged about 0.035; the two-transfer multicall showed
+about 0.121 and was charged about 0.052. Four priced transactions at the cap
+is 0.8 STRK, plus at most one gasless quote; a full run at those charges
+spends about 0.16 STRK. Keep at least 1 STRK on the account so a run is never
+short of the estimate. The dust principal returns; the fee does not.
 
 ## Create the account
 
@@ -76,8 +84,18 @@ sncast account create \
   --network mainnet \
   --name bramble \
   --type oz \
-  --class-hash 0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381
+  --class-hash 0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381 \
+  --salt 0x0
 ```
+
+`--salt 0x0` is required. The wallet imports a key as the OpenZeppelin account
+at salt `0x0`, so an account created with sncast's random salt is never the
+one the wallet opens, and the suite stops with "Imported 0x… account, not the
+sncast account". To reuse a key you already have, add an entry to the accounts
+file under `alpha-mainnet` with that key, `"salt": "0x0"`, `"type":
+"open_zeppelin"`, the class hash above, and the address for salt `0x0`; then
+deploy it. `bun run test:e2e:mainnet:setup` prints the expected address when
+the configured one does not match.
 
 `sncast` writes `~/.starknet_accounts/starknet_open_zeppelin_accounts.json`
 under `alpha-mainnet`, unless `--accounts-file` or `accounts-file` in
