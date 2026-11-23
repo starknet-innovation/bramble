@@ -26,6 +26,7 @@ import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-pa
 import { ACTIVITY_PARITY_FIXTURE_PATH, renderActivityParity } from "./mobile-parity-activity";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
+import { renderSwapParity, SWAP_PARITY_FIXTURE_PATH } from "./mobile-parity-swap";
 import { computeVaultParity, VAULT_PARITY_FIXTURE_PATH } from "./mobile-parity-vault";
 
 const envelopePassword = "parity-vector-password";
@@ -136,6 +137,9 @@ for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${pa
 
 await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
 console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);
+
+await writeFile(SWAP_PARITY_FIXTURE_PATH, await renderSwapParity());
+console.log(`wrote ${SWAP_PARITY_FIXTURE_PATH}`);
 
 // So are the privacy fixture and the privacy copy tables.
 await import("./generate-mobile-privacy-vectors");
