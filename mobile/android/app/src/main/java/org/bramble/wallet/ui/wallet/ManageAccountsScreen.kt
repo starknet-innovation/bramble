@@ -254,10 +254,13 @@ private fun GroupFields(
     }
 }
 
+/** Where the Add account chooser is: its own options, or one of the import screens. */
+private enum class AddStage { ADD, IMPORT_CHOOSER, IMPORT_KEY }
+
 /**
- * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account", and a multisig
- * through the Ready Multisig gateway when [multisig] is given; Ledger is hidden, and importing an
- * existing account is shown as coming.
+ * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account", a multisig
+ * through the Ready Multisig gateway when [multisig] is given, and "Import an existing account",
+ * which leads to [ImportAccountChooser] and [ImportKeyForm]; Ledger is hidden.
  */
 @Composable
 fun AddAccountChooser(
@@ -265,6 +268,30 @@ fun AddAccountChooser(
     close: () -> Unit,
     added: () -> Unit,
     multisig: (() -> Unit)? = null,
+) {
+    var stage by remember { mutableStateOf(AddStage.ADD) }
+    when (stage) {
+        AddStage.ADD -> {
+            AddOptions(store, close, added, multisig) { stage = AddStage.IMPORT_CHOOSER }
+        }
+
+        AddStage.IMPORT_CHOOSER -> {
+            ImportAccountChooser(store, back = { stage = AddStage.ADD }, importKey = { stage = AddStage.IMPORT_KEY })
+        }
+
+        AddStage.IMPORT_KEY -> {
+            ImportKeyForm(store, back = { stage = AddStage.IMPORT_CHOOSER }, imported = added)
+        }
+    }
+}
+
+@Composable
+private fun AddOptions(
+    store: WalletStore,
+    close: () -> Unit,
+    added: () -> Unit,
+    multisig: (() -> Unit)?,
+    importExisting: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
@@ -290,10 +317,10 @@ fun AddAccountChooser(
             )
         }
         OptionCard(
-            BrambleIconName.KEY_ROUND,
+            BrambleIconName.LINK,
             "Import an existing account",
-            "Coming to Bramble mobile.",
-            enabled = false,
-        ) {}
+            "Bring accounts you already own: a recovery phrase or a private key.",
+            onClick = importExisting,
+        )
     }
 }
