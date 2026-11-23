@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
  * for code-owner review alongside the workflow.
  */
 export const MAINNET_E2E_WORKFLOW_SHA256 =
-  "34059ad23760ee9dafc3c65d7189493a6532b57a5f551512e7b967b5d2ac5076";
+  "97c04a7685e017a444e5be852cc4941485aaa0228eb6c08a0b8006cf3a519b27";
 
 /** Stable start of the failure reported when the workflow bytes are not the reviewed ones. */
 export const PIN_FAILURE =

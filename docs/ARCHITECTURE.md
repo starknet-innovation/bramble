@@ -486,7 +486,7 @@ share the in-flight request, account switches remain isolated, and the first vis
 images are fetched eagerly so the gallery is warm when opened.
 
 ## Reproducible Builds
-Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,
+Every build input is pinned: Bun `1.4.4` (`packageManager` + CI), a frozen lockfile,
 the exact published Krusty KMS package and both runtime-file digests, the exact Argent
 account-contract release and official artifact digests, and GitHub Actions by commit SHA. The
 Privacy SDK source and browser
