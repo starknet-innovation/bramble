@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type BrowserContext, chromium, type Page, type Worker } from "@playwright/test";
+import { chromeBetaExecutable } from "./chrome-beta";
 
 /**
  * Loaded extension handles exposed to E2E tests.
@@ -32,6 +33,22 @@ const NETWORK_BLOCK_ARGS = [
   "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
   "--no-proxy-server",
 ] as const;
+
+/**
+ * The browser to load the extension in, from `BRAMBLE_E2E_CHANNEL`. Unset or
+ * `chromium` is Playwright's pinned Chromium; `chrome-for-testing-beta` is the
+ * pinned next Chromium the nightly early-warning run uses (tests/e2e/chrome-beta.ts).
+ * Any other value throws, so a typo never silently tests the default browser.
+ * Branded Chrome is not offered: it ignores `--load-extension` since 137.
+ */
+const browserLaunchOptions = (): { channel: "chromium" } | { executablePath: string } => {
+  const channel = process.env["BRAMBLE_E2E_CHANNEL"] ?? "chromium";
+  if (channel === "chromium") return { channel };
+  if (channel === "chrome-for-testing-beta") return { executablePath: chromeBetaExecutable() };
+  throw new Error(
+    `BRAMBLE_E2E_CHANNEL=${JSON.stringify(channel)} is not one of chromium, chrome-for-testing-beta`,
+  );
+};
 
 const isWalletServiceWorker = (worker: Worker): boolean =>
   worker.url().startsWith("chrome-extension://") && worker.url().endsWith("/background/index.js");
@@ -60,9 +77,10 @@ export type LaunchExtensionOptions = {
 };
 
 /**
- * Launches bundled Chromium with the built extension loaded from dist/.
+ * Launches bundled Chromium (or the browser `BRAMBLE_E2E_CHANNEL` selects)
+ * with the built extension loaded from dist/.
  *
- * Throws if the extension's background service worker never appears, which is
+ * Throws on an unknown `BRAMBLE_E2E_CHANNEL`, and if the extension's background service worker never appears, which is
  * how a missing or broken `dist/` surfaces.
  */
 export const launchExtension = async (
@@ -77,7 +95,7 @@ export const launchExtension = async (
       ...(options.args ?? []),
       ...(liveNetworkAllowed() ? [] : NETWORK_BLOCK_ARGS),
     ],
-    channel: "chromium",
+    ...browserLaunchOptions(),
     headless: options.headless ?? true,
     // Spread conditionally because `exactOptionalPropertyTypes` forbids
     // assigning `undefined` to an optional property (TS2379). Playwright itself

@@ -27,6 +27,7 @@ const GREEN = {
   E2E: "success",
   E2E_FAILED: "[]",
   E2E_FLAKY: "[]",
+  E2E_NEXT: "success",
   SEPOLIA: "success",
   SEPOLIA_CONFIGURED: "true",
   SEPOLIA_TXN: "success",
@@ -116,6 +117,26 @@ describe("nightly report", () => {
     expect(summary).toContain(
       "### Not run\n- Sepolia sends and deploys (live): the BRAMBLE_SEPOLIA_TXN_SEED secret is not configured",
     );
+  });
+
+  test("the next-Chromium early warning is shown but never opens or keeps open the issue", async () => {
+    const issues: Issue[] = [];
+    const alone = await run({ E2E_NEXT: "failure" }, issues);
+    expect(issues).toHaveLength(0);
+    expect(alone.summary).toContain(
+      "### Early warning (non-blocking)\n- Next Chromium E2E: fail (failure)",
+    );
+
+    await run({ E2E_NEXT: "failure", BUILD: "failure" }, issues);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.body).toContain("- Next Chromium E2E: fail (failure)");
+    expect(issues[0]?.body).not.toMatch(/nightly-state: .*Next Chromium/);
+
+    await run({ E2E_NEXT: "failure" }, issues);
+    expect(issues[0]?.state).toBe("closed");
+
+    const old = await run({ E2E_NEXT: "skipped" }, []);
+    expect(old.summary).toContain("- Next Chromium E2E: not run on this branch");
   });
 
   test("a hostile test title cannot break the state line or the markdown", async () => {
