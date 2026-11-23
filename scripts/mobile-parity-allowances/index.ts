@@ -18,8 +18,9 @@
  * - `recording`: `recordApproveAllowances` over a submitted batch and the stored value after;
  * - `outcomes`: `revokeOutcomes` (exported for this) over activity rows;
  * - `revoke`: `allowanceTarget` for an id and the `approve(spender, 0)` built for its target;
- * - `scan`, `tracked`: `collectExternalAllowances` and `collectTrackedAllowances` over a small
- *   fake node, as the transcript of every call and answer, then the result (see `./scan.ts`).
+ * - `scan`, `tracked`: `scanExternalAllowances` and `readTrackedAllowances` over a small fake
+ *   node, as the transcript of every provider call (block ids and bounds as sent) and answer,
+ *   then the result (see `./scan.ts`).
  *
  * Left out: the handlers' orchestration (`handleListAllowances`, `handleRevokeAllowance`: which
  * scopes, the fee review and submission), which stays the wallet's; the 50-spender cap per token

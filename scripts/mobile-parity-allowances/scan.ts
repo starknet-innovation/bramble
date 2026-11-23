@@ -1,25 +1,31 @@
 /**
- * The chain blocks of the allowances fixture: `scan` (`collectExternalAllowances`) and `tracked`
- * (`collectTrackedAllowances`), each over a small fake node, recorded as the transcript of every
+ * The chain blocks of the allowances fixture: `scan` (`scanExternalAllowances`, over
+ * `collectExternalAllowances`) and `tracked` (`readTrackedAllowances`, over
+ * `collectTrackedAllowances`), each over a small fake node, recorded as the transcript of every
  * call the extension made, in order, with the node's answer, then the result (or `transport`
  * when a transport failure ended the read, for the caller to fail over).
+ *
+ * Each call is recorded as the extension hands it to starknet.js's `RpcProvider` (one endpoint,
+ * no failover): `getBlockNumber`, `getEvents` with its filter as sent (bounds wrapped as
+ * `{ block_number }`, an absent bound or token omitted), and `callContract` with the call and its
+ * `blockIdentifier`. Those arguments are what starknet.js puts on the wire unchanged.
  *
  * The node pages events oldest-first, two to a page whatever `chunk_size` asks (a node may send
  * fewer), filters by key position and block range as `starknet_getEvents` does, and answers
  * `allowance` from a table. An answer is `{ result }`, `{ error }` (a JSON-RPC error: a node's
  * refusal, which skips the token or pair) or `{ transport }` (thrown as a transport failure).
  */
+
+import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import { APPROVAL_EVENT_KEY } from "@bramble/transactions/allowance-discovery";
 import {
   type AllowanceEvent,
-  type AllowanceEventFilter,
-  type AllowanceRpc,
-  collectExternalAllowances,
-  collectTrackedAllowances,
+  readTrackedAllowances,
+  scanExternalAllowances,
   type TrackedAllowancePair,
 } from "@bramble/transactions/allowance-scan";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
-import type { Call } from "starknet";
+import type { Call, RpcProvider } from "starknet";
 import { ADDRESS, BRIDGE, DEX, LENDER, MULTISIG_ID, STRK, UNKNOWN, USDC } from "./shared";
 
 const PAGE = 2;
@@ -60,9 +66,18 @@ type Node = {
 const same = (a: unknown, b: unknown): boolean =>
   typeof a === "string" && typeof b === "string" && canonicalFelt(a) === canonicalFelt(b);
 
-const events = (node: Node, filter: AllowanceEventFilter) => {
-  const from = filter.from_block ?? 0;
-  const to = filter.to_block ?? node.head;
+/** `starknet_getEvents`'s filter as the provider receives it. */
+type EventFilter = {
+  readonly address: string;
+  readonly keys: readonly (readonly string[])[];
+  readonly from_block?: { readonly block_number: number };
+  readonly to_block?: { readonly block_number: number };
+  readonly continuation_token?: string;
+};
+
+const events = (node: Node, filter: EventFilter) => {
+  const from = filter.from_block?.block_number ?? 0;
+  const to = filter.to_block?.block_number ?? node.head;
   const matching = (node.logs[canonicalFelt(filter.address) ?? ""] ?? []).filter(
     (event) =>
       event.block >= from &&
@@ -82,14 +97,14 @@ const events = (node: Node, filter: AllowanceEventFilter) => {
 const reply = (node: Node, method: string, params: Record<string, unknown>): Answer => {
   const fault = node.fault?.(method, params);
   if (fault) return fault;
-  if (method === "getLatestBlockNumber") return { result: node.head };
-  if (method === "getEvents") return { result: events(node, params as AllowanceEventFilter) };
+  if (method === "getBlockNumber") return { result: node.head };
+  if (method === "getEvents") return { result: events(node, params as EventFilter) };
   const spender = canonicalFelt(String((params["calldata"] as string[])[1])) ?? "";
   return { result: node.amounts?.[spender] ?? ["0x0", "0x0"] };
 };
 
-/** The node as the scan's `AllowanceRpc`, recording each call and its answer in `transcript`. */
-const recordingRpc = (node: Node, transcript: object[]): AllowanceRpc => {
+/** The node as the extension's `RpcProvider`, recording each call and its answer in `transcript`. */
+const recordingProvider = (node: Node, transcript: object[]): RpcProvider => {
   const answer = async (method: string, params: object) => {
     const answered = reply(node, method, params as Record<string, unknown>);
     transcript.push({ method, params, reply: answered });
@@ -99,12 +114,23 @@ const recordingRpc = (node: Node, transcript: object[]): AllowanceRpc => {
       throw Object.assign(new Error("node refused"), { baseError: answered.error });
     return answered.result;
   };
-  return {
-    callContract: async (call: Call) => (await answer("callContract", call)) as string[],
-    getEvents: async (filter) =>
-      (await answer("getEvents", filter)) as Awaited<ReturnType<AllowanceRpc["getEvents"]>>,
-    getLatestBlockNumber: async () => (await answer("getLatestBlockNumber", {})) as number,
+  const provider = {
+    callContract: (call: Call, blockIdentifier: unknown) =>
+      answer("callContract", { ...call, blockIdentifier }),
+    getBlockNumber: () => answer("getBlockNumber", {}),
+    getEvents: (filter: EventFilter) => answer("getEvents", filter),
   };
+  return provider as unknown as RpcProvider;
+};
+
+const URLS = ["https://node.invalid"];
+
+/** `run` against `node` alone, its calls recorded, the endpoint fresh (no earlier cooldown). */
+const capture = async <T>(node: Node, run: (provider: () => RpcProvider) => Promise<T>) => {
+  resetRpcEndpointCooldownsForTests();
+  const calls: object[] = [];
+  const result = await outcome(() => run(() => recordingProvider(node, calls)));
+  return { calls, result };
 };
 
 const outcome = async <T>(run: () => Promise<T>): Promise<T | { readonly transport: true }> =>
@@ -215,8 +241,7 @@ const SCANS: readonly {
   {
     name: "a transport failure ends the scan for the next endpoint",
     node: {
-      fault: (method) =>
-        method === "getLatestBlockNumber" ? { transport: "fetch failed" } : undefined,
+      fault: (method) => (method === "getBlockNumber" ? { transport: "fetch failed" } : undefined),
       head: 10,
       logs: {},
     },
@@ -269,32 +294,26 @@ const TRACKED: readonly {
   },
 ];
 
-/** `scan` and `tracked`. */
+/** `scan` and `tracked`, one at a time (the endpoint cooldowns are shared). */
 export const computeScans = async (): Promise<
   readonly (readonly [string, readonly object[]])[]
-> => [
-  [
-    "scan",
-    await Promise.all(
-      SCANS.map(async ({ name, node, owner, tokens }) => {
-        const calls: object[] = [];
-        const result = await outcome(() =>
-          collectExternalAllowances(recordingRpc(node, calls), { owner, tokens }),
-        );
-        return { calls, name, owner, result, tokens };
-      }),
-    ),
-  ],
-  [
-    "tracked",
-    await Promise.all(
-      TRACKED.map(async ({ name, node, pairs }) => {
-        const calls: object[] = [];
-        const result = await outcome(() =>
-          collectTrackedAllowances(recordingRpc(node, calls), pairs),
-        );
-        return { calls, name, pairs, result };
-      }),
-    ),
-  ],
-];
+> => {
+  const scans: object[] = [];
+  for (const { name, node, owner, tokens } of SCANS) {
+    const { calls, result } = await capture(node, (provider) =>
+      scanExternalAllowances({ owner, rpcUrls: URLS, tokens }, provider),
+    );
+    scans.push({ calls, name, owner, result, tokens });
+  }
+  const tracked: object[] = [];
+  for (const { name, node, pairs } of TRACKED) {
+    const { calls, result } = await capture(node, (provider) =>
+      readTrackedAllowances({ pairs, rpcUrls: URLS }, provider),
+    );
+    tracked.push({ calls, name, pairs, result });
+  }
+  return [
+    ["scan", scans],
+    ["tracked", tracked],
+  ];
+};
