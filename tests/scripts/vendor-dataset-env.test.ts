@@ -4,10 +4,12 @@
  * only: this points the reader at a temporary file and never opens the real
  * one or touches a network.
  */
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { envLines, envSeed } from "../../tools/vendor-dataset/dataset-env";
+import { sepoliaSecret, sepoliaVar } from "../../tools/vendor-dataset/sepolia-seeds";
 
 const dir = mkdtempSync(join(tmpdir(), "bramble-dataset-env-"));
 const file = join(dir, "values.env");
@@ -22,17 +24,21 @@ writeFileSync(
   ].join("\n"),
 );
 
-// The module resolves its file path once, at import, from this variable.
-const previous = process.env["BRAMBLE_DATASET_ENV_FILE"];
-process.env["BRAMBLE_DATASET_ENV_FILE"] = file;
-const { envLines, envSeed } = await import("../../tools/vendor-dataset/dataset-env");
-const { sepoliaSecret, sepoliaVar } = await import("../../tools/vendor-dataset/sepolia-seeds");
-if (previous === undefined) delete process.env["BRAMBLE_DATASET_ENV_FILE"];
-else process.env["BRAMBLE_DATASET_ENV_FILE"] = previous;
-
 afterAll(() => rmSync(dir, { force: true, recursive: true }));
 
 describe("vendor-dataset value file", () => {
+  let previous: string | undefined;
+
+  beforeEach(() => {
+    previous = process.env["BRAMBLE_DATASET_ENV_FILE"];
+    process.env["BRAMBLE_DATASET_ENV_FILE"] = file;
+  });
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env["BRAMBLE_DATASET_ENV_FILE"];
+    else process.env["BRAMBLE_DATASET_ENV_FILE"] = previous;
+  });
+
   test("reads the file named by BRAMBLE_DATASET_ENV_FILE", () => {
     expect(envLines()).toHaveLength(5);
   });
