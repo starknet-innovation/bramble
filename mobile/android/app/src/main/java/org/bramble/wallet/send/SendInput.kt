@@ -13,6 +13,7 @@ import org.bramble.wallet.send.SendFlowModel.Stage
 fun SendFlowModel.updateRecipient(text: String) {
     recipientInput = text
     recipientError = null
+    recipientNote = null
 }
 
 /** Typing clears the amount error and drops any plan: an edit always needs a new review. */
@@ -24,12 +25,15 @@ fun SendFlowModel.updateAmount(text: String) {
     dropPlan()
 }
 
-/** Picks a listed row (a contact or one of the person's accounts) as the recipient, under its name. */
+/**
+ * Picks a listed row (a contact or one of the person's accounts) as the recipient, under its name.
+ * Like typing, it clears the error and a name lookup's note (as iOS's `recipientInput` `didSet`).
+ */
 fun SendFlowModel.useRecipient(
     address: String,
     label: String,
 ) {
-    recipientInput = address
+    updateRecipient(address)
     continueWithRecipient { label }
 }
 
@@ -46,6 +50,20 @@ fun SendFlowModel.continueWithRecipient(labelFor: (String) -> String? = { null }
     }
     recipient = canonical
     recipientLabel = labelFor(canonical)
+    resolvedName = null
+    dropPlan()
+    stage = Stage.DETAILS
+}
+
+/** A Starknet name's address, under the canonical [name] (never the typed spelling). */
+fun SendFlowModel.takeResolvedName(
+    address: String,
+    name: String,
+    isNew: Boolean,
+) {
+    recipient = address
+    recipientLabel = name
+    resolvedName = SendFlowModel.ResolvedName(isNew)
     dropPlan()
     stage = Stage.DETAILS
 }

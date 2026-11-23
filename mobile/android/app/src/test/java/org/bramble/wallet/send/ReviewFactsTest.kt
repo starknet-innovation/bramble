@@ -67,6 +67,14 @@ class ReviewFactsTest {
     }
 
     @Test
+    fun newResolvedNameIsFlaggedFirst() {
+        assertEquals(
+            listOf(NEW_RECIPIENT_WARNING, SendCopy.selfTransfer),
+            reviewRisks(review(listOf(ReviewFlag.SELF_TRANSFER)), newResolvedRecipient = true),
+        )
+    }
+
+    @Test
     fun deployedSendQuotesItsFee() {
         assertEquals(ReviewCost.Figure(SendCopy.feePrefix + "0.000003 STRK", null, false), reviewCost(review()))
         val short = reviewCost(review(affordability = FeeAffordability.INSUFFICIENT))

@@ -72,10 +72,10 @@ a search that matches nothing shows "No matching recipient.".
 - **Picking a recipient.** A row sends to its address and carries its name to the review as the
   recipient label. Typed text never supplies a label, but a typed address that is already listed
   reads as the row it matches (compared as canonical felts).
-- **Continue with address.** Disabled until `validate_recipient` returns a canonical felt; the
-  error is "Enter a valid Starknet address.". Validation follows `normalizeFeltInput` then
-  `isStarkFieldElement`: trim; when the text starts with `0x`, lowercase it and strip leading
-  zeros; then apply the lowercase-hex grammar, at most 64 digits, below P.
+- **Continue with address.** An address goes on; else a listed or Starknet name is looked up
+  ([endpoints-and-names.md](endpoints-and-names.md) §2); else "Enter a valid Starknet address.".
+  Validation follows `normalizeFeltInput` then `isStarkFieldElement`: trim; `0x` text lowercased,
+  leading zeros stripped; lowercase hex, at most 64 digits, below P.
 - **Truncation.** Everywhere it uses the core's `short_address`: the first 6 characters, then
   "…", then the last 4. The extension's `shortAddress` applies this to the raw string.
 

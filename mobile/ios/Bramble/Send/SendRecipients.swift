@@ -94,6 +94,15 @@ enum SendRecipients {
         }
     }
 
+    /// `matchingRecipients`: the rows whose name is exactly the typed text (any case), else those
+    /// a search for it shows; none for blank text.
+    static func named(_ typed: String, in rows: [Row]) -> [Row] {
+        let query = typed.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return [] }
+        let exact = rows.filter { $0.name.trimmingCharacters(in: .whitespaces).lowercased() == query }
+        return exact.isEmpty ? matching(rows, query: typed) : exact
+    }
+
     /// `knownRecipientLabel`: the name of the listed row the typed address belongs to, compared
     /// as canonical felts, so a padded or differently cased spelling still matches.
     static func knownLabel(of typed: String, in rows: [Row]) -> String? {

@@ -65,12 +65,15 @@ struct SendReviewView: View {
                             sender: (model.account.displayName, model.account.address),
                             recipient: (model.recipientLabel, review.recipient),
                             amount: review.amountDisplay,
-                            symbol: review.tokenSymbol
+                            symbol: review.tokenSymbol,
+                            resolvedFromName: model.resolvedName != nil
                         ),
                         token: model.token
                     )
                     SendCostBox(cost: SendReviewCopy.cost(review)) { Task { await model.retryFee() } }
-                    SendRisksPanel(messages: SendReviewCopy.risks(review))
+                    SendRisksPanel(
+                        messages: SendReviewCopy.risks(review, newResolvedRecipient: model.resolvedName?.isNew == true)
+                    )
                 }
                 StatusLine(text: model.reviewBlock, tone: .danger)
                 PillButton(SendCopy.confirmLabel, icon: .check) { Task { await model.confirm() } }
@@ -139,10 +142,15 @@ struct SendReviewFacts: View {
                         mono: code
                     )
                     .foregroundStyle(skin.muted)
-                    .lineLimit(1)
+                    // A name-resolved recipient's full address wraps rather than truncates.
+                    .lineLimit(fact.source == nil ? 1 : nil)
+                    .multilineTextAlignment(.trailing)
                 if let copy = fact.copy {
                     CopyButton(value: copy, label: SendCopy.copyRecipient)
                 }
+            }
+            if let source = fact.source {
+                Text(source).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
             }
         }
     }
