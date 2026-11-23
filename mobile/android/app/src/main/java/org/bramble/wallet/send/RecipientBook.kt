@@ -55,6 +55,17 @@ data class RecipientBook(
 fun RecipientBook.labelFor(address: String): String? = rows.firstOrNull { it.address == address }?.label
 
 /**
+ * `matchingRecipients`: the rows whose name is exactly [typed] (trimmed, any case), else those a
+ * search for it shows; none for blank text.
+ */
+fun RecipientBook.named(typed: String): List<RecipientRow> {
+    val query = typed.trim().lowercase()
+    if (query.isEmpty()) return emptyList()
+    val exact = rows.filter { it.label.trim().lowercase() == query }
+    return exact.ifEmpty { filtered(typed).rows }
+}
+
+/**
  * The rows whose name or address contains [query] (trimmed, any case), as the extension's search;
  * a folder with nothing left drops out. A blank query keeps everything.
  */

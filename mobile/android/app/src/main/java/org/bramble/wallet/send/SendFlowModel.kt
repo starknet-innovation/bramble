@@ -43,7 +43,7 @@ class SendFlowModel(
     /** The tracked tokens on this network the review warns about paying (`trustedTokenAddresses`). */
     private val trackedTokens: List<String> = emptyList(),
     /** How each plan step's bytes move: the store's chain transport (a fixture node in tests). */
-    private val transport: RpcPost = RpcClient.https,
+    internal val transport: RpcPost = RpcClient.https,
     /**
      * The wallet's price cache and display currency, which price the send's activity record as it
      * is written (`withSubmittedPrice`); null records it without a price.
@@ -109,6 +109,33 @@ class SendFlowModel(
      */
     var recipientLabel by mutableStateOf<String?>(null)
         internal set
+
+    /**
+     * The Starknet-name readout under the field (`#send-recipient-note`): "Resolving …" while the
+     * read runs, then why it did not commit. Any keystroke retires it.
+     */
+    var recipientNote by mutableStateOf<String?>(null)
+        internal set
+
+    /** True while a typed Starknet name is being resolved (`StarkNameLookup.kt`). */
+    var resolvingName by mutableStateOf(false)
+        internal set
+
+    /**
+     * Set when the recipient came from a resolved Starknet name (`recipientResolvedFrom`): the review
+     * shows the full address and warns when [ResolvedName.isNew].
+     */
+    var resolvedName by mutableStateOf<ResolvedName?>(null)
+        internal set
+
+    /**
+     * The review's facts about a name-resolved recipient.
+     *
+     * @property isNew no listed contact or account has its address (`isNewResolvedRecipient`).
+     */
+    data class ResolvedName(
+        val isNew: Boolean,
+    )
 
     /** The token to send: [startToken] when this network has it, else STRK, else the first token. */
     var token by mutableStateOf(

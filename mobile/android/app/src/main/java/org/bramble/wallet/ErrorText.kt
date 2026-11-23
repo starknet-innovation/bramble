@@ -1,20 +1,26 @@
 package org.bramble.wallet
 
 import org.bramble.core.CoreException
+import org.bramble.core.redactEndpoints
 import org.bramble.wallet.design.BrambleCopy
 import java.util.Locale
 
 /**
  * User-facing text for a core error, in the iOS (and extension) wording. Never includes user
  * input: only the core's fixed `InvalidInput` reasons are shown, and every other failure collapses
- * to one generic line.
+ * to one generic line. That one pass-through text goes through [redact] (the core's
+ * `redactEndpoints`), as every failure text does before it is shown, logged or reported: an RPC
+ * override URL may carry an API key.
  */
-fun describe(error: Throwable): String =
+fun describe(
+    error: Throwable,
+    redact: (String) -> String = ::redactEndpoints,
+): String =
     when (error) {
         is CoreException.WrongPassword -> BrambleCopy.incorrectPassphrase
         is CoreException.Throttled -> throttledText(error.retryAfterMs.toLong())
         is CoreException.BiometricInvalidated -> securityCopy(BrambleCopy.biometricInvalidated)
-        is CoreException.InvalidInput -> error.reason.replaceFirstChar { it.uppercase() }
+        is CoreException.InvalidInput -> redact(error.reason.replaceFirstChar { it.uppercase() })
         is CoreException.WalletExists -> "A wallet already exists on this device"
         is CoreException.Locked -> "The wallet is locked"
         else -> "Something went wrong. Try again."
