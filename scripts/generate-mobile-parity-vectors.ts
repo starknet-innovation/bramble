@@ -26,6 +26,7 @@ import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-pa
 import { ACTIVITY_PARITY_FIXTURE_PATH, renderActivityParity } from "./mobile-parity-activity";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
+import { renderStakingParity, STAKING_PARITY_FIXTURE_PATH } from "./mobile-parity-staking";
 import { computeVaultParity, VAULT_PARITY_FIXTURE_PATH } from "./mobile-parity-vault";
 
 const envelopePassword = "parity-vector-password";
@@ -117,6 +118,9 @@ console.log(`wrote ${VAULT_PARITY_FIXTURE_PATH}`);
 
 await writeFile(ACTIVITY_PARITY_FIXTURE_PATH, await renderActivityParity());
 console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);
+
+await writeFile(STAKING_PARITY_FIXTURE_PATH, await renderStakingParity());
+console.log(`wrote ${STAKING_PARITY_FIXTURE_PATH}`);
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
