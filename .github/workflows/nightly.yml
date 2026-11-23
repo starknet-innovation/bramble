@@ -169,12 +169,10 @@ jobs:
         id: e2e_install
         continue-on-error: true
         run: bun run test:e2e:install
-      # Previous release build for tests/e2e/upgrade-from-previous.e2e.ts; the token reaches this
-      # step alone. A failed fetch still passes its path on, so the test fails in the E2E gate.
+      # Previous release build for tests/e2e/upgrade-from-previous.e2e.ts, over public HTTPS, no token.
+      # A failed fetch still passes its path on, so the test fails in the E2E gate.
       - name: Fetch previous release build
         id: previous_build
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           [ -f scripts/fetch-previous-release.ts ] || { echo "::notice::Branch predates the upgrade test; not run."; exit 0; }
           dir="$RUNNER_TEMP/previous-build"

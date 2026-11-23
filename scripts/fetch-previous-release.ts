@@ -6,19 +6,21 @@
  *
  * Without a version it picks the newest published (non-draft) `vX.Y.Z`
  * release strictly below `package.json`'s version. It downloads
- * `bramble-<v>.zip` and its `.sha256` with `gh release download`, checks the
+ * `bramble-<v>.zip` and its `.sha256` over public HTTPS, checks the
  * digest, unzips into `<out-dir>` (which must not exist yet), checks the
  * unpacked manifest carries that version, and prints `<out-dir>`. Any mismatch
  * exits non-zero with nothing left in `<out-dir>`. The digest is published
  * beside the zip, so it guards against a corrupt or swapped download, not a
- * compromised release. `gh` needs `GH_TOKEN` (or a login) to list releases.
+ * compromised release. No token: the repository is public, so the nightly
+ * never hands a credential to this release-branch code.
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+const REPOSITORY = "starknet-innovation/bramble";
 const SEMVER_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
 
 const parts = (version: string): readonly number[] | undefined => {
@@ -61,6 +63,12 @@ const run = (command: readonly string[]): string => {
   return result.stdout.toString();
 };
 
+const get = async (url: string): Promise<Response> => {
+  const response = await fetch(url, { headers: { accept: "application/vnd.github+json" } });
+  if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+  return response;
+};
+
 const main = async (outArg: string | undefined, versionArg: string | undefined): Promise<void> => {
   if (!outArg) throw new Error("usage: fetch-previous-release.ts <out-dir> [X.Y.Z]");
   const out = resolve(outArg);
@@ -72,10 +80,11 @@ const main = async (outArg: string | undefined, versionArg: string | undefined):
     if (!tag) throw new Error(`version ${versionArg} is not X.Y.Z`);
   } else {
     const pkg = (await Bun.file("package.json").json()) as { version: unknown };
-    const listed = JSON.parse(
-      run(["gh", "release", "list", "--limit", "100", "--json", "tagName,isDraft"]),
-    ) as { tagName: string; isDraft: boolean }[];
-    const tags = listed.filter((release) => !release.isDraft).map((release) => release.tagName);
+    // ponytail: unauthenticated API (60 requests/hour per IP), one call per run.
+    const listed = (await (
+      await get(`https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`)
+    ).json()) as { tag_name: string; draft: boolean }[];
+    const tags = listed.filter((release) => !release.draft).map((release) => release.tag_name);
     tag = previousReleaseTag(tags, String(pkg.version));
     if (!tag) throw new Error(`no release below ${String(pkg.version)}`);
   }
@@ -83,8 +92,13 @@ const main = async (outArg: string | undefined, versionArg: string | undefined):
   const zipName = `bramble-${version}.zip`;
   const download = await mkdtemp(join(tmpdir(), "bramble-previous-"));
   try {
-    run(["gh", "release", "download", tag, "--dir", download, "--pattern", zipName]);
-    run(["gh", "release", "download", tag, "--dir", download, "--pattern", `${zipName}.sha256`]);
+    const base = `https://github.com/${REPOSITORY}/releases/download/${tag}`;
+    for (const name of [zipName, `${zipName}.sha256`]) {
+      await writeFile(
+        join(download, name),
+        new Uint8Array(await (await get(`${base}/${name}`)).arrayBuffer()),
+      );
+    }
     const expected = (await readFile(join(download, `${zipName}.sha256`), "utf8")).trim();
     const actual = createHash("sha256")
       .update(await readFile(join(download, zipName)))
