@@ -32,4 +32,10 @@ final class PasteOnlyTextViewTests: XCTestCase {
             XCTAssertFalse(view.canPerformAction(action, withSender: nil), "\(action) is offered")
         }
     }
+
+    func testKeepsWritingToolsOut() throws {
+        guard #available(iOS 18.0, *) else { throw XCTSkip("Writing Tools is iOS 18 and later") }
+        XCTAssertNotEqual(UITextView().writingToolsBehavior, UIWritingToolsBehavior.none, "control: on by default")
+        XCTAssertEqual(PasteOnlyTextView().writingToolsBehavior, UIWritingToolsBehavior.none)
+    }
 }

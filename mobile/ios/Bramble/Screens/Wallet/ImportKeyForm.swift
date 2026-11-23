@@ -187,8 +187,17 @@ private struct KeyTextView: UIViewRepresentable {
 }
 
 /// A text view whose edit menu holds only paste, select and select all: copy, cut, share, look up
-/// and translate would each hand the key to the pasteboard or another process.
+/// and translate would each hand the key to the pasteboard or another process. Writing Tools
+/// (iOS 18) reaches selected text by its own path, not the edit menu, so it is switched off too.
 final class PasteOnlyTextView: UITextView {
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        if #available(iOS 18.0, *) { writingToolsBehavior = UIWritingToolsBehavior.none }
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) { nil }
+
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         let allowed = [#selector(paste(_:)), #selector(select(_:)), #selector(selectAll(_:))]
         return allowed.contains(action) && super.canPerformAction(action, withSender: sender)
