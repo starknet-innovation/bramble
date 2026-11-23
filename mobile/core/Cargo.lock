@@ -207,13 +207,12 @@ dependencies = [
 
 [[package]]
 name = "bramble-core"
-version = "0.4.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.4.0#4322c9432d90cc49aa8182327481fddc70b97132"
+version = "0.6.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.6.0#b8feaf3e4c27b93c7efb0536e595b14078f16491"
 dependencies = [
  "bip39",
  "serde",
  "serde_json",
- "starknet-types-core",
  "starknet-wallet-core",
  "thiserror",
  "uniffi",
@@ -1774,8 +1773,8 @@ dependencies = [
 
 [[package]]
 name = "starknet-wallet-core"
-version = "0.4.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.4.0#4322c9432d90cc49aa8182327481fddc70b97132"
+version = "0.6.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.6.0#b8feaf3e4c27b93c7efb0536e595b14078f16491"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",

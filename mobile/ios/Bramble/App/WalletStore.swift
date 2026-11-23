@@ -79,7 +79,9 @@ final class WalletStore {
 
     init(core: WalletCore) {
         self.core = core
-        portfolio = PortfolioStore(activity: core.activityBook())
+        portfolio = PortfolioStore(activity: core.activityBook()) { [core] network, preferences in
+            core.explorerFallbackAllowed(network: network, preferences: preferences)
+        }
         network = UserDefaults.standard.string(forKey: "network") == "sepolia" ? .sepolia : .mainnet
         security = core.securityStatus()
         route = core.status() == .noWallet ? .onboarding : .locked

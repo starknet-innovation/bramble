@@ -43,6 +43,9 @@ class RecipientBookTest {
         authorizationShape = "stark-pair",
         groupId = group,
         active = index == 0,
+        hidden = false,
+        imported = false,
+        preFixReadyKey = false,
     )
 
     @Test

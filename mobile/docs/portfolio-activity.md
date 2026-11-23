@@ -260,7 +260,7 @@ pub struct TokenGlyph { pub logo_address: Option<String>, pub letters: String, p
 ```
 
 ### 3.7 Explorer lane permission
-`explorerFallbackAllowed(prefs, net)` = `explorerFallback[net] ?? (rpcOverride[net] === undefined)`. Mobile has no RPC or explorer override UI, so the lane is allowed on built-in endpoints; the `explorerFallback` map is still persisted and honoured so a later setting needs no migration. A failed preferences read means **not** permitted. An answering Starkscan page is authoritative, even when empty; any Starkscan failure falls through silently to the RPC scan. No API key is shipped, so no `X-Starkscan-Api-Key` header is sent.
+`explorerFallbackAllowed(prefs, net)` = `explorerFallback[net] ?? (rpcOverride[net] === undefined)`. Since wallet-core `v0.6.0` the wallet answers it (`WalletCore.explorerFallbackAllowed(network, preferences)`, passed to each `PortfolioStore` as `explorerAllowed`), since only it knows the RPC override; it answers false while locked or with no wallet. The `explorerFallback` map is still persisted and honoured. A failed preferences read means **not** permitted. Tested: iOS `testTheExplorerIsNotAskedWhenTheWalletSaysNo`. An answering Starkscan page is authoritative, even when empty; any Starkscan failure falls through silently to the RPC scan. No API key is shipped, so no `X-Starkscan-Api-Key` header is sent.
 
 ### 3.8 What never crosses the FFI boundary
 

@@ -66,7 +66,7 @@ extension PortfolioStore {
             accountId: scope.accountId,
             network: net,
             tracked: tokens,
-            explorerAllowed: preferences.explorerFallbackAllowed(network: net),
+            explorerAllowed: explorerAllowed(net, preferences),
             nowMs: now
         ) else { return nil }
         let outcome = await transport.perform(request)

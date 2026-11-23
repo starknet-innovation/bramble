@@ -202,7 +202,9 @@ constants come from `core/generated/multisig.json` (§6.1).
     pub local_signer_account_ids: Vec<String> }
 #[derive(uniffi::Record)] pub struct RpcRequest { pub id: u64, pub body: String }
 #[derive(uniffi::Enum)] pub enum RelayStep {
-    Continue, Finish { close_frame: Option<String> } }   // send close_frame if any, then close the socket
+    Continue,
+    Finish { close_frame: Option<String> },                  // send close_frame if any, then close the socket
+    NextPage { close_frame: String, request: String } }      // send both, in order, on the same socket
 #[derive(uniffi::Record)] pub struct CoordinationSyncOutcome {
     pub received: u32, pub trusted: u32, pub held: u32, pub imported: u32 }
 #[derive(uniffi::Record)] pub struct RelayPolicy {
@@ -289,16 +291,19 @@ Since M11 the judges are wallet-core's `nostr::{relay_url, relay, sync, sync_win
 `nostr-relay-socket.ts` and `nostr-relay.ts` as implemented: oversized (`> 140_000` bytes), non-JSON,
 non-array or over-long frames are ignored and the subscription stays open; every EVENT frame counts
 toward the 50-frame close, accepted or not, and is kept only if it passes `isNostrEvent`, is kind 1059
-and carries our `p` tag; EOSE answers `Finish{close_frame: ["CLOSE",id]}`; CLOSED, timeout, socket error
+and carries our `p` tag; EOSE on a short page answers `Finish{close_frame: ["CLOSE",id]}` (on a full
+one, `NextPage`, below); CLOSED, timeout, socket error
 and close (`relay_ended`) keep the relay's events and fail it only if it has none. Checkpoint-seen ids
 are skipped **before** the round-robin bound of 50, then candidates sort by `created_at` desc, `id` asc,
 and the core opens them itself (§4). Every relay failed → "Nostr relays are unavailable" (the core's
 messages, as the extension's), shown as "Secure co-signer updates are unavailable".
 
-**[mobile] One page per relay until 2.7.** The core pages (an `until` cursor below the oldest wrap, up
-to 4 pages) through a third `RelayStep`, `NextPage`; the UniFFI enum cannot gain it before the bindings
-regenerate, so mobile runs the core's judge with a page cap of 1, where `NextPage` never occurs (mapped
-to `Finish` as a fail-safe). A burst of newer wraps can therefore still hide an older one from mobile.
+**Paging (since wallet-core `v0.6.0`, M15).** The core pages (an `until` cursor below the oldest wrap,
+up to 4 pages) through `NextPage`: each app's relay loop sends its close frame, then the older page's
+request, on the same socket and keeps reading, with a fresh request timeout per page, as each of the
+extension's subscriptions has its own (`followRelayStep` on Android, `WebSocketRelayTransport.follow`
+on iOS; `RelayStepTest`, `RelayStepTests`). Before `v0.6.0` mobile read one page per relay, so a
+burst of newer wraps could hide an older one.
 
 Publishing (`publish_many_nostr_gift_wraps`: batch validation, `OK` judging where a false ack whose
 message starts with `duplicate:` counts as accepted, the counts) is the core's too, wrapped with mobile's
@@ -427,7 +432,7 @@ from `extension-parity.json` so that sibling branches do not conflict. It is wri
 6. **Relay URL**: `isNostrRelayUrl` verdicts plus a `mobile` column differing only for `ws://`.
 7. **Frames and trust**: the frame cases mirrored from `nostr-relay.test.ts` live with the judges in
    wallet-core; `nostr_coordination_parity.rs` replays the paging, batch and acknowledgement fixtures
-   through mobile, except `ws:` loopback and the cases that need a second page. `trustedSharedIntent` needs a fully verified intent (invoke-v3 re-hash and Stark signature
+   through mobile, second pages included, except `ws:` loopback. `trustedSharedIntent` needs a fully verified intent (invoke-v3 re-hash and Stark signature
    checks, §8), so its generated vectors wait for import. Until then the Rust trust judge is covered by unit
    tests, including a saved contact that forges a snapshot listing itself.
 8. **Authority read**: recorded JSON-RPC bodies per `MultisigAuthorityStatus`, including an error-24 re-pin.
