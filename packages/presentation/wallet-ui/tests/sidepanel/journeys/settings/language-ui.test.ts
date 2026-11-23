@@ -61,7 +61,7 @@ describe("language screen", () => {
     const host = document.createElement("div");
     host.innerHTML = languageFlow(emptyStatus(), prefs());
     expect(host.textContent).toContain("语言");
-    expect(host.querySelector('[data-language="auto"]')?.textContent?.trim()).toBe("跟随浏览器");
+    expect(host.querySelector('[data-language="auto"]')?.textContent?.trim()).toBe("浏览器");
   });
 });
 

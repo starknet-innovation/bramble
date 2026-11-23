@@ -229,11 +229,12 @@ export const ledgerSurfaceSwitched = (): string =>
  * A device error during onboarding, with the catalog message and a retry,
  * centred in the overlay shell.
  */
-export const ledgerOnboardError = (message: string): string =>
+export const ledgerOnboardError = (message: string, supportCode?: string): string =>
   onboardHero(
     icon("alert"),
     `<h1>${th("ledger.error.title")}</h1>
-      <p class="review-flag">${escapeHtml(message)}</p>`,
+      <p class="review-flag">${escapeHtml(message)}</p>
+      ${supportCode ? `<p class="hint">${escapeHtml(supportCode)}</p>` : ""}`,
     `${button({
       attributes: { "data-ledger-onboard-connect": true },
       icon: "refresh",
