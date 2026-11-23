@@ -25,12 +25,15 @@ fun SendFlowModel.updateAmount(text: String) {
     dropPlan()
 }
 
-/** Picks a listed row (a contact or one of the person's accounts) as the recipient, under its name. */
+/**
+ * Picks a listed row (a contact or one of the person's accounts) as the recipient, under its name.
+ * Like typing, it clears the error and a name lookup's note (as iOS's `recipientInput` `didSet`).
+ */
 fun SendFlowModel.useRecipient(
     address: String,
     label: String,
 ) {
-    recipientInput = address
+    updateRecipient(address)
     continueWithRecipient { label }
 }
 
