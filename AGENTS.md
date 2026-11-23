@@ -17,6 +17,7 @@ bun run build:firefox        # writes dist-firefox/ (loadable in Firefox via abo
 bun run build:all            # both targets, from one run of the prerequisite gates
 bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
 bun run check:firefox        # Mozilla's validator over dist-firefox/ (needs build:firefox first)
+bun run test:firefox:smoke   # runs dist-firefox/ in headless Firefox (nightly gate; see below)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
 bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed file; ~20 min)
@@ -204,3 +205,8 @@ The pinned Argent and Privacy vendor outputs are already present, so `bun run ch
   `npx web-ext lint --source-dir dist-firefox` runs Mozilla's own validator — including the API
   checks implied by `strict_min_version`, which is how the AMO data-consent requirement surfaced.
   The Gecko manifest is derived, never hand-written: see `apps/extension/firefox-manifest.ts`.
+- `bun run test:firefox:smoke` (`tests/firefox/smoke.ts`) is the only thing that *runs* the
+  Firefox build: install, background, phrase import, lock, unlock, offline behind a loopback
+  proxy. On Linux x64 it fetches the Firefox + geckodriver builds pinned by SHA-256 in
+  `tests/firefox/browser.ts`; elsewhere set `BRAMBLE_FIREFOX_BINARY` and `BRAMBLE_GECKODRIVER`
+  (on macOS: `/Applications/Firefox.app/Contents/MacOS/firefox`). It needs `openssl` on PATH.

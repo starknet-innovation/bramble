@@ -8,6 +8,7 @@
       "playwright.mainnet-wallet.config.ts"
     ]
   },
+  "ignoreBinaries": ["openssl"],
   "workspaces": {
     ".": {
       "entry": [

@@ -210,6 +210,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
   "test:e2e:mainnet:multisig": "bun run scripts/mainnet-wallet-e2e.ts multisig",
   "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
+  "test:firefox:smoke": "bun run tests/firefox/smoke.ts",
   "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:ledger-app": "bun run scripts/vendor-ledger-app.ts",
