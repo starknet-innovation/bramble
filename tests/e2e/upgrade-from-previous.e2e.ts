@@ -21,8 +21,8 @@ import { decryptJson, isEncryptedEnvelope } from "@bramble/vault/encrypted-store
 import { CURRENT_SCHEMA_VERSION } from "@bramble/vault/schema";
 import { VAULT_STORE_KEY } from "@bramble/vault/store-migration";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
-import { expect, type Page, test } from "@playwright/test";
-import { type LoadedExtension, launchExtension } from "./extension-fixture";
+import { expect, type Page, test, type Worker } from "@playwright/test";
+import { launchExtension } from "./extension-fixture";
 import { startTestDapp } from "./test-dapp-server";
 import {
   IMPORT_MNEMONIC,
@@ -42,8 +42,8 @@ test.use({ actionTimeout: 15_000 });
 // The schema version inside the stored vault. It is encrypted at rest, so the
 // envelope is read from the worker's storage and opened here with the wallet's
 // own decrypt and the suite's published test passphrase.
-const storedSchemaVersion = async (extension: LoadedExtension): Promise<unknown> => {
-  const envelope = await extension.serviceWorker.evaluate(async (key) => {
+const storedSchemaVersion = async (worker: Worker): Promise<unknown> => {
+  const envelope = await worker.evaluate(async (key) => {
     const storage = (
       globalThis as unknown as {
         chrome: { storage: { local: { get: (k: string) => Promise<Record<string, unknown>> } } };
@@ -87,6 +87,8 @@ const accountSnapshot = async (sidepanel: Page) => {
       })),
     );
   await closeDrawer(sidepanel);
+  // canonicalFelt("") is "0x0": a missing title must fail here, not compare equal.
+  for (const { address } of accounts) expect(address).toMatch(/^0x[0-9a-fA-F]+$/);
   return accounts.map((account) => ({ ...account, address: canonicalFelt(account.address) }));
 };
 
@@ -147,6 +149,10 @@ test("a wallet set up on the previous release survives the upgrade", async () =>
   test
     .info()
     .annotations.push({ description: `${previousVersion} -> ${currentVersion}`, type: "upgrade" });
+  expect(
+    previousVersion.localeCompare(currentVersion, "en", { numeric: true }),
+    `${previousVersion} must not be newer than ${currentVersion}`,
+  ).toBeLessThanOrEqual(0);
   const root = await mkdtemp(join(tmpdir(), "bramble-upgrade-"));
   const extensionPath = join(root, "extension");
   const userDataDir = join(root, "profile");
@@ -162,27 +168,46 @@ test("a wallet set up on the previous release survives the upgrade", async () =>
       seeded = await accountSnapshot(sidepanel);
       expect(seeded).toHaveLength(2);
       expect(seeded.map((account) => account.label)).toContain(RENAMED);
-      expect(seeded.every((account) => account.address !== null)).toBe(true);
-      test.info().annotations.push({
-        description: String(await storedSchemaVersion(old)),
-        type: "previous vault schema",
-      });
+      const previousSchema = await storedSchemaVersion(old.serviceWorker);
+      test
+        .info()
+        .annotations.push({ description: String(previousSchema), type: "previous vault schema" });
+      expect(typeof previousSchema).toBe("number");
+      expect(previousSchema as number).toBeLessThanOrEqual(CURRENT_SCHEMA_VERSION);
+
+      // The update, through Chromium's own reload rather than a bare file swap.
+      // Relaunching after a bare swap keeps the previous build's registered
+      // worker script under the new pages (a command-line load never
+      // re-registers it), which shows below as "Couldn't load connected sites".
+      // Reloading unloads the extension and drops that registration. In this
+      // headless browser it then stays unloaded until the relaunch below adds
+      // it back from the command line, which registers the new worker.
+      await rm(extensionPath, { force: true, recursive: true });
+      await cp(distPath, extensionPath, { recursive: true });
+      await old.serviceWorker
+        .evaluate(() =>
+          (
+            globalThis as unknown as { chrome: { runtime: { reload: () => void } } }
+          ).chrome.runtime.reload(),
+        )
+        .catch(() => undefined); // the worker may be gone before it answers
+      // Unloaded once its pages no longer load.
+      const probe = await old.context.newPage();
+      await expect
+        .poll(() =>
+          probe.goto(`chrome-extension://${old.extensionId}/sidepanel.html`).then(
+            () => "loaded",
+            (error: Error) =>
+              error.message.includes("ERR_BLOCKED_BY_CLIENT") ? "unloaded" : "other",
+          ),
+        )
+        .toBe("unloaded");
     } finally {
       await old.close();
     }
+
     const oldId = old.extensionId;
 
-    await rm(extensionPath, { force: true, recursive: true });
-    await cp(distPath, extensionPath, { recursive: true });
-    // A store update re-registers the background worker. A command-line load
-    // does not: Chromium keeps the previous build's registered worker script
-    // (its recorded version stays the old one) and runs it under the new
-    // pages, which no user sees. Dropping the registration makes this launch
-    // register the new worker, as an update would. It holds no wallet data:
-    // the wallet keeps nothing in worker Cache Storage, and chrome.storage and
-    // IndexedDB live elsewhere in the profile. A stale worker shows up below
-    // as "Couldn't load connected sites".
-    await rm(join(userDataDir, "Default", "Service Worker"), { force: true, recursive: true });
     const upgraded = await launchExtension({ extensionPath, userDataDir });
     try {
       expect(upgraded.extensionId).toBe(oldId);
@@ -205,7 +230,9 @@ test("a wallet set up on the previous release survives the upgrade", async () =>
       await dapp.getByTestId("preauth").click();
       await expect(dapp.getByTestId("preauth-result")).toHaveText("true");
 
-      await expect.poll(() => storedSchemaVersion(upgraded)).toBe(CURRENT_SCHEMA_VERSION);
+      await expect
+        .poll(() => storedSchemaVersion(upgraded.serviceWorker))
+        .toBe(CURRENT_SCHEMA_VERSION);
     } finally {
       await upgraded.close();
     }
