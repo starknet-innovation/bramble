@@ -291,7 +291,8 @@ Since M11 the judges are wallet-core's `nostr::{relay_url, relay, sync, sync_win
 `nostr-relay-socket.ts` and `nostr-relay.ts` as implemented: oversized (`> 140_000` bytes), non-JSON,
 non-array or over-long frames are ignored and the subscription stays open; every EVENT frame counts
 toward the 50-frame close, accepted or not, and is kept only if it passes `isNostrEvent`, is kind 1059
-and carries our `p` tag; EOSE answers `Finish{close_frame: ["CLOSE",id]}`; CLOSED, timeout, socket error
+and carries our `p` tag; EOSE on a short page answers `Finish{close_frame: ["CLOSE",id]}` (on a full
+one, `NextPage`, below); CLOSED, timeout, socket error
 and close (`relay_ended`) keep the relay's events and fail it only if it has none. Checkpoint-seen ids
 are skipped **before** the round-robin bound of 50, then candidates sort by `created_at` desc, `id` asc,
 and the core opens them itself (§4). Every relay failed → "Nostr relays are unavailable" (the core's
@@ -431,7 +432,7 @@ from `extension-parity.json` so that sibling branches do not conflict. It is wri
 6. **Relay URL**: `isNostrRelayUrl` verdicts plus a `mobile` column differing only for `ws://`.
 7. **Frames and trust**: the frame cases mirrored from `nostr-relay.test.ts` live with the judges in
    wallet-core; `nostr_coordination_parity.rs` replays the paging, batch and acknowledgement fixtures
-   through mobile, except `ws:` loopback and the cases that need a second page. `trustedSharedIntent` needs a fully verified intent (invoke-v3 re-hash and Stark signature
+   through mobile, second pages included, except `ws:` loopback. `trustedSharedIntent` needs a fully verified intent (invoke-v3 re-hash and Stark signature
    checks, §8), so its generated vectors wait for import. Until then the Rust trust judge is covered by unit
    tests, including a saved contact that forges a snapshot listing itself.
 8. **Authority read**: recorded JSON-RPC bodies per `MultisigAuthorityStatus`, including an error-24 re-pin.
