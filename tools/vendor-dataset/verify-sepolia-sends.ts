@@ -129,16 +129,24 @@ const ok = await guarded(async () => {
         }
       };
       const blockedAtStart = fw.blocked.length;
+      const passedAtStart = fw.passed.length;
       // null: the node could not say, so a retry could not be proven safe.
       const readNonce = (): Promise<bigint | null> => nonceOf(address).catch(() => null);
       const nonce = await readNonce();
       let result = await attempt();
       // The public node sometimes refuses a request or stalls a step. Retry a
-      // sender once, and only when provably nothing went out: no blocked
-      // broadcast, and after a pause the nonce (pre-confirmed included) was
-      // read both times and has not moved. The verdict keeps the first
-      // failure so flakiness shows.
-      if (!result.ok && !c.readOnly && fw.blocked.length === blockedAtStart && nonce !== null) {
+      // sender once, and only when provably nothing went out: no broadcast
+      // blocked or let through (one whose response timed out can still land),
+      // and after a pause the nonce (pre-confirmed included) was read both
+      // times and has not moved. The verdict keeps the first failure so
+      // flakiness shows.
+      if (
+        !result.ok &&
+        !c.readOnly &&
+        fw.blocked.length === blockedAtStart &&
+        fw.passed.length === passedAtStart &&
+        nonce !== null
+      ) {
         await pace(RETRY_PAUSE_MS);
         if ((await readNonce()) === nonce) {
           const first = result.why;
