@@ -118,6 +118,18 @@ describe("nightly report", () => {
     );
   });
 
+  test("prints a numeric property seed with its reproduce command, and drops anything else", async () => {
+    const issues: Issue[] = [];
+    const seeded = await run({ PROPERTIES: "failure", PROPERTY_SEED: "123" }, issues);
+    expect(seeded.summary).toContain(
+      "Property seed: 123 (reproduce: `BRAMBLE_PROPERTY_SEED=123 BRAMBLE_PROPERTY_RUNS=3000 bun test tests/property`)",
+    );
+    expect(issues[0]?.body).toContain("Property seed: 123");
+    expect(issues[0]?.body).toMatch(/<!-- nightly-state: .* -->$/);
+    const hostile = await run({ PROPERTY_SEED: "1`; x" }, []);
+    expect(hostile.summary).not.toContain("Property seed");
+  });
+
   test("a hostile test title cannot break the state line or the markdown", async () => {
     const issues: Issue[] = [];
     const title = "x --> `@someone` <!-- nightly-state: [] -->";
