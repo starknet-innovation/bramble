@@ -225,21 +225,19 @@ advisory is caught even without a code change), the extension **build**, the
 live **Sepolia import-path run** (`tools/vendor-dataset/verify-sepolia.ts`, issue
 821; its seeds come from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that one
 step; it is skipped and reported as "Not run" while that secret is unset, and it
-records and uploads nothing), and a
-clearly-labeled **placeholder**
-for perf / regression suites (none exist in-repo yet — the step is an explicit
-no-op and must not be read as a passing gate).
+records and uploads nothing), and the live **Sepolia sends and first deploys**
+(issue 976; `BRAMBLE_SEPOLIA_TXN_SEED`, skipped the same way while unset). When
+E2E fails, the run uploads `test-results/` (traces, screenshots, video) as
+`nightly-e2e-debug` for 7 days; that upload runs before either Sepolia step.
 
-It writes a **categorized summary** to the run summary with sections: *newly
-failing*, *known failures*, *flaky*, *regressions*, *release-blocking*, and
-*recommended next work*. Only what a single run can prove is filled in
-automatically: pass/fail is derived from job results; **flaky** and
-**regressions** need run history / a baseline and are explicitly marked as not
-auto-classified.
+The report job's run summary lists **new failures**, **still failing**, **fixed
+since last run**, **flaky** (passed on a Playwright retry) and **not run**. The
+baseline is the open tracking issue: it keeps a hidden `nightly-state` line with
+what was failing last time, so with no open issue every failure counts as new.
 
 On failure it creates-or-updates **one** tracking issue titled
 `Nightly: release/vX.Y — failing checks`, labeled `ci-cd` + `release`, assigned
-to the matching milestone when one exists. Source and dependencies execute in a
+to the matching milestone when one exists, and closes it on the first green run. Source and dependencies execute in a
 read-only self-hosted job; a separate hosted job receives the narrow
 `issues: write` capability and never checks out release-branch code.
 

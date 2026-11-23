@@ -23,7 +23,7 @@ const ADDRESS = expression("vars.MAINNET_E2E_ADDRESS");
 /** The pinned Bun setup every Bun job uses. */
 export const SETUP_BUN = {
   uses: "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
-  with: { "bun-version": "1.3.3" },
+  with: { "bun-version": "1.4.4" },
 } as const;
 
 /** The pinned Node setup the build and the tests use. */
