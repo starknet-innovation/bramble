@@ -170,8 +170,9 @@ const waitForBalance = async (
 const importFundedAccount = async (sidepanel: Page): Promise<void> => {
   await sidepanel.locator("#account-trigger").click();
   await sidepanel.locator("#drawer-add-account").click();
+  // "Import" opens a sub-chooser; picking a kind there takes effect at once.
   await sidepanel.locator('[data-add-kind="import"]').click();
-  await sidepanel.locator("[data-add-continue]").click();
+  await sidepanel.locator('[data-add-kind="import-key"]').click();
   await expect(sidepanel.getByRole("heading", { name: "Import private key" })).toBeVisible();
   const keyInput = sidepanel.locator('textarea[name="rawKey"]');
   try {
