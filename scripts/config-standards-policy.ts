@@ -217,6 +217,9 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   // Live Sepolia scorecard: needs the git-ignored seed file, so never a gate.
   "verify:sepolia":
     "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
+  // Live Sepolia send run (issue 976): spends testnet STRK from S-TXN, so never a gate.
+  "verify:sepolia:sends":
+    "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia-sends.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {
