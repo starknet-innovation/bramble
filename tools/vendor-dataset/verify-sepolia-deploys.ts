@@ -24,7 +24,7 @@
  *   bun run verify:sepolia:deploys
  * Spends testnet STRK only; exits non-zero when any check fails.
  */
-import { parseTokenAmount } from "@bramble/starknet/rpc";
+import { isContractNotFoundError, parseTokenAmount } from "@bramble/starknet/rpc";
 import { STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
 import { expect } from "@playwright/test";
 import { generateMnemonic } from "@scure/bip39";
@@ -191,7 +191,12 @@ const asksForStrk = async (session: Session, derived: readonly string[]): Promis
 /** Returns what is left on `account` to the bank; best effort, never fails the run. */
 const sweep = async (account: Throwaway, bank: string): Promise<void> => {
   try {
-    if (!(await provider.getClassHashAt(account.address).catch(() => null))) return;
+    try {
+      await provider.getClassHashAt(account.address);
+    } catch (error) {
+      if (isContractNotFoundError(error)) return;
+      throw error;
+    }
     const balance = await tokenBalance("STRK", account.address);
     const signer = new Account({
       provider,
