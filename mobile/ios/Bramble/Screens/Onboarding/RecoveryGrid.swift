@@ -12,7 +12,7 @@ enum RecoveryPhraseWordCount {
 }
 
 /// Blur applied to a word field while it is masked or the screen is being captured.
-private let maskedWordBlur: CGFloat = 6
+let maskedWordBlur: CGFloat = 6
 
 /// Three columns of cells. Not lazy: focus must be able to move to any cell, rendered or not,
 /// and a phrase grid is at most 24 cells.
