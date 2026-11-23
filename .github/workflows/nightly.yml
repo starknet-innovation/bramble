@@ -106,6 +106,7 @@ jobs:
       audit: ${{ steps.audit.outcome }}
       properties: ${{ steps.properties.outcome }}
       property_seed: ${{ steps.properties.outputs.seed }}
+      property_runs: ${{ steps.properties.outputs.runs }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
       e2e_failed: ${{ steps.e2e_results.outputs.failed }}
@@ -216,15 +217,15 @@ jobs:
           retention-days: 7
           overwrite: true # a re-run attempt reuses the name
           if-no-files-found: ignore
-      # Fresh seed nightly (PR CI keeps the fixed one); a branch predating BRAMBLE_PROPERTY_* ignores it.
-      - name: Security property suite
+      - name: Security property suite # fresh seed nightly (PR CI keeps the fixed one), only where the tests read it
         id: properties
         continue-on-error: true
         run: |
-          set -euo pipefail; BRAMBLE_PROPERTY_SEED="$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')"
-          export BRAMBLE_PROPERTY_SEED BRAMBLE_PROPERTY_RUNS=3000
-          echo "seed=$BRAMBLE_PROPERTY_SEED" >> "$GITHUB_OUTPUT"
-          echo "Property seed: $BRAMBLE_PROPERTY_SEED"
+          set -euo pipefail
+          if grep -q BRAMBLE_PROPERTY_SEED tests/property/security-boundaries.test.ts; then
+            export BRAMBLE_PROPERTY_SEED="$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" BRAMBLE_PROPERTY_RUNS=3000
+            printf 'seed=%s\nruns=%s\n' "$BRAMBLE_PROPERTY_SEED" "$BRAMBLE_PROPERTY_RUNS" | tee -a "$GITHUB_OUTPUT"
+          fi
           bun test tests/property
       # Live Sepolia run of every in-wallet import path against the issue-821
       # test accounts (tools/vendor-dataset/verify-sepolia.ts). It sends nothing:
@@ -365,6 +366,7 @@ jobs:
           AUDIT: ${{ needs.nightly.outputs.audit }}
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
           PROPERTY_SEED: ${{ needs.nightly.outputs.property_seed }}
+          PROPERTY_RUNS: ${{ needs.nightly.outputs.property_runs }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
           E2E_FAILED: ${{ needs.nightly.outputs.e2e_failed }}
@@ -403,10 +405,10 @@ jobs:
             const failedTests = strings(parse(env.E2E_FAILED));
             const flakyTests = strings(parse(env.E2E_FLAKY));
 
-            const failing = [
-              ...failingGates.map((g) => `gate: ${g.name}`),
-              ...failedTests.map((t) => `test: ${t}`),
-            ];
+            const PROP = "gate: Security property suite", seed = /^\d{1,10}$/.test(env.PROPERTY_SEED || "") && /^\d{1,7}$/.test(env.PROPERTY_RUNS || "") ? env.PROPERTY_SEED : "";
+            // Seed/runs: digits only. A seeded property failure keeps its seed in the state and stays listed until a human closes the issue.
+            const key = (g) => `gate: ${g.name}` + (seed && `gate: ${g.name}` === PROP ? ` (seed ${seed})` : "");
+            const current = [...failingGates.map(key), ...failedTests.map((t) => `test: ${t}`)];
             const show = (key) => {
               const name = key.slice(6); // after "gate: " or "test: "
               if (key.startsWith("test: ")) return `- ${code(name)}`;
@@ -423,6 +425,7 @@ jobs:
             const existing = open.find((item) => item.title === title && !item.pull_request);
             const stateLine = /<!-- nightly-state: (.*) -->\s*$/; // last line; titles sit above it
             const known = existing ? strings(parse(stateLine.exec(existing.body || "")?.[1]), 100) : [];
+            const failing = [...current, ...known.filter((k) => k.startsWith(`${PROP} (seed `) && !current.includes(k))];
             const newly = failing.filter((key) => !known.includes(key));
             const still = failing.filter((key) => known.includes(key));
             const fixed = known.filter((key) => !failing.includes(key));
@@ -431,10 +434,8 @@ jobs:
             const section = (heading, lines) => (lines.length ? ["", `### ${heading}`, ...lines] : []);
             const report = [
               `Nightly run for \`${branch}\`: ${runUrl}`,
-              // Digits only: the seed is the one value here not fixed by this workflow.
-              ...(/^\d{1,10}$/.test(env.PROPERTY_SEED || "")
-                ? ["", `Property seed: ${env.PROPERTY_SEED} (reproduce: \`BRAMBLE_PROPERTY_SEED=${env.PROPERTY_SEED} BRAMBLE_PROPERTY_RUNS=3000 bun test tests/property\`)`]
-                : []),
+              ...(seed ? ["", `Property seed: ${seed} (reproduce: \`BRAMBLE_PROPERTY_SEED=${seed} BRAMBLE_PROPERTY_RUNS=${env.PROPERTY_RUNS} bun test tests/property\`)`] : []),
+              ...(failing.some((k) => k.startsWith(`${PROP} (seed `)) ? ["", "A seeded property failure needs a fixed-seed regression test committed; then a human closes this issue."] : []),
               ...section("New failures", newly.map(show)),
               ...section("Still failing", still.map(show)),
               ...section("Fixed since last run", fixed.map(show)),
