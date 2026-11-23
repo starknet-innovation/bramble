@@ -29,6 +29,7 @@ import {
   renderActivityFeedParity,
 } from "./mobile-parity-activity-feed";
 import { ALLOWANCES_PARITY_FIXTURE_PATH, renderAllowancesParity } from "./mobile-parity-allowances";
+import { CALLS_PARITY_FIXTURE_PATH, renderCallsParity } from "./mobile-parity-calls";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
@@ -137,6 +138,8 @@ console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);
 
 await writeFile(STAKING_PARITY_FIXTURE_PATH, await renderStakingParity());
 console.log(`wrote ${STAKING_PARITY_FIXTURE_PATH}`);
+await writeFile(CALLS_PARITY_FIXTURE_PATH, await renderCallsParity());
+console.log(`wrote ${CALLS_PARITY_FIXTURE_PATH}`);
 await writeFile(ALLOWANCES_PARITY_FIXTURE_PATH, await renderAllowancesParity());
 console.log(`wrote ${ALLOWANCES_PARITY_FIXTURE_PATH}`);
 // The RPC override rules (P4) and Starknet name lookups (P5), recomputed in full.
