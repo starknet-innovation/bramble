@@ -8,8 +8,14 @@ import { parseTokenAmount } from "@bramble/starknet/rpc";
 /** Decimal STRK/ETH moved to the same account. Small enough to be dust. */
 export const SELF_TRANSFER_AMOUNT = "0.000001";
 
-/** Displayed STRK fee above this is not submitted. */
-export const MAX_TX_FEE_STRK = "0.02";
+/**
+ * Displayed STRK fee above this is not submitted. The review shows the RPC
+ * estimate, which runs well above the charged fee: in November 2026 a dust
+ * STRK self-transfer estimated about 0.081 STRK (charged about 0.035) and a
+ * two-transfer multicall about 0.121 STRK (charged about 0.052). The cap
+ * sits above the estimate, not the charge, or every send is refused.
+ */
+export const MAX_TX_FEE_STRK = "0.2";
 
 /**
  * Human-unit ceilings for a gasless fee quote, keyed by the wallet's symbol.

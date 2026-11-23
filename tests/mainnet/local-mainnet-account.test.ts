@@ -5,16 +5,32 @@
 import { describe, expect, test } from "bun:test";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import { STARK_CURVE_ORDER, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { ec, hash } from "starknet";
 import { setupInstructions } from "../../scripts/mainnet-e2e-setup";
 import {
   LOCAL_MAINNET_SKIP_MESSAGE,
   type LocalMainnetProbe,
   loadLocalMainnetAccount,
+  walletOpenZeppelinAddress,
 } from "./local-mainnet-account";
 import { classifyLocalMainnetEnv, localOnlyMessage } from "./mainnet-safety";
 
 const KEY = "0x333333333333333333333333333333333333333333333333333333333333333";
-const ADDRESS = "0x1234";
+// The wallet's OpenZeppelin derivation, written out here rather than taken
+// from the loader: salt 0x0, calldata [publicKey], deployer 0.
+const ADDRESS = hash.calculateContractAddressFromHash(
+  "0x0",
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+  [ec.starkCurve.getStarkKey(KEY)],
+  0,
+);
+// What sncast derives for the same key when it picks a random salt.
+const RANDOM_SALT_ADDRESS = hash.calculateContractAddressFromHash(
+  "0x2dd9ec5fbad71bff",
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+  [ec.starkCurve.getStarkKey(KEY)],
+  0,
+);
 const ACK = "I_UNDERSTAND_THIS_WRITES_TO_MAINNET";
 const RPC = "https://rpc.example/mainnet?apikey=secret-key";
 
@@ -175,6 +191,37 @@ describe("local mainnet account loader", () => {
     }
   });
 
+  test("refuses an address the wallet would not derive from the key, before any chain read", async () => {
+    expect(walletOpenZeppelinAddress(KEY)).toBe(ADDRESS);
+    let reads = 0;
+    const counting: LocalMainnetProbe = {
+      chainId: () => {
+        reads += 1;
+        return Promise.resolve(STARKNET_NETWORKS.SN_MAIN.chainId);
+      },
+      classHash: () => {
+        reads += 1;
+        return Promise.resolve({ classHash: OPENZEPPELIN_ACCOUNT_CLASS_HASH, kind: "found" });
+      },
+    };
+    const loaded = await load(
+      {
+        BRAMBLE_MAINNET_E2E_ADDRESS: RANDOM_SALT_ADDRESS,
+        BRAMBLE_MAINNET_E2E_PRIVATE_KEY: KEY,
+        BRAMBLE_MAINNET_E2E_RPC_URL: RPC,
+      },
+      counting,
+    );
+    expect(loaded.kind).toBe("error");
+    if (loaded.kind === "error") {
+      expect(loaded.message).toContain("salt 0x0");
+      expect(loaded.message).toContain(ADDRESS);
+      expect(loaded.message).not.toContain(KEY);
+      expect(loaded.message).not.toContain("secret-key");
+    }
+    expect(reads).toBe(0);
+  });
+
   test("rejects a scalar at or above the Stark curve order", async () => {
     const over = `0x${STARK_CURVE_ORDER.toString(16)}`;
     const loaded = await load(
@@ -197,6 +244,7 @@ describe("local mainnet account loader", () => {
     const text = setupInstructions();
     expect(text).toContain(OPENZEPPELIN_ACCOUNT_CLASS_HASH);
     expect(text).toContain("sncast account deploy");
+    expect(text).toContain("--salt 0x0");
     expect(text).not.toContain(KEY);
   });
 
@@ -207,6 +255,7 @@ describe("local mainnet account loader", () => {
     expect(doc).toContain("bun run test:e2e:mainnet:setup");
     expect(doc).toContain(ACK);
     expect(doc).toContain("account deploy");
+    expect(doc).toContain("--salt 0x0");
     expect(doc).toContain("Swap");
   });
 });
