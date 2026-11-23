@@ -3,7 +3,7 @@
  * case records the build AVNU answered, the POST the service sent, and the handler's answer: the
  * review (per-call lines, flags, the route's minimum) or the refusal. An accepted build is then
  * executed (`wallet.swapExecute`) against a node that lands it, and the case records the calls
- * that reached the signer and the activity row filed for them.
+ * that reached the signer and the activity row and allowances filed for them.
  */
 import { avnuDirectRoute, avnuRouteCalldata } from "@bramble/testkit/avnu-route";
 import type { SwapCall } from "@bramble/transactions/avnu";
@@ -35,6 +35,10 @@ type BuildCase = {
 
 const ETH_STRK: SwapAsk = { amount: "0.01", buy: "STRK", sell: "ETH" };
 const SELL_HEX = `0x${SELL_AMOUNT.toString(16)}`;
+const MAX_U128 = 2n ** 128n - 1n;
+const MAX_U128_HEX = `0x${MAX_U128.toString(16)}`;
+// 2^128 - 1 wei, as the panel writes it.
+const MAX_U128_ETH = "340282366920938463463.374607431768211455";
 // The floor a 0.5% quote of 12.5 STRK implies: 12.5 × (10 000 − 50 − 1) / 10 000.
 const FLOOR = (BUY_AMOUNT * 9_949n) / 10_000n;
 
@@ -100,10 +104,6 @@ const CASES: readonly BuildCase[] = [
     }),
     routeCall,
   ]),
-  honest("the router spelled in upper-case hex", [
-    approve([ROUTER_ADDRESS.toUpperCase().replace("0X", "0x"), SELL_HEX, "0x0"]),
-    routeCall,
-  ]),
   {
     build: built([approveRouter, routeWith({ minBuyAmount: (BUY_AMOUNT * 9_899n) / 10_000n })]),
     name: "a 1% slippage",
@@ -115,6 +115,16 @@ const CASES: readonly BuildCase[] = [
     buyAmount: "11.234567",
     name: "a six-decimal buy over a split route",
     slippage: 0.01,
+  },
+  {
+    // The largest sell the policy admits (its approval's high limb must be zero) is the
+    // unlimited cut-off itself, so the review flags the approval it accepts.
+    ask: { ...ETH_STRK, amount: MAX_U128_ETH },
+    build: built([
+      approve([ROUTER_ADDRESS, MAX_U128_HEX, "0x0"]),
+      routeWith({ sellAmount: MAX_U128 }),
+    ]),
+    name: "a sell of 2^128 - 1 units, whose approval reads as unlimited",
   },
   // Refused by the build policy, in the order it judges.
   honest("an additive allowance", [
@@ -211,6 +221,10 @@ const CASES: readonly BuildCase[] = [
     { ...routeCall, contractAddress: "router" },
   ]),
   honest("an approval limb that is not a felt", [approve([ROUTER_ADDRESS, "", "0x0"]), routeCall]),
+  honest("an approval naming the router in upper-case hex", [
+    approve([ROUTER_ADDRESS.toUpperCase().replace("0X", "0x"), SELL_HEX, "0x0"]),
+    routeCall,
+  ]),
   honest("a call over the calldata cap", [
     approveRouter,
     { ...routeCall, calldata: Array.from({ length: 2001 }, () => "0x0") },
@@ -224,8 +238,8 @@ const CASES: readonly BuildCase[] = [
   },
 ];
 
-/** The submitted calls as plain records. */
-const plainCalls = (calls: unknown) => JSON.parse(JSON.stringify(calls)) as unknown;
+/** `value` as plain JSON records (the submitted calls, the allowance rows). */
+const plain = (calls: unknown) => JSON.parse(JSON.stringify(calls)) as unknown;
 
 /** Runs every build case through the real handler, executing the ones it prepares. */
 export const computeBuilds = async (): Promise<readonly object[]> => {
@@ -261,6 +275,7 @@ export const computeBuilds = async (): Promise<readonly object[]> => {
       type: "wallet.swapExecute",
     });
     const rows = await harness.activity.list();
+    const allowances = await harness.allowanceStore.list();
     out.push({
       ...record,
       activity: rows.map((row) => ({
@@ -269,9 +284,12 @@ export const computeBuilds = async (): Promise<readonly object[]> => {
         token: row.token,
         tokenAddress: row.tokenAddress,
       })),
+      allowances: allowances.map((row) =>
+        plain({ amount: row.amount, spender: row.spender, token: row.token }),
+      ),
       executed,
       response: { ok: true, swapPreparation: { flags, minBuyAmount, summaries } },
-      submitted: plainCalls(harness.submitted),
+      submitted: plain(harness.submitted),
     });
   }
   return out;

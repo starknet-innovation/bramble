@@ -11,7 +11,7 @@
  * - `build`: a quote, then a preparation against it: AVNU's build reply, the POST the service sent
  *   and the handler's answer. An accepted build carries the review (per-call lines, flags, the
  *   route's minimum) and is executed against a node that lands it, recording the calls that
- *   reached the signer and the activity row; a refused one carries the refusal, covering every
+ *   reached the signer, the activity row and the allowance filed; a refused one carries the refusal, covering every
  *   reason `buildPolicy` gives in its order, the build envelope, each call's grammar and the
  *   preparation's input rules;
  * - `floor`: `reviewedMinBuyAmount` over quotes and slippages, null where it states no floor.

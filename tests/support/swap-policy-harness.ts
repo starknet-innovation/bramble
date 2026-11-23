@@ -14,6 +14,7 @@
 import type { PriceService } from "@bramble/portfolio/prices";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -186,6 +187,7 @@ export const makeSwapHarness = (
     },
     store: createMemoryStore(),
   });
+  const allowanceStore = memoryAllowanceStore();
   const submitted: unknown[] = [];
   const swap: SwapService = services.swap ?? {
     async listTokens() {
@@ -209,6 +211,7 @@ export const makeSwapHarness = (
   };
   const handler = createMessageHandler(walletStub, testExtension, {
     activity,
+    allowanceStore,
     runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
@@ -222,7 +225,7 @@ export const makeSwapHarness = (
     session,
     swap,
   });
-  return { activity, handler, submitted };
+  return { activity, allowanceStore, handler, submitted };
 };
 
 /** Sends the reviewed wallet.swapPrepare for `build` and keeps what was submitted. */
