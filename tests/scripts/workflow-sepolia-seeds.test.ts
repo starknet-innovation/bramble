@@ -241,6 +241,18 @@ describe("Sepolia seed secret policy", () => {
       "\nenv:\n  SHELLOPTS: noexec\njobs:\n",
       ".github/workflows/nightly.yml must carry only its reviewed top-level keys",
     ],
+    [
+      "an added pull_request trigger",
+      "\n  workflow_dispatch:\n",
+      "\n  pull_request:\n  workflow_dispatch:\n",
+      ".github/workflows/nightly.yml must run only on its reviewed triggers",
+    ],
+    [
+      "a dropped schedule",
+      '  schedule:\n    # 03:00 UTC daily.\n    - cron: "0 3 * * *"\n',
+      "",
+      ".github/workflows/nightly.yml must run only on its reviewed triggers",
+    ],
   ] as const) {
     test(`${label} in a live step fails`, async () => {
       const sources = await readWorkflowSources();

@@ -12,8 +12,8 @@
  * keys, anchors, aliases, tags, merge keys or directives, and no scalar
  * another reader could type differently. Then each live step must decode to
  * exactly its pinned step, once, in the nightly job, and that job must run
- * one at a time. The workflow and the job may carry only their reviewed keys,
- * on its reviewed runner: an added `env` (`BASH_ENV`, `SHELLOPTS`, `PATH`),
+ * one at a time, on the workflow's reviewed triggers. The workflow and the job
+ * may carry only their reviewed keys, on its reviewed runner: an added `env` (`BASH_ENV`, `SHELLOPTS`, `PATH`),
  * `defaults`, `container` or `services` changes what the pinned steps run
  * without touching them. Earlier steps can still write `$GITHUB_ENV` or
  * `$GITHUB_PATH`; that stays a review matter.
@@ -44,6 +44,12 @@ const ONE_AT_A_TIME = { "cancel-in-progress": false, group: "sepolia-tx" };
 // either level (env, defaults, container, services) reaches the live steps.
 const ROOT_KEYS = ["jobs", "name", "on", "permissions"];
 const JOB_KEYS = ["concurrency", "if", "needs", "outputs", "permissions", "runs-on", "steps"];
+
+/**
+ * The workflow's reviewed triggers. An added `pull_request` or
+ * `pull_request_target` would run the live steps far more often than nightly.
+ */
+const TRIGGERS = ["schedule", "workflow_dispatch"];
 
 /** The nightly job's reviewed runner, compared as decoded values. */
 const RUNNER = ["codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}"];
@@ -100,6 +106,9 @@ export const sepoliaDocumentFailures = (
   }
   if (!onlyKeys(root, ROOT_KEYS)) {
     failures.push(`${path} must carry only its reviewed top-level keys`);
+  }
+  if (!isDeepStrictEqual(Object.keys(record(root["on"])).sort(), TRIGGERS)) {
+    failures.push(`${path} must run only on its reviewed triggers`);
   }
   if (!onlyKeys(job, JOB_KEYS) || !isDeepStrictEqual(job["runs-on"], RUNNER)) {
     failures.push(`${path} must run the ${JOB} job only with its reviewed keys and runner`);
