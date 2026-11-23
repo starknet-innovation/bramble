@@ -5,7 +5,8 @@
  * Usage: `bun scripts/fetch-previous-release.ts <out-dir> [X.Y.Z]`
  *
  * Without a version it picks the newest published (non-draft) `vX.Y.Z`
- * release strictly below `package.json`'s version. It downloads
+ * release at or below `package.json`'s version: the release live users run
+ * while a branch is unbumped, and the one before it once it is. It downloads
  * `bramble-<v>.zip` and its `.sha256` over public HTTPS, checks the
  * digest, unzips into `<out-dir>` (which must not exist yet), checks the
  * unpacked manifest carries that version, and prints `<out-dir>`. Any mismatch
@@ -37,8 +38,8 @@ const below = (a: readonly number[], b: readonly number[]): boolean => {
 };
 
 /**
- * The newest `vX.Y.Z` tag strictly below `current`, or `undefined` when none
- * is. Tags in any other shape are ignored, so a prerelease suffix never wins.
+ * The newest `vX.Y.Z` tag at or below `current`, or `undefined` when none is.
+ * Tags in any other shape are ignored, so a prerelease suffix never wins.
  * Pure. Throws if `current` is not `X.Y.Z`.
  */
 export const previousReleaseTag = (
@@ -50,7 +51,7 @@ export const previousReleaseTag = (
   let best: { tag: string; version: readonly number[] } | undefined;
   for (const tag of tags) {
     const version = SEMVER_TAG.test(tag) ? parts(tag.slice(1)) : undefined;
-    if (version && below(version, ceiling) && (!best || below(best.version, version))) {
+    if (version && !below(ceiling, version) && (!best || below(best.version, version))) {
       best = { tag, version };
     }
   }
@@ -86,7 +87,7 @@ const main = async (outArg: string | undefined, versionArg: string | undefined):
     ).json()) as { tag_name: string; draft: boolean }[];
     const tags = listed.filter((release) => !release.draft).map((release) => release.tag_name);
     tag = previousReleaseTag(tags, String(pkg.version));
-    if (!tag) throw new Error(`no release below ${String(pkg.version)}`);
+    if (!tag) throw new Error(`no release at or below ${String(pkg.version)}`);
   }
   const version = tag.slice(1);
   const zipName = `bramble-${version}.zip`;
