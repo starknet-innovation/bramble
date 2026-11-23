@@ -1,5 +1,6 @@
 package org.bramble.wallet
 
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import org.bramble.core.NetworkId
 import org.bramble.wallet.design.ThemeChoice
@@ -32,15 +33,18 @@ fun WalletStore.rpcOverride(): String = runCatching { walletCore.rpcOverride(net
 suspend fun WalletStore.saveRpcOverride(
     target: NetworkId,
     raw: String,
-): String? {
-    val ticket = session.ticket()
-    val saved = calls.work(ticket) { walletCore.setRpcOverride(target, raw) }
-    // The portfolio's scope holds the endpoint list it was entered with: a change to the network
-    // on screen enters it again, so no read goes to the old endpoints after the save.
-    if (target == network) {
-        portfolio.lock()
-        // The app's scope: leaving the Network screen must not cancel the reload after the lock.
-        appScope.launch { refreshBalances(ticket) }
-    }
-    return saved
-}
+): String? =
+    // The app's scope, for the write and what follows it: leaving the Network screen cancels the
+    // caller, and a cancel after the core stored the override must not skip the reload.
+    appScope
+        .async {
+            val ticket = session.ticket()
+            val saved = calls.work(ticket) { walletCore.setRpcOverride(target, raw) }
+            // The portfolio's scope holds the endpoint list it was entered with: a change to the
+            // network on screen enters it again, so no read goes to the old endpoints after the save.
+            if (target == network) {
+                portfolio.lock()
+                appScope.launch { refreshBalances(ticket) }
+            }
+            saved
+        }.await()
