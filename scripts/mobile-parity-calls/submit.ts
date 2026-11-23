@@ -26,6 +26,7 @@ import type { Call } from "starknet";
 import {
   type CapturedExchange,
   type CapturedSignature,
+  DEPLOY_ESTIMATE,
   INVOKE_ESTIMATE,
   type Injection,
   type MobileNetworkId,
@@ -131,6 +132,16 @@ const captureBatch = async (spec: BatchSpec) => {
   };
 };
 
+/** The node's re-estimate at submission: every INVOKE entry costs more than it did at review. */
+const feeRose: Injection = (method, params) => {
+  if (method !== "starknet_estimateFee") return undefined;
+  const request = (params?.["request"] ?? []) as readonly { readonly type: string }[];
+  const rose = { ...INVOKE_ESTIMATE, l2_gas_consumed: "0x48d280" };
+  return {
+    result: request.map((entry) => (entry.type === "DEPLOY_ACCOUNT" ? DEPLOY_ESTIMATE : rose)),
+  };
+};
+
 const SCENARIOS: readonly BatchSpec[] = [
   {
     name: "a multicall from a deployed account",
@@ -155,10 +166,14 @@ const SCENARIOS: readonly BatchSpec[] = [
     networkId: "SN_SEPOLIA",
     reviewState: { deployed: true, nonce: "0x5" },
     submitState: { deployed: true, nonce: "0x5" },
-    inject: (method) =>
-      method === "starknet_estimateFee"
-        ? { result: [{ ...INVOKE_ESTIMATE, l2_gas_consumed: "0x48d280" }] }
-        : undefined,
+    inject: feeRose,
+  },
+  {
+    name: "a multicall that deploys first whose fee rose past the reviewed one",
+    networkId: "SN_SEPOLIA",
+    reviewState: { deployed: false, nonce: "0x0" },
+    submitState: { deployed: false, nonce: "0x0" },
+    inject: feeRose,
   },
 ];
 
