@@ -32,7 +32,8 @@ multisig private balances that work on Mainnet, and fixes from user reports.
 ### Added
 - Simplified Chinese. Settings → Language follows the browser or picks a
   language. Review and signing lines are translated only from reviewed
-  references; a line without one shows in English (#930–#946, #996, #997).
+  references; a line without one shows in English (#930–#946, #996, #997,
+  #1011).
 - Connected sites lists the accounts each site can see. Disconnect one
   account or the whole site (#972, #987).
 - A Forgot password? guide on the unlock screen. It explains that the
