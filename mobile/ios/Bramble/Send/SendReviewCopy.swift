@@ -18,7 +18,15 @@ enum SendReviewCopy {
         /// The disclosure that reveals the full address in place (`fullAddressReveal`), so the
         /// reviewer can check it against the source they were given; nil for the amount.
         let reveal: Reveal?
+        /// Where a name-resolved recipient came from (`.send-review-source`); the detail is then
+        /// the full address, since the name alone does not carry what the reader must check.
+        var source: String?
     }
+
+    /// `.send-review-source` under a recipient resolved from a Starknet name.
+    static let resolvedSource = "Resolved from Starknet ID"
+    /// `NEW_RECIPIENT_WARNING`: a name resolved to an address no listed row has.
+    static let newRecipientWarning = "New recipient. Check the full address before you send."
 
     /// `details.address-reveal`: its summary line and the full address it opens to.
     struct Reveal: Equatable {
@@ -46,15 +54,27 @@ enum SendReviewCopy {
     private static let friFractionDigits: UInt8 = 6
 
     /// Who it leaves, who it reaches, how much. The recipient reads under the name of the row it
-    /// was picked from, else as its truncated address, with a control that copies it in full.
+    /// was picked from, else as its truncated address, with a control that copies it in full. One
+    /// resolved from a Starknet name shows the full address and where it came from instead.
     static func facts(
         sender: (name: String, address: String),
         recipient: (label: String?, address: String),
         amount: String,
-        symbol: String
+        symbol: String,
+        resolvedFromName: Bool = false
     ) -> [Fact] {
         let senderShort = shortAddress(sender.address)
         let recipientShort = shortAddress(recipient.address)
+        let toFact = Fact(
+            kind: .recipient,
+            label: SendCopy.toRowLabel,
+            value: recipient.label ?? recipientShort,
+            detail: resolvedFromName ? recipient.address : recipientShort,
+            copy: recipient.address,
+            reveal: resolvedFromName || recipient.address.isEmpty
+                ? nil : Reveal(label: SendCopy.showFullRecipient, address: recipient.address),
+            source: resolvedFromName ? resolvedSource : nil
+        )
         return [
             Fact(
                 kind: .sender,
@@ -64,15 +84,7 @@ enum SendReviewCopy {
                 copy: nil,
                 reveal: sender.address.isEmpty ? nil : Reveal(label: SendCopy.showFullSender, address: sender.address)
             ),
-            Fact(
-                kind: .recipient,
-                label: SendCopy.toRowLabel,
-                value: recipient.label ?? recipientShort,
-                detail: recipientShort,
-                copy: recipient.address,
-                reveal: recipient.address.isEmpty
-                    ? nil : Reveal(label: SendCopy.showFullRecipient, address: recipient.address)
-            ),
+            toFact,
             // Mobile has no fiat estimate in Send, so the amount always says so.
             Fact(
                 kind: .amount,
@@ -104,9 +116,10 @@ enum SendReviewCopy {
         return Cost(lines: [SendCopy.feePrefix + fee.display], failure: nil, shortfall: short)
     }
 
-    /// `reviewRisksHtml`: the risk flags, then the note that a first send also deploys the
-    /// account. Empty when there is nothing to warn about, and then no panel is shown.
-    static func risks(_ review: TransferReview) -> [String] {
+    /// `reviewRisksHtml`: the note that a name-resolved recipient is new, the risk flags, then the
+    /// note that a first send also deploys the account. Empty when there is nothing to warn about,
+    /// and then no panel is shown.
+    static func risks(_ review: TransferReview, newResolvedRecipient: Bool = false) -> [String] {
         let flags = review.flags.map { flag in
             switch flag {
             case .selfTransfer:
@@ -119,7 +132,8 @@ enum SendReviewCopy {
                 SendCopy.poisonedRecipient
             }
         }
-        return flags + (review.requiresDeployment ? [SendCopy.deployNote] : [])
+        return (newResolvedRecipient ? [newRecipientWarning] : []) + flags
+            + (review.requiresDeployment ? [SendCopy.deployNote] : [])
     }
 
     /// `sumFeeEstimates` then `formatFeeEstimate`: like units only; FRI reads as STRK.

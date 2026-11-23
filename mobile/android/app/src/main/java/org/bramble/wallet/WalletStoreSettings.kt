@@ -1,5 +1,7 @@
 package org.bramble.wallet
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import org.bramble.core.NetworkId
 import org.bramble.wallet.design.ThemeChoice
 
@@ -20,3 +22,29 @@ fun WalletStore.setTheme(choice: ThemeChoice) {
     theme = choice
     prefs.edit().putString(ThemeChoice.STORAGE_KEY, choice.stored).apply()
 }
+
+/** The selected network's RPC override, for the settings field; "" for the defaults or while locked. */
+fun WalletStore.rpcOverride(): String = runCatching { walletCore.rpcOverride(network) }.getOrNull().orEmpty()
+
+/**
+ * `setRpcOverride` for [target]: the core trims [raw], clears the override when it is empty, and
+ * refuses anything but a plain `https` URL (thrown as its `InvalidInput`). Returns what is stored.
+ */
+suspend fun WalletStore.saveRpcOverride(
+    target: NetworkId,
+    raw: String,
+): String? =
+    // The app's scope, for the write and what follows it: leaving the Network screen cancels the
+    // caller, and a cancel after the core stored the override must not skip the reload.
+    appScope
+        .async {
+            val ticket = session.ticket()
+            val saved = calls.work(ticket) { walletCore.setRpcOverride(target, raw) }
+            // The portfolio's scope holds the endpoint list it was entered with: a change to the
+            // network on screen enters it again, so no read goes to the old endpoints after the save.
+            if (target == network) {
+                portfolio.lock()
+                appScope.launch { refreshBalances(ticket) }
+            }
+            saved
+        }.await()

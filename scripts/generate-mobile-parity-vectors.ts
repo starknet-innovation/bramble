@@ -26,8 +26,15 @@ import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-pa
 import { ACTIVITY_PARITY_FIXTURE_PATH, renderActivityParity } from "./mobile-parity-activity";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
+import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
+import { renderStarkNameParity, STARK_NAME_PARITY_FIXTURE_PATH } from "./mobile-parity-stark-name";
 import { renderSwapParity, SWAP_PARITY_FIXTURE_PATH } from "./mobile-parity-swap";
-import { computeVaultParity, VAULT_PARITY_FIXTURE_PATH } from "./mobile-parity-vault";
+import {
+  computeImportedVaultParity,
+  computeVaultParity,
+  VAULT_IMPORTED_FIXTURE_PATH,
+  VAULT_PARITY_FIXTURE_PATH,
+} from "./mobile-parity-vault";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -97,10 +104,10 @@ if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...scanPaths]).exitCode
 }
 
 /** The committed vault seal, or `undefined` only when the fixture file is missing. */
-const readCommittedVaultSeal = async (): Promise<unknown> => {
+const readCommittedVaultSeal = async (path: string): Promise<unknown> => {
   let text: string;
   try {
-    text = await readFile(VAULT_PARITY_FIXTURE_PATH, "utf8");
+    text = await readFile(path, "utf8");
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
     throw error;
@@ -109,15 +116,24 @@ const readCommittedVaultSeal = async (): Promise<unknown> => {
 };
 
 // The v13 vault keeps its committed seal when the extension still opens it to the same payload.
-const committedVault = await readCommittedVaultSeal();
-await writeFile(
-  VAULT_PARITY_FIXTURE_PATH,
-  `${JSON.stringify(await computeVaultParity(committedVault), null, 2)}\n`,
-);
-console.log(`wrote ${VAULT_PARITY_FIXTURE_PATH}`);
+// So does the imported-key vault (P3).
+for (const [path, compute] of [
+  [VAULT_PARITY_FIXTURE_PATH, computeVaultParity],
+  [VAULT_IMPORTED_FIXTURE_PATH, computeImportedVaultParity],
+] as const) {
+  const vault = await compute(await readCommittedVaultSeal(path));
+  await writeFile(path, `${JSON.stringify(vault, null, 2)}\n`);
+  console.log(`wrote ${path}`);
+}
 
 await writeFile(ACTIVITY_PARITY_FIXTURE_PATH, await renderActivityParity());
 console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);
+
+// The RPC override rules (P4) and Starknet name lookups (P5), recomputed in full.
+await writeFile(SETTINGS_PARITY_FIXTURE_PATH, await renderSettingsParity());
+console.log(`wrote ${SETTINGS_PARITY_FIXTURE_PATH}`);
+await writeFile(STARK_NAME_PARITY_FIXTURE_PATH, await renderStarkNameParity());
+console.log(`wrote ${STARK_NAME_PARITY_FIXTURE_PATH}`);
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
