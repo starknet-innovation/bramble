@@ -293,7 +293,6 @@ private fun AddOptions(
     multisig: (() -> Unit)?,
     importExisting: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         FlowHeader("Add a new account", network = store.networkLabel, back = close)
         OptionCard(
@@ -302,7 +301,9 @@ private fun AddOptions(
             "Create the next account from this wallet’s recovery phrase.",
             enabled = !store.busy,
         ) {
-            scope.launch {
+            // The store's scope: closing the chooser mid-call must not skip the reload and toast
+            // after the core has added the account.
+            store.appScope.launch {
                 runCatching { store.addRegularAccount() }
                     .onSuccess { added() }
                     .onFailure(store::showError)
