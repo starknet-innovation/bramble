@@ -244,6 +244,7 @@ final class WalletStore {
             throw error
         }
         BiometricKeychain.delete()
+        GatewayAnalytics.shared.reset()
         lock()
         portfolio.deleteFiles()
         route = .onboarding

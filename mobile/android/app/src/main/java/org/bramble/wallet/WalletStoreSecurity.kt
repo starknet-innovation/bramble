@@ -54,6 +54,7 @@ suspend fun WalletStore.deleteWallet(password: String) {
     }
     vaultWritten = false
     biometrics.delete()
+    GatewayAnalytics.shared?.reset()
     lock()
     portfolio.deleteFiles()
 }

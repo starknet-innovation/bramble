@@ -12,6 +12,7 @@ import org.bramble.core.PrivacyStep
 import org.bramble.core.maxPrivacyResponseBytes
 import org.bramble.core.maxRpcResponseBytes
 import org.bramble.core.rpcVerifyChainId
+import org.bramble.wallet.GatewayAnalytics
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
@@ -106,6 +107,7 @@ class PrivacyDriver(
                 connection.instanceFollowRedirects = false
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")
+                GatewayAnalytics.apply(connection)
                 connection.outputStream.use { it.write(body) }
                 val status = connection.responseCode
                 val stream = if (status in HTTP_SUCCESS) connection.inputStream else connection.errorStream
@@ -168,6 +170,7 @@ class PrivacyDriver(
             connection.useCaches = false
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
+            GatewayAnalytics.apply(connection)
             connection.outputStream.use { it.write(body.toByteArray()) }
             check(connection.responseCode == HttpsURLConnection.HTTP_OK) { "http ${connection.responseCode}" }
             return connection.inputStream.use { bounded(it, maxRpcResponseBytes().toInt()) }.decodeToString()
