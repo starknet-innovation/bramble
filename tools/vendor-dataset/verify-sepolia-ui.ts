@@ -120,6 +120,8 @@ export type Session = {
   readonly close: () => Promise<void>;
   /** The side panel, on Sepolia. Navigated by every other helper, so re-read its state after one. */
   readonly panel: Page;
+  /** Opens Add account on a fresh side panel and clicks down through `kinds` (e.g. ["regular"]). */
+  readonly openAdd: (kinds: readonly string[]) => Promise<Page>;
   /**
    * On a scan page, ticks the rows at `addresses` and imports them. Returns
    * the addresses whose row was missing or not selectable, which stay unimported.
@@ -150,11 +152,19 @@ export type Session = {
   readonly phraseEntry: (mnemonic: string) => Promise<{ message: string; searchable: boolean }>;
 };
 
-const accountsOf = async (page: Page): Promise<string[]> => {
-  const status = await sendRuntimeMessage<{ accounts?: readonly { address: string }[] }>(page, {
-    type: "wallet.status",
-  });
-  return (status?.accounts ?? []).map(({ address }) => `0x${BigInt(address).toString(16)}`);
+/**
+ * The wallet's account addresses. `activeNetwork` keeps only the active
+ * network's: accounts are per network, and the onboarded mainnet account can
+ * share an address with a Sepolia one.
+ */
+const accountsOf = async (page: Page, activeNetwork = false): Promise<string[]> => {
+  const status = await sendRuntimeMessage<{
+    accounts?: readonly { address: string; networkId?: string }[];
+    networkId?: string;
+  }>(page, { type: "wallet.status" });
+  return (status?.accounts ?? [])
+    .filter((a) => !activeNetwork || (a.networkId ?? status?.networkId) === status?.networkId)
+    .map(({ address }) => `0x${BigInt(address).toString(16)}`);
 };
 
 /**
@@ -332,12 +342,14 @@ export async function openSession(
         .locator("input.select-check");
       if (!(await check.isChecked())) await check.check();
     }
-    await page.locator("#recover-accounts-button").click();
     const wanted = addresses.filter((a) => !missed.includes(a));
+    // Recover stays disabled with nothing ticked; clicking it would only time out.
+    if (wanted.length === 0) return missed;
+    await page.locator("#recover-accounts-button").click();
     await expect
       .poll(
         async () => {
-          const held = await accountsOf(panel);
+          const held = await accountsOf(panel, true);
           return wanted.every((a) => held.some((h) => same(h, a)));
         },
         { timeout: STEP_TIMEOUT_MS },
@@ -388,6 +400,7 @@ export async function openSession(
   return {
     close: () => loaded.close(),
     panel,
+    openAdd: open,
     importRows,
     ledger,
     scan,

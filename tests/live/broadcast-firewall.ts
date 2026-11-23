@@ -29,6 +29,11 @@ export type Broadcast = { readonly method: string; readonly senders: readonly st
 export type BroadcastFirewall = {
   /** Broadcasts refused so far, in arrival order. Empty means nothing was blocked. */
   readonly blocked: readonly Broadcast[];
+  /**
+   * Broadcasts let through so far, in arrival order. One here may have landed
+   * even if its response never came back.
+   */
+  readonly passed: readonly Broadcast[];
   /** JSON-RPC requests inspected so far; zero means the route never saw the wallet's traffic. */
   readonly inspected: () => number;
 };
@@ -235,6 +240,7 @@ export const installBroadcastFirewall = async (
     );
   }
   const blocked: Broadcast[] = [];
+  const passed: Broadcast[] = [];
   let inspected = 0;
   await context.route(/^https?:\/\//u, async (route) => {
     const request = route.request();
@@ -252,7 +258,8 @@ export const installBroadcastFirewall = async (
       await route.abort("blockedbyclient");
       return;
     }
+    passed.push(...broadcastsIn(body));
     await route.fallback();
   });
-  return { blocked, inspected: () => inspected };
+  return { blocked, passed, inspected: () => inspected };
 };
