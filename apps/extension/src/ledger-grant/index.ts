@@ -28,12 +28,13 @@ import {
   requestGrantTransport,
   supportedGrantTransportKinds,
 } from "@bramble/ledger-browser/grant-transport";
+import { browserLedgerLocks, watchLedgerPanelLock } from "@bramble/ledger-browser/panel-presence";
 import { type LedgerTransport, newStarknetClient } from "@bramble/ledger-browser/webhid";
 import {
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
 } from "@bramble/ledger-protocol/broker";
-import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { appendLedgerCause, LedgerRejection } from "@bramble/ledger-protocol/errors";
 import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
 import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import { applySkin } from "@bramble/ui-kit/skin";
@@ -43,6 +44,7 @@ import {
   type LedgerConnectionMethod,
   ledgerGrantDiagnostic,
   ledgerGrantFailure,
+  ledgerGrantRelease,
   transportForConnectionMethod,
 } from "./grant-flow";
 import { grantLocale, gt, setGrantLocale } from "./messages";
@@ -227,7 +229,7 @@ const render = (): void => {
   let activeTransportKind: LedgerTransportKind | null = null;
   let brokerChannel: BroadcastChannel | null = null;
   let stopBroker: (() => void) | null = null;
-  let closing = false;
+  let releasePromise: Promise<void> | null = null;
   const sessionId = ledgerBrokerSessionFromHash(globalThis.location.hash);
   const supportedTransports = supportedGrantTransportKinds();
 
@@ -246,25 +248,25 @@ const render = (): void => {
   };
   renderReadiness();
 
-  const release = async (): Promise<void> => {
-    if (closing) {
-      return;
-    }
-    closing = true;
-    stopBroker?.();
-    stopBroker = null;
-    brokerChannel?.close();
-    brokerChannel = null;
-    const transport = activeTransport;
-    const transportKind = activeTransportKind;
-    activeTransport = null;
-    activeTransportKind = null;
-    const cleanup =
-      transport && transportKind
-        ? closeGrantTransport(transport).catch(() => undefined)
-        : Promise.resolve();
-    await closeThisTab();
-    await cleanup;
+  const release = (): Promise<void> => {
+    releasePromise = ledgerGrantRelease(
+      releasePromise,
+      async () => {
+        stopBroker?.();
+        stopBroker = null;
+        brokerChannel?.close();
+        brokerChannel = null;
+        const transport = activeTransport;
+        const transportKind = activeTransportKind;
+        activeTransport = null;
+        activeTransportKind = null;
+        if (transport && transportKind) {
+          await closeGrantTransport(transport).catch(() => undefined);
+        }
+      },
+      () => closeThisTab(),
+    );
+    return releasePromise;
   };
 
   globalThis.addEventListener("pagehide", () => {
@@ -295,11 +297,12 @@ const render = (): void => {
 
   const showLedgerRejection = (error: LedgerRejection, transport: LedgerTransportKind): void => {
     const appIsClosed = error.code === "no-app-open";
+    const support = `Support code · ${diagnosticId(transport, appIsClosed ? "APP" : "DEVICE")}`;
     setStatus(
       appIsClosed ? gt("ledgerGrant.openStarknet") : gt("ledgerGrant.notReady"),
       ledgerMessageIn(error.code, grantLocale()),
       "danger",
-      `Support code · ${diagnosticId(transport, appIsClosed ? "APP" : "DEVICE")}`,
+      appendLedgerCause(support, error),
     );
     nextTransport = transport;
     resetButton(
@@ -314,13 +317,15 @@ const render = (): void => {
     diagnostics: LedgerGrantTransportDiagnostics,
   ): void => {
     const failure = ledgerGrantFailure(error);
+    const support = (stage: string): string =>
+      appendLedgerCause(ledgerGrantDiagnostic(diagnosticId(transport, stage), diagnostics), error);
     if (failure === "permission-dismissed") {
       nextTransport = transport;
       setStatus(
         gt("ledgerGrant.picker.title"),
         transport === "ble" ? gt("ledgerGrant.picker.ble") : gt("ledgerGrant.picker.cable"),
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
+        support("PICKER"),
       );
       resetButton(retryTransportLabel(transport));
       return;
@@ -329,7 +334,7 @@ const render = (): void => {
         gt("ledgerGrant.access.blocked"),
         gt("ledgerGrant.access.blockedCopy"),
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
+        support("POLICY"),
       );
     } else if (failure === "interface-unavailable" || failure === "transport-unavailable") {
       const alternate = alternateLedgerTransport(transport, supported);
@@ -340,7 +345,7 @@ const render = (): void => {
           ? gt("ledgerGrant.interface.alternate", { transport: transportName(alternate) })
           : gt("ledgerGrant.interface.retry"),
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
+        support("INTERFACE"),
       );
       resetButton(
         alternate
@@ -353,7 +358,7 @@ const render = (): void => {
         gt("ledgerGrant.failed.title"),
         gt("ledgerGrant.failed.copy"),
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "TRANSPORT"), diagnostics),
+        support("TRANSPORT"),
       );
     }
     nextTransport = transport;
@@ -469,6 +474,13 @@ const render = (): void => {
   cancel.addEventListener("click", () => {
     void release();
   });
+
+  // Let go of the device while the shared lock is still held, so a reconnect
+  // can tell this tab is ours until the Ledger is free.
+  const panelLocks = sessionId ? browserLedgerLocks() : null;
+  if (sessionId && panelLocks) {
+    watchLedgerPanelLock(panelLocks, sessionId, () => release()).catch(() => undefined);
+  }
 
   if (!sessionId) {
     button.disabled = true;

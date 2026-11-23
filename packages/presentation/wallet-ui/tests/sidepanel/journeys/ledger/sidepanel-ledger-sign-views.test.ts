@@ -72,6 +72,13 @@ describe("ledgerSignScreen", () => {
     expect(html).toContain("You may have rejected the request, or Blind signing may be off.");
     expect(html).toContain("data-ledger-retry");
     expect(html).toContain("data-ledger-cancel");
+    const withCode = render({
+      code: "unexpected-device-error",
+      kind: "error",
+      message: "x",
+      supportCode: "Support code · unexpected-device-error · InvalidStateError",
+    });
+    expect(withCode).toContain("Support code · unexpected-device-error · InvalidStateError");
     expect(html).not.toContain('data-liquid-dots="ledger"');
   });
 

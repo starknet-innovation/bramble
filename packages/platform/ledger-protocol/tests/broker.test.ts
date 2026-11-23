@@ -122,5 +122,36 @@ describe("isLedgerBrokerResponse", () => {
     ).toBe(false);
     expect(isLedgerBrokerResponse({ id: 1, kind: "response", ok: true })).toBe(false);
     expect(isLedgerBrokerResponse({ extra: true, kind: "ready" })).toBe(false);
+    expect(
+      isLedgerBrokerResponse({
+        cause: "Unable to claim interface.",
+        error: "device-busy",
+        id: 3,
+        kind: "response",
+        ok: false,
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts a class-name cause and rejects an extra field beside it", () => {
+    expect(
+      isLedgerBrokerResponse({
+        cause: "TransportInterfaceNotAvailable",
+        error: "device-busy",
+        id: 4,
+        kind: "response",
+        ok: false,
+      }),
+    ).toBe(true);
+    expect(
+      isLedgerBrokerResponse({
+        cause: "NetworkError",
+        error: "device-busy",
+        extra: true,
+        id: 4,
+        kind: "response",
+        ok: false,
+      }),
+    ).toBe(false);
   });
 });
