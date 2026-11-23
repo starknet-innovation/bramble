@@ -46,8 +46,7 @@ agent will ask for it.
 
 ## Dashboard fields
 
-- **Privacy policy URL:** publish `docs/chrome-web-store/PRIVACY.md` at a stable HTTPS URL and enter
-  that exact URL in the designated dashboard field.
+- **Privacy policy URL:** `https://bramble.fi/privacy`
 - **Homepage:** `https://github.com/starknet-innovation/bramble`
 - **Support:** GitHub issues for non-sensitive defects; GitHub private vulnerability reporting for
   security or sensitive reports.
