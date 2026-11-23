@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.bramble.core.AccountRecord
+import org.bramble.core.DisplayCurrency
 import org.bramble.core.NetworkInfo
+import org.bramble.core.PriceBook
 import org.bramble.core.ReviewFlag
 import org.bramble.core.SendException
 import org.bramble.core.SendFailure
@@ -42,6 +44,11 @@ class SendFlowModel(
     private val trackedTokens: List<String> = emptyList(),
     /** How each plan step's bytes move: the store's chain transport (a fixture node in tests). */
     private val transport: RpcPost = RpcClient.https,
+    /**
+     * The wallet's price cache and display currency, which price the send's activity record as it
+     * is written (`withSubmittedPrice`); null records it without a price.
+     */
+    private val pricing: Pair<PriceBook, DisplayCurrency>? = null,
 ) {
     /** The screen the journey shows, in the extension's order. */
     enum class Stage {
@@ -186,6 +193,8 @@ class SendFlowModel(
             else -> {
                 dropPlan()
                 val plan = prepare(to) ?: return
+                // Before Confirm: the core reads the cached, fresh price only when it writes the record.
+                pricing?.let { (prices, currency) -> plan.priceWith(prices, currency) }
                 hooks.track(plan)
                 val driver = SendDriver(plan, network, transport).also { this.driver = it }
                 stage = Stage.REVIEWING

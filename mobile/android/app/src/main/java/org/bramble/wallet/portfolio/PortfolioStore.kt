@@ -33,7 +33,6 @@ import org.bramble.core.TokenConfig
 import org.bramble.core.TokenPreferences
 import org.bramble.core.TrackedToken
 import org.bramble.core.UnifiedBalance
-import org.bramble.core.activityGroups
 import org.bramble.core.balanceFailureCopy
 import org.bramble.core.networkDataIssue
 import org.bramble.core.portfolioHero
@@ -62,7 +61,8 @@ class PortfolioStore(
      * lane off, and answers false while locked.
      */
     private val explorerAllowed: (NetworkId, TokenPreferences) -> Boolean,
-    private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
+    /** Epoch milliseconds, as JavaScript's `Date.now()`. */
+    internal val clock: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
     /**
      * The account a portfolio is read for.
@@ -115,16 +115,24 @@ class PortfolioStore(
     var activityView by mutableStateOf<ActivityView?>(null)
         private set
 
-    /** [activityView]'s entries grouped by UTC day, as the core renders the rows (no fiat figure). */
-    var groups by mutableStateOf(emptyList<ActivityDayGroup>())
-        private set
+    /**
+     * What the Activity screen shows: the feed under the person's filter, which resets on a scope
+     * change or lock, as the extension's view state does.
+     */
+    var feed by mutableStateOf(ActivityFeedState())
+        internal set
+
+    /** [feed]'s rows grouped by UTC day (one untitled group for the amount sort), as the core renders them. */
+    val groups: List<ActivityDayGroup> get() = feed.groups
 
     /**
      * The stored entry behind each row of [groups], in the same shape. A row cannot be found by its
      * hash: a swap's legs are separate entries that share one.
      */
-    var groupEntries by mutableStateOf(emptyList<List<ActivityEntry>>())
-        private set
+    val groupEntries: List<List<ActivityEntry>> get() = feed.entries
+
+    /** The scope's whole feed: every row, not the filtered view. */
+    val activityEntries: List<ActivityEntry> get() = if (scope != null) activityView?.entries.orEmpty() else emptyList()
 
     /** True while an Activity history read is in flight; the Activity header shows a spinner. */
     var historyLoading by mutableStateOf(false)
@@ -203,7 +211,11 @@ class PortfolioStore(
         val id = account.id
         val next = Scope(id, account.address, network)
         if (scope != next) {
+            // The names the search resolves belong to the network's address book, not the scope,
+            // and the screen sends them only when they change: they outlive the reset.
+            val contacts = feed.contacts
             lock()
+            feed = ActivityFeedState(contacts = contacts)
             scope = next
         }
         (snapshots.plan(id, network.network, clock(), true, false) as? BalancePlan.Serve)?.let { balances = it.view }
@@ -319,8 +331,7 @@ class PortfolioStore(
         privacyState = null
         hero = PortfolioHero(null, null, null)
         activityView = null
-        groups = emptyList()
-        groupEntries = emptyList()
+        feed = ActivityFeedState()
         historyLoading = false
     }
 
@@ -370,11 +381,7 @@ class PortfolioStore(
                 emptyList()
             }
         hero = portfolioHero(home?.let { unified.map { it.balance } }, view, scope != null)
-        val entries = if (current != null) activityView?.entries.orEmpty() else emptyList()
-        groups = if (entries.isEmpty()) emptyList() else activityGroups(entries, tracked.map { it.token }, clock())
-        // `activity_groups` builds one row per entry, in order, and only splits them by day.
-        var taken = 0
-        groupEntries = groups.map { group -> entries.drop(taken).take(group.rows.size).also { taken += it.size } }
+        refilter()
     }
 }
 

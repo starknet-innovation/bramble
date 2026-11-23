@@ -1,4 +1,5 @@
 import BrambleCore
+import Foundation
 
 /// The Activity feed (`activity-ops.ts handleActivity` over `createExplorerFirstHistory`): the saved
 /// log first, then — when a read is due or forced — Starkscan when the explorer lane is permitted,
@@ -38,25 +39,61 @@ extension PortfolioStore {
         recomputeGroups()
     }
 
-    /// The day groups the Activity screen renders, and the entry behind each row. The tracked
-    /// tokens resolve each row's token mark; rows carry no fiat figure, so prices are not an input.
+    /// The day groups the Activity screen renders, and the entry behind each row, under the
+    /// current filter and contacts. The tracked tokens resolve each row's token mark and the token
+    /// filter; rows carry no fiat figure from today's prices, so prices are not an input.
     func recomputeGroups() {
-        guard let scope, let view = activityView else {
-            groups = []
-            groupEntries = []
-            return
-        }
-        groups = activityGroups(
-            entries: view.entries,
-            tracked: preferences.tracked(network: scope.network.network).map(\.token),
+        refilter()
+    }
+
+    /// Rebuilds `feed` under `filter` (by default the one it holds): after a read, or when the
+    /// person changes the filter.
+    func refilter(_ filter: ActivityFilter? = nil) {
+        rebuildFeed(filter: filter ?? feed.filter, contacts: feed.contacts)
+    }
+
+    /// Rebuilds `feed` when the names the search resolves changed.
+    func refilter(contacts: [ActivityContact]) {
+        guard contacts != feed.contacts else { return }
+        rebuildFeed(filter: feed.filter, contacts: contacts)
+    }
+
+    private func rebuildFeed(filter: ActivityFilter, contacts: [ActivityContact]) {
+        feed = ActivityFeedState(
+            entries: activityEntries,
+            filter: filter,
+            tracked: scope.map { preferences.tracked(network: $0.network.network).map(\.token) } ?? [],
+            contacts: contacts,
             nowMs: clock()
         )
-        // `activity_groups` builds one row per entry, in order, and only splits them by day.
-        var rest = view.entries[...]
-        groupEntries = groups.map { group in
-            defer { rest = rest.dropFirst(group.rows.count) }
-            return Array(rest.prefix(group.rows.count))
+    }
+
+    /// The scope's whole feed: every row, not the filtered view.
+    var activityEntries: [ActivityEntry] { scope == nil ? [] : activityView?.entries ?? [] }
+
+    /// Writes the scope's whole feed (`activityCsv`) to a temporary file named
+    /// `activityCsvFileName()` for the share sheet, replacing the last export; nil when there is
+    /// nothing to export or the file cannot be written.
+    func activityCsvFile() -> URL? {
+        let entries = activityEntries
+        guard !entries.isEmpty else { return nil }
+        let url = Self.activityCsvURL
+        do {
+            try Data(activityCsv(entries: entries).utf8).write(to: url, options: [.atomic, .completeFileProtection])
+        } catch {
+            return nil
         }
+        return url
+    }
+
+    /// Removes the export, which holds the account's whole history: once the share sheet closes,
+    /// and with the wallet.
+    static func removeActivityCsvFile() {
+        try? FileManager.default.removeItem(at: activityCsvURL)
+    }
+
+    private static var activityCsvURL: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(activityCsvFileName())
     }
 
     // The explorer lane: an answering page is authoritative; any failure falls through silently.

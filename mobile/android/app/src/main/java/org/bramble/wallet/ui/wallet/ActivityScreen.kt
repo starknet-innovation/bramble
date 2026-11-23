@@ -40,7 +40,9 @@ import org.bramble.core.ActivityEntry
 import org.bramble.core.ActivityRow
 import org.bramble.core.ActivityTone
 import org.bramble.core.activityEmptyCopy
+import org.bramble.core.activityFeeText
 import org.bramble.core.activityUnavailableNotice
+import org.bramble.core.activityValueText
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleControl
 import org.bramble.wallet.design.BrambleIcon
@@ -57,6 +59,7 @@ import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.networkName
+import org.bramble.wallet.portfolio.refilter
 import org.bramble.wallet.refreshSendState
 import org.bramble.wallet.send.SendCopy
 import org.bramble.wallet.ui.CopyButton
@@ -69,13 +72,19 @@ private const val ACTIVITY_POLL_MS = 60_000L
  * for the active account and network, read from the core's one activity store (submitted
  * transactions and on-chain history, grouped by UTC day). Opening the tab reads history when due
  * and settles pending records; the refresh control forces a read; while visible the feed re-checks
- * every 60 s. Export CSV is out of scope, so no control for it is shown.
+ * every 60 s. Above the feed: the search, the filters and the sort ([ActivityToolbar]), and the
+ * counterparty summary while a search resolves one party; Export CSV shares the whole feed.
  */
 @Composable
 fun ActivityScreen(store: WalletStore) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     val portfolio = store.portfolio
+    val contacts = store.activityContacts()
+    LaunchedEffect(portfolio.scope?.accountId) { store.coordination.refresh() }
+    // Keyed on the scope too: a switch locks the portfolio (dropping the feed's names) before it
+    // loads, and the names themselves are often unchanged.
+    LaunchedEffect(portfolio.scope, contacts) { portfolio.refilter(contacts = contacts) }
     LaunchedEffect(portfolio.scope?.accountId) {
         while (true) {
             portfolio.refreshActivity(force = false)
@@ -109,11 +118,25 @@ fun ActivityScreen(store: WalletStore) {
                     scope.launch { portfolio.refreshActivity(force = true) }
                 }
             }
+            ExportCsvButton(store)
         }
         if (unavailable) StatusLine(activityUnavailableNotice())
-        ActivityFeed(store, portfolio.groups, portfolio.groupEntries, unavailable)
+        val feed = portfolio.feed
+        if (feed.total > 0) {
+            ActivityToolbar(store)
+            PartySummary(feed)
+        }
+        if (feed.hasNoMatches) {
+            StatusLine(NO_MATCHES)
+        } else {
+            ActivityFeed(store, feed.groups, feed.entries, unavailable)
+        }
+        feed.result?.let { StatusLine(it) }
     }
 }
+
+/** `#activity-no-matches`: the filter keeps none of the feed's rows. */
+private const val NO_MATCHES = "No matching transactions."
 
 /**
  * The day groups under their headings, or the core's empty copy when there is nothing yet.
@@ -143,12 +166,15 @@ internal fun ActivityFeed(
     }
     groups.forEachIndexed { index, group ->
         val records = entries.getOrNull(index).orEmpty()
-        Text(
-            group.heading,
-            color = skin.muted,
-            style = textStyle(BrambleTypeScale.body, BrambleWeight.medium),
-            modifier = Modifier.semantics { heading() },
-        )
+        // The amount sort's one group is untitled, as the extension lists it.
+        if (group.heading.isNotEmpty()) {
+            Text(
+                group.heading,
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.body, BrambleWeight.medium),
+                modifier = Modifier.semantics { heading() },
+            )
+        }
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
             group.rows.forEachIndexed { at, row -> ActivityRowItem(store, row, records.getOrNull(at)) }
         }
@@ -160,8 +186,9 @@ internal fun ActivityFeed(
  * tone the status), the heading that joins verb and amount, the truncated hash (a link to the
  * explorer in the system browser when there is one) with its copy control, the status word for a
  * row that is not accepted, the token mark, and the disclosure chevron. The expansion: the
- * counterparty (or the Detail fact), the record's Network and Token contract, then Submitted and
- * Status. No fiat figure: a value from today's price is not what the transaction was worth.
+ * counterparty (or the Detail fact), the record's Value at submission, Network fee, Network and
+ * Token contract, then Submitted and Status. The only fiat figure is the one priced when the send
+ * was submitted: a value from today's price is not what the transaction was worth.
  */
 @Composable
 private fun ActivityRowItem(
@@ -262,9 +289,9 @@ private fun ActivityHash(
 
 /**
  * The expansion's facts: the counterparty (its role, the 6…4 address and a copy control carrying
- * the full one), or the Detail fact; the network and token contract of [entry], the stored
- * record the row was built from (`activityRecordFacts` in `activity-detail.ts`); then Submitted
- * and Status. Each only when recorded.
+ * the full one), or the Detail fact; the record facts ([recordFacts]) and token contract of
+ * [entry], the stored record the row was built from (`activityRecordFacts` in
+ * `activity-detail.ts`); then Submitted and Status. Each only when recorded.
  */
 @Composable
 private fun ActivityFacts(
@@ -285,8 +312,8 @@ private fun ActivityFacts(
         } else {
             row.detail?.let { ActivityFact(DETAIL_LABEL, it) }
         }
-        val network = entry?.let { networkName(it.network) }.orEmpty()
-        if (network.isNotEmpty()) ActivityFact(NETWORK_LABEL, network)
+        val facts = entry?.let { recordFacts(it, networkName(it.network)) }.orEmpty()
+        facts.forEach { (label, value) -> ActivityFact(label, value) }
         entry?.tokenAddress?.let { contract ->
             ActivityFact(TOKEN_CONTRACT_LABEL, contract, mono = true) {
                 CopyButton(store, contract, COPY_TOKEN_CONTRACT_LABEL)
@@ -296,6 +323,21 @@ private fun ActivityFacts(
         row.statusHint?.let { ActivityFact(STATUS_LABEL, it) }
     }
 }
+
+/**
+ * `activityRecordFacts` up to the token contract, in its order: the value at submission
+ * (`activityValueText`, at the price captured when it was sent), the network fee
+ * (`activityFeeText`, the receipt's), and the network, each only when [entry] holds it.
+ */
+internal fun recordFacts(
+    entry: ActivityEntry,
+    network: String,
+): List<Pair<String, String>> =
+    listOfNotNull(
+        activityValueText(entry)?.let { VALUE_AT_SUBMISSION_LABEL to it },
+        activityFeeText(entry)?.let { NETWORK_FEE_LABEL to it },
+        network.takeIf { it.isNotEmpty() }?.let { NETWORK_LABEL to it },
+    )
 
 /** One `dt`/`dd` pair of the expansion, with an optional trailing control. */
 @Composable
@@ -323,6 +365,8 @@ private fun ActivityFact(
 
 /** The expansion's fixed fact labels (`transactionRow`'s `dt`s). */
 private const val DETAIL_LABEL = "Detail"
+private const val VALUE_AT_SUBMISSION_LABEL = "Value at submission"
+private const val NETWORK_FEE_LABEL = "Network fee"
 private const val NETWORK_LABEL = "Network"
 private const val TOKEN_CONTRACT_LABEL = "Token contract"
 private const val COPY_TOKEN_CONTRACT_LABEL = "Copy token contract address"

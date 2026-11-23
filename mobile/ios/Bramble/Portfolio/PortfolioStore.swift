@@ -56,10 +56,14 @@ final class PortfolioStore {
     private(set) var currency: DisplayCurrency
     private(set) var tracked: [TrackedToken] = []
     var activityView: ActivityView?
-    var groups: [ActivityDayGroup] = []
+    /// What the Activity screen shows: the feed under the person's filter, which resets on a scope
+    /// change or lock, as the extension's view state does.
+    var feed = ActivityFeedState()
+    /// `feed`'s rows grouped by UTC day (one untitled group for the amount sort).
+    var groups: [ActivityDayGroup] { feed.groups }
     /// The stored entry behind each row of `groups`, in the same shape. A row cannot be found by
     /// its hash: a swap's legs are separate entries that share one.
-    var groupEntries: [[ActivityEntry]] = []
+    var groupEntries: [[ActivityEntry]] { feed.entries }
     var historyLoading = false
     /// Bumped on every scope change and on lock; in-flight results compare against it.
     var generation = 0
@@ -113,7 +117,11 @@ final class PortfolioStore {
         let accountId = account.id
         let next = Scope(accountId: accountId, address: account.address, network: network)
         if scope != next {
+            // The names the search resolves belong to the network's address book, not the scope,
+            // and the screen sends them only when they change: they outlive the reset.
+            let contacts = feed.contacts
             clearView()
+            feed.contacts = contacts
             scope = next
         }
         tracked = preferences.tracked(network: network.network)
@@ -238,6 +246,7 @@ final class PortfolioStore {
     func lock() {
         clearView()
         scope = nil
+        Self.removeActivityCsvFile()
     }
 
     /// Re-reads the scope's activity from the core's log (after the send journey recorded or
@@ -253,6 +262,7 @@ final class PortfolioStore {
     func deleteFiles() {
         lock()
         files.removeAll()
+        Self.removeActivityCsvFile()
         preferences = TokenPreferences(persisted: nil)
         prices = PriceBook(persisted: nil)
         snapshots = BalanceSnapshots(persisted: nil)
@@ -320,8 +330,7 @@ final class PortfolioStore {
         hero = PortfolioHero(totalText: nil, totalValue: nil, delta: nil)
         tracked = []
         activityView = nil
-        groups = []
-        groupEntries = []
+        feed = ActivityFeedState()
         historyLoading = false
     }
 }
