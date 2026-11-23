@@ -36,6 +36,7 @@ struct URLSessionRpcTransport: RpcTransport {
     }
 
     func post(_ body: String, to url: URL, write _: Bool, maxBytes: UInt64) async throws -> String {
+        let started = ContinuousClock.now
         let outcome = await http.perform(HttpRequest(
             method: .post,
             url: url.absoluteString,
@@ -44,6 +45,7 @@ struct URLSessionRpcTransport: RpcTransport {
             maxBodyBytes: maxBytes,
             deadlineMs: rpcLimits().deadlineMs
         ))
+        ReliabilityDiagnostics.shared.recordRpc(url, outcome, elapsed: started.duration(to: .now))
         guard outcome.status == Self.httpOK else { throw RpcTransportFailure.unreachable }
         guard let data = outcome.body else { throw RpcTransportFailure.tooLarge }
         return String(decoding: data, as: UTF8.self)

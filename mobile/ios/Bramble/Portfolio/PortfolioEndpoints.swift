@@ -26,6 +26,7 @@ struct PortfolioEndpoints: Sendable {
 
     /// POSTs one call and reports what came back; the core classifies it.
     func send(_ call: RpcRequest, to url: URL) async -> RpcReply {
+        let started = ContinuousClock.now
         let outcome = await transport.perform(HttpRequest(
             method: .post,
             url: url.absoluteString,
@@ -34,6 +35,7 @@ struct PortfolioEndpoints: Sendable {
             maxBodyBytes: call.maxResponseBytes,
             deadlineMs: limits.deadlineMs
         ))
+        ReliabilityDiagnostics.shared.recordRpc(url, outcome, elapsed: started.duration(to: .now))
         return RpcReply(
             id: call.id,
             status: outcome.status,

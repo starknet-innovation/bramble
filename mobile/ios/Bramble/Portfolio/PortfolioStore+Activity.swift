@@ -106,15 +106,19 @@ extension PortfolioStore {
             explorerAllowed: explorerAllowed(net, preferences),
             nowMs: now
         ) else { return nil }
+        let started = ContinuousClock.now
         let outcome = await transport.perform(request)
+        let elapsed = started.duration(to: .now)
         guard generation == self.generation else { return nil }
-        return activity.starkscanApply(
+        let view = activity.starkscanApply(
             accountId: scope.accountId,
             network: net,
             tracked: tokens,
             outcome: outcome,
             nowMs: now
         )
+        ReliabilityDiagnostics.shared.recordExplorer(outcome, applied: view != nil, elapsed: elapsed)
+        return view
     }
 
     // The RPC scan, replayed from the start on the next verified endpoint after a transport
