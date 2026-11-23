@@ -216,14 +216,6 @@ jobs:
           retention-days: 7
           overwrite: true # a re-run attempt reuses the name
           if-no-files-found: ignore
-      # Early warning: the suite on the next Chromium (tests/e2e/chrome-beta.ts). Never
-      # fails the job or opens the issue; skipped on a branch that predates it.
-      - name: Full E2E on next Chromium (early warning)
-        id: e2e_next
-        if: hashFiles('tests/e2e/chrome-beta.ts') != ''
-        continue-on-error: true
-        env: { BRAMBLE_E2E_CHANNEL: chrome-for-testing-beta }
-        run: bun run test:e2e:install:beta && bun run test:e2e --reporter=list
       - name: Deterministic security property suite
         id: properties
         continue-on-error: true
@@ -321,6 +313,14 @@ jobs:
           bun tools/vendor-dataset/verify-sepolia-deploys.ts || status=1
           exit "$status"
 
+      # Early warning (tests/e2e/chrome-beta.ts): last and capped, so no blocking gate waits on it.
+      - name: Full E2E on next Chromium (early warning)
+        id: e2e_next
+        if: hashFiles('tests/e2e/chrome-beta.ts') != ''
+        continue-on-error: true
+        timeout-minutes: 60
+        env: { BRAMBLE_E2E_CHANNEL: chrome-for-testing-beta }
+        run: bun run test:e2e:install:beta && bun run test:e2e --reporter=list
       - name: Fail the job if any gate failed
         if: always()
         env:
