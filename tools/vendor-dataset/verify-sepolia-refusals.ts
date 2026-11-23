@@ -63,11 +63,13 @@ const refusal = async (
     }
     if (noticed) message = `notice shown but Send enabled; ${message}`;
   }
+  const moved = (await nonceOf(address)) !== nonce;
+  // Counted after the last await, so a broadcast that lands late still shows.
   if (firewall.blocked.length > blocked) {
     const what = "the firewall blocked a broadcast";
     message = broadcasts ? `${message} · ${what}` : `${what} · ${message}`;
   }
-  if ((await nonceOf(address)) !== nonce) throw new Error("the nonce moved: something was sent");
+  if (moved) throw new Error("the nonce moved: something was sent");
   return { message: redact(message) };
 };
 
