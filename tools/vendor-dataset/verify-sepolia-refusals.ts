@@ -86,6 +86,7 @@ const group = async (
   const addresses = cards.map((card) => addressOf(card.id));
   let missed: readonly string[] = addresses;
   let why = "not importable from the scan";
+  const blocked = firewall.blocked.length;
   // The public node sometimes stops a scan ("temporarily unavailable"); one
   // more try after a pause, since these imports come after a long run.
   for (let tries = 0; tries < 2 && missed.length > 0; tries += 1) {
@@ -98,8 +99,13 @@ const group = async (
       console.log(`   ${why.slice(0, 200)}`);
     }
   }
+  // refusal() counts only from its own start, so a broadcast tried while
+  // scanning or importing is caught here and fails the whole group.
+  const importBroadcast = firewall.blocked.length > blocked;
   for (const card of cards) {
     await attempt([card], async () => {
+      if (importBroadcast)
+        throw new Error("the firewall blocked a broadcast during scan or import");
       if (missed.includes(addressOf(card.id))) throw new Error(why);
       return [await refusal(session, firewall, addressOf(card.id), broadcasts)];
     });
