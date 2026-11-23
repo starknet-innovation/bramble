@@ -65,10 +65,10 @@ a search that matches nothing shows "No matching recipient.".
 - **Address book.** The heading "Address book" over the saved contacts on this network. A typed
   address that validates and is not already listed also offers "Save", which opens the address
   book with the address filled in. There is no address-book empty state.
-- **Accounts under their folders.** The wallet's accounts on the network, filed as the account
-  drawer files them: the folder's glyph, name and account count, then its rows; accounts in no
-  folder sit under "My accounts"; empty folders are not listed. The sending account's own row is
-  listed too, marked "Current".
+- **Accounts under their folders.** The wallet's visible accounts on the network (hidden ones out,
+  accounts.md §2.4a), filed as the drawer files them: the folder's glyph, name and account count,
+  then its rows; accounts in no folder sit under "My accounts"; empty folders are not listed. The
+  sending account's own row is listed too (unless hidden), marked "Current".
 - **Picking a recipient.** A row sends to its address and carries its name to the review as the
   recipient label. Typed text never supplies a label, but a typed address that is already listed
   reads as the row it matches (compared as canonical felts).
