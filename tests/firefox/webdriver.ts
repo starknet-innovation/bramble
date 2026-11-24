@@ -123,12 +123,21 @@ export const openSession = async (driverUrl: string, capabilities: unknown): Pro
     },
     call,
     // Retried like Playwright's actionability wait: a screen still animating in
-    // reports "not interactable" for a moment.
+    // reports "not interactable" for a moment. Any other error is final: the
+    // click may have landed (a tab closing itself, a checkbox already toggled),
+    // and clicking again would undo or misreport it.
     click: async (element) => {
+      let failure: unknown;
       await waitFor("a clickable element", async () => {
-        await call("POST", `/element/${element[ELEMENT_KEY]}/click`, {});
+        try {
+          await call("POST", `/element/${element[ELEMENT_KEY]}/click`, {});
+        } catch (error) {
+          if (/element (not interactable|click intercepted)/.test(String(error))) return undefined;
+          failure = error;
+        }
         return true;
       });
+      if (failure !== undefined) throw failure;
     },
     css: (selector, timeoutMs) =>
       waitFor(`"${selector}"`, () => displayed("css selector", selector), timeoutMs),

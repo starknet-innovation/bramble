@@ -22,7 +22,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -152,6 +152,20 @@ const main = async (): Promise<void> => {
   let logFd: number | undefined;
   let driverGroup: number | undefined;
   let session: Session | undefined;
+  // A step timeout kills this process before `finally` runs: take geckodriver,
+  // Firefox, and the work dir (throwaway TLS key) down with it.
+  const abort = (signal: NodeJS.Signals): never => {
+    if (driverGroup !== undefined) {
+      try {
+        process.kill(-driverGroup, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }
+    rmSync(work, { force: true, recursive: true });
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGTERM", abort).once("SIGINT", abort);
   try {
     const network = await startOfflineNetwork(work);
     closeNetwork = network.close;
