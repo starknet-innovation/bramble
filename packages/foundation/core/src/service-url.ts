@@ -77,7 +77,10 @@ const REDACTION_BREAK = /[\s"<>`]/u;
 // written in, because the parser adds a slash ("https://rpc.example" would
 // become ".../"), and that would break equality with a bundled default or an
 // existing list entry. A serialization that still holds a redaction break has
-// no canonical spelling: encoding the break would change the bytes sent.
+// no canonical spelling: encoding the break would change the bytes sent. Nor
+// does one with an empty fragment: the parser reports `hash === ""` for a bare
+// trailing "#" but keeps the "#" in `href`, and a "#" can only appear there as
+// the fragment delimiter, so the earlier rule let "https://rpc.example/#" pass.
 const canonicalFor = (
   value: unknown,
   secureProtocol: string,
@@ -89,7 +92,9 @@ const canonicalFor = (
   const href = url.href;
   const bare = url.pathname === "/" && href.endsWith("/") && !endsWithSeparator(value);
   const canonical = bare ? href.slice(0, -1) : href;
-  return canonical.length <= MAX_SERVICE_URL_LENGTH && !REDACTION_BREAK.test(canonical)
+  return canonical.length <= MAX_SERVICE_URL_LENGTH &&
+    !REDACTION_BREAK.test(canonical) &&
+    !canonical.includes("#")
     ? canonical
     : null;
 };
@@ -130,7 +135,7 @@ export const trimTrailingSlashes = (value: string): string => {
 
 /**
  * Checks a service endpoint without performing network access: HTTPS, or HTTP
- * on a loopback host, with no credentials or fragment, written in its canonical
+ * on a loopback host, with no credentials or fragment (not even an empty "#"), written in its canonical
  * spelling. That spelling is the URL parser's serialization, which is what a
  * request sends (a bare origin may keep or drop its trailing slash), and it
  * holds no character {@link redactEndpoints} ends a URL at. The parser would
@@ -172,9 +177,9 @@ export const canonicalWebSocketServiceUrl = (value: unknown): string | null =>
  * preferences record could hold one this build refuses. Returns the canonical
  * spelling, which makes the same request. Returns `undefined` when the earlier
  * rule accepted the endpoint but it has no canonical spelling: it is over the
- * 2,048-character cap once percent-encoded, or its serialization keeps a
+ * 2,048-character cap once percent-encoded, its serialization keeps a
  * character the redactor ends a URL at, which encoding would change on the
- * wire. The caller drops such an endpoint rather than fail the whole record.
+ * wire, or it ends in an empty fragment ("https://rpc.example/#"). The caller drops such an endpoint rather than fail the whole record.
  * Anything else is returned unchanged for the record's validator to reject,
  * because the earlier rule refused it too. Pure and total.
  */

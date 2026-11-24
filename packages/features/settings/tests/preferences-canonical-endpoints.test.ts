@@ -236,6 +236,23 @@ describe("stored endpoints are carried to the canonical spelling", () => {
     expect(read.explorerFallback).toEqual({ SN_MAIN: false, SN_SEPOLIA: true });
   });
 
+  // An earlier build stored an empty fragment: the parser reports `hash === ""`
+  // for it but keeps the "#" in the serialization, so it has no canonical spelling.
+  test("an override with an empty fragment is refused, and a stored one dropped", async () => {
+    const fresh = createPreferencesStore({ store: createMemoryStore() });
+    for (const rpcUrl of ["https://rpc.example/#", "https://rpc.example#"]) {
+      await expect(fresh.setRpcOverride({ networkId: "SN_MAIN", rpcUrl })).rejects.toThrow(
+        "Invalid RPC endpoint",
+      );
+    }
+    const { preferences } = await storedWith({
+      rpcOverrides: { SN_MAIN: "https://rpc.example/#", SN_SEPOLIA: rpc.raw },
+    });
+    const read = await preferences.read();
+    expect(read.rpcOverrides).toEqual({ SN_SEPOLIA: rpc.canonical });
+    expect(read.explorerFallback).toEqual({ SN_MAIN: false });
+  });
+
   // A map is rebuilt with own properties, so a `__proto__` key reaches the
   // validator instead of vanishing through the prototype setter (#674 review).
   test("a map with a __proto__ key still fails closed once rebuilt", async () => {

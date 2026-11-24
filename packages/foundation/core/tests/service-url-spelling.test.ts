@@ -145,6 +145,37 @@ describe("canonical endpoint spelling", () => {
     }
   });
 
+  // The parser reports `hash === ""` for a bare "#" but keeps it in `href`.
+  test("refuses any fragment, empty or not, and drops a stored empty one", () => {
+    for (const value of [
+      "https://rpc.example/#",
+      "https://rpc.example#",
+      "wss://relay.example/#",
+    ]) {
+      expect(isServiceUrl(value)).toBe(false);
+      expect(isWebSocketServiceUrl(value)).toBe(false);
+      expect(canonicalServiceUrl(value)).toBeNull();
+      expect(canonicalWebSocketServiceUrl(value)).toBeNull();
+    }
+    expect(normalizeStoredServiceUrl("https://rpc.example/#")).toBeUndefined();
+    expect(normalizeStoredServiceUrl("https://rpc.example#")).toBeUndefined();
+    expect(normalizeStoredWebSocketServiceUrl("wss://relay.example/#")).toBeUndefined();
+    // A non-empty fragment was refused by the earlier rule too, so it is left
+    // for the validator to reject.
+    expect(isServiceUrl("https://rpc.example/#frag")).toBe(false);
+    expect(normalizeStoredServiceUrl("https://rpc.example/#frag")).toBe(
+      "https://rpc.example/#frag",
+    );
+    for (const value of [
+      "https://rpc.example",
+      "https://rpc.example/",
+      "https://rpc.example/v1?k=1",
+    ]) {
+      expect(isServiceUrl(value)).toBe(true);
+      expect(normalizeStoredServiceUrl(value)).toBe(value);
+    }
+  });
+
   test("caps the canonical spelling, dropping a stored one that outgrows the cap", () => {
     const exact = `https://rpc.example/${"a".repeat(2048 - 20)}`;
     expect(exact.length).toBe(2048);
