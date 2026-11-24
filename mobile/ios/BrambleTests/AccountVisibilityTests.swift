@@ -84,7 +84,7 @@ final class AccountVisibilityTests: XCTestCase {
                 id: "SN_DEVNET:0x1",
                 networkId: "SN_DEVNET",
                 address: "0x1",
-                shortAddress: "0x1…0x1",
+                shortAddress: "0x0000…0001",
                 reason: reason
             ))
         }

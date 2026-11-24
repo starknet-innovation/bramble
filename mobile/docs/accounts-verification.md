@@ -45,7 +45,7 @@ through the extension's real code, written by `bun run mobile:parity`, and compa
 
 Not shipped as fixtures, and covered by Rust unit tests instead: the keep rule
 (`isCreatableCandidate` is private to `onboarding-ops.ts`), probe judging, `nextAccountIndex`, and
-the onboarding 10…8 preview (an inline expression in `onboarding-ui.ts`). Phase B `keyImports`
+the onboarding preview (now `addressLabel`, 6…4). Phase B `keyImports`
 waits for Phase B.
 
 ## 8. Test plan

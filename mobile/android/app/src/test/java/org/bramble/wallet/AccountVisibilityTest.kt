@@ -53,7 +53,7 @@ class AccountVisibilityTest {
     fun everyKeptReasonHasALine() {
         val lines =
             UnusableReason.entries.map { reason ->
-                unusableReasonText(UnusableAccount("SN_DEVNET:0x1", "SN_DEVNET", "0x1", "0x1…0x1", reason))
+                unusableReasonText(UnusableAccount("SN_DEVNET:0x1", "SN_DEVNET", "0x1", "0x0000…0001", reason))
             }
         assertEquals(UnusableReason.entries.size, lines.toSet().size)
         assertTrue(lines.all { it.isNotBlank() })

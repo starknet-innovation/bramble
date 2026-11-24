@@ -61,13 +61,13 @@ final class AccountsBridgeTests: XCTestCase {
         for name in fixture.names {
             XCTAssertEqual(accountDisplayName(address: name.address, label: nil), name.name, name.address)
             XCTAssertEqual(accountLabel(address: name.address), name.short, name.address)
+            // The design-system helper is the core's rule.
+            XCTAssertEqual(shortAddress(name.address), name.short, name.address)
         }
         for label in fixture.labels {
             XCTAssertEqual(isAccountLabel(label: label.value), label.valid, label.value)
         }
         XCTAssertEqual(accountDisplayName(address: "0x1", label: "Savings"), "Savings")
-        XCTAssertEqual(shortAddress("0x0"), "0x0…0x0", "the design-system helper is the core's rule")
-        XCTAssertEqual(shortAddress("0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9"), "0x2083…98d9")
     }
 
     func testRestoredFamiliesDeriveTheExtensionsAddresses() throws {

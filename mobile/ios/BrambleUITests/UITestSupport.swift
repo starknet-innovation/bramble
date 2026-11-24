@@ -229,7 +229,7 @@ enum UITest {
     }
 
     /// The published wallet's primary account as "Find your accounts" titles it.
-    static let primaryCandidate = "Account 0, 0x2083…98d9"
+    static let primaryCandidate = "Account 0, 0x0208…98d9"
 
     /// "Find your accounts" over the fixture node, which knows only the published wallet's primary
     /// account: waits for the search, keeps that account selected (a funded or deployed state

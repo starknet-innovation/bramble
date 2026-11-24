@@ -145,7 +145,7 @@ fails. A UI gate over words already held for display (iOS `OnboardingSteps.swift
 | Account name | `friendlyAccountName(address)` | "Account N" (index + 1) |
 | Recovery Continue gate | non-empty cells, then Krusty validates | every word valid and the phrase valid |
 | Settings | no Security group | Security: Lock, Remove wallet; top group eyebrow "Accounts & networks" |
-| Review card | starts unselected, 10…8 address | starts selected, 6…4 address |
+| Review card | starts unselected, 6…4 address | starts selected, 6…4 address |
 
 ### 2.4 Unlock (`UnlockScreen.kt`, iOS `UnlockView.swift`)
 
