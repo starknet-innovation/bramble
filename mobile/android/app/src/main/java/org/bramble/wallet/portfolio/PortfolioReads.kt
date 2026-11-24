@@ -21,9 +21,13 @@ import org.bramble.core.balanceJudge
 import org.bramble.core.balanceRequests
 import org.bramble.core.rpcChainIdRequest
 import org.bramble.core.rpcVerifyChainId
+import org.bramble.wallet.ReliabilityDiagnostics
+import java.net.URL
 
 /** JSON-RPC calls sent at once to one endpoint; the rest wait for the batch before them. */
 private const val RPC_BATCH = 4
+
+private const val NANOS_PER_MS = 1_000_000L
 
 /**
  * One activity read for [PortfolioStore.refreshActivity].
@@ -86,9 +90,13 @@ internal class PortfolioReads(
             )
         val lane =
             request?.let {
+                val started = System.nanoTime()
                 val outcome = transport.perform(it)
+                val elapsedMs = (System.nanoTime() - started) / NANOS_PER_MS
                 if (!current()) return null
-                book.starkscanApply(target.accountId, net, target.tokens, outcome, target.now)
+                book.starkscanApply(target.accountId, net, target.tokens, outcome, target.now).also { view ->
+                    ReliabilityDiagnostics.recordExplorer(outcome, applied = view != null, elapsedMs = elapsedMs)
+                }
             }
         return lane ?: scanHistory(book, target)
     }
@@ -143,6 +151,7 @@ internal class PortfolioReads(
         call: RpcRequest,
         url: String,
     ): RpcReply {
+        val started = System.nanoTime()
         val outcome =
             transport.perform(
                 HttpRequest(
@@ -154,6 +163,9 @@ internal class PortfolioReads(
                     limits.deadlineMs,
                 ),
             )
+        runCatching { URL(url) }.getOrNull()?.let {
+            ReliabilityDiagnostics.recordRpc(it, outcome, (System.nanoTime() - started) / NANOS_PER_MS)
+        }
         return RpcReply(call.id, outcome.status, outcome.body?.decodeToString())
     }
 

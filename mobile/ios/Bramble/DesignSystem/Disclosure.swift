@@ -75,3 +75,27 @@ struct CheckBox: View {
             .accessibilityHidden(true)
     }
 }
+
+/// A checkbox and its text as one toggle: the extension's `checkboxField`, Android's `CheckRow`.
+struct CheckRow: View {
+    /// Drops the checkbox to the text's first baseline.
+    private static let checkBoxTop: CGFloat = 2
+
+    let text: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button { isOn.toggle() } label: {
+            HStack(alignment: .top, spacing: BrambleSpace.sm) {
+                CheckBox(isOn: isOn).padding(.top, Self.checkBoxTop)
+                Text(text).brambleText(BrambleTypeScale.body)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+}

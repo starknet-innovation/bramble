@@ -173,6 +173,8 @@ class WalletStore(
     init {
         // A Keystore key or wrap-secret file left by a removed wallet is useless: drop it.
         if (!vaultWritten) biometrics.delete()
+        GatewayAnalytics.shared = GatewayAnalytics(prefs)
+        ReliabilityDiagnostics.enabled = prefs.getBoolean(ReliabilityDiagnostics.ENABLED_KEY, false)
         applySecurity(security)
     }
 

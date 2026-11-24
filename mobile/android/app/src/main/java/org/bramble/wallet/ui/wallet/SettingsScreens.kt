@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -122,7 +124,7 @@ fun NetworkScreen(
     val scope = rememberCoroutineScope()
     val networks = remember { supportedNetworks() }
     Column(
-        Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.md),
     ) {
         FlowHeader("Network", subtitle = "Choose where the wallet operates", network = store.networkLabel, back = back)
@@ -168,6 +170,8 @@ fun NetworkScreen(
         RpcEndpointSettings(store)
         org.bramble.wallet.coordination
             .CoordinationRelaySettings(store)
+        ProductAnalyticsSettings(store)
+        ReliabilityDiagnosticsSettings(store)
     }
 }
 

@@ -13,6 +13,8 @@ import Foundation
 /// - **Time.** One deadline covers connecting, headers and the whole body.
 /// - **Hardening.** Ephemeral session, no cookies, no cache, no `Referer`, and redirects refused,
 ///   so the response always comes from the host the core chose. ATS keeps every hop on HTTPS.
+/// - **Analytics.** `GatewayAnalytics` adds its headers to a gateway request while it is on; a
+///   caller's own `X-MC-*` header is dropped.
 protocol PortfolioTransport: Sendable {
     func perform(_ request: HttpRequest) async -> HttpOutcome
 }
@@ -21,11 +23,13 @@ final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @
     static let shared = BoundedHttp()
 
     private let protocolClasses: [AnyClass]
+    private let analytics: GatewayAnalytics
 
     /// A non-empty `protocolClasses` replaces the session's URL protocols (tests only); the app
     /// passes none, and an empty list keeps the system protocols.
-    init(protocolClasses: [AnyClass] = []) {
+    init(protocolClasses: [AnyClass] = [], analytics: GatewayAnalytics = .shared) {
         self.protocolClasses = protocolClasses
+        self.analytics = analytics
     }
 
     private lazy var session: URLSession = {
@@ -57,7 +61,7 @@ final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @
         guard let url = URL(string: request.url), url.scheme == "https" else { return .unanswered }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = request.method == .post ? "POST" : "GET"
-        for header in request.headers {
+        for header in request.headers where !GatewayAnalytics.isAnalyticsHeader(header.name) {
             urlRequest.setValue(header.value, forHTTPHeaderField: header.name)
         }
         if let body = request.body {
@@ -77,8 +81,14 @@ final class BoundedHttp: NSObject, PortfolioTransport, URLSessionTaskDelegate, @
         return await exchange(urlRequest, limit: maxBodyBytes, deadline: deadlineMs)
     }
 
-    private func exchange(_ urlRequest: URLRequest, limit: UInt64, deadline: UInt64) async -> HttpOutcome {
-        await withTaskGroup(of: HttpOutcome?.self) { group in
+    private func exchange(_ request: URLRequest, limit: UInt64, deadline: UInt64) async -> HttpOutcome {
+        var urlRequest = request
+        if let url = urlRequest.url {
+            for (name, value) in analytics.headers(for: url) {
+                urlRequest.setValue(value, forHTTPHeaderField: name)
+            }
+        }
+        return await withTaskGroup(of: HttpOutcome?.self) { group in
             group.addTask { await self.read(urlRequest, limit: limit) }
             group.addTask {
                 try? await Task.sleep(for: .milliseconds(Int(deadline)))

@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
@@ -117,6 +118,8 @@ class RpcClient(
         /** The app's transport: [post] over HTTPS, bounded to [MAX_RESPONSE_BYTES]. */
         val https: RpcPost = RpcPost { url, body, write -> post(url, body, write) }
         private const val READ_CHUNK_BYTES = 8 * 1024
+        private const val HTTP_TOO_MANY = 429
+        private const val NANOS_PER_MS = 1_000_000L
 
         /**
          * POSTs one JSON-RPC [body] and returns the reply, bounded to [maxBytes] (the core's
@@ -132,6 +135,9 @@ class RpcClient(
             maxBytes: Int = MAX_RESPONSE_BYTES,
         ): String {
             val connection = url.openConnection() as HttpsURLConnection
+            val started = System.nanoTime()
+            var status = 0
+            var timedOut = false
             try {
                 connection.requestMethod = "POST"
                 connection.connectTimeout = TIMEOUT_MS
@@ -140,11 +146,18 @@ class RpcClient(
                 connection.instanceFollowRedirects = !write
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")
+                GatewayAnalytics.apply(connection)
                 connection.outputStream.use { it.write(body.toByteArray()) }
-                check(connection.responseCode == HttpURLConnection.HTTP_OK) { "http ${connection.responseCode}" }
+                val code = connection.responseCode
+                if (code == HTTP_TOO_MANY) status = code
+                check(code == HttpURLConnection.HTTP_OK) { "http $code" }
                 check(connection.contentLengthLong <= maxBytes) { "reply too large" }
-                return connection.inputStream.use { readBounded(it, maxBytes) }
+                return connection.inputStream.use { readBounded(it, maxBytes) }.also { status = code }
+            } catch (timeout: SocketTimeoutException) {
+                timedOut = true
+                throw timeout
             } finally {
+                ReliabilityDiagnostics.recordRpc(url, status, timedOut, (System.nanoTime() - started) / NANOS_PER_MS)
                 connection.disconnect()
             }
         }

@@ -48,3 +48,16 @@ suspend fun WalletStore.saveRpcOverride(
             }
             saved
         }.await()
+
+/** Product analytics on or off (`GatewayAnalytics`); the next gateway request follows it. */
+fun WalletStore.setProductAnalytics(on: Boolean) {
+    GatewayAnalytics.shared?.enabled = on
+    showNotice(if (on) "Product analytics enabled" else "Product analytics disabled")
+}
+
+/** Reliability diagnostics on or off, remembered; off clears the counters at once. */
+fun WalletStore.setReliabilityDiagnostics(on: Boolean) {
+    ReliabilityDiagnostics.enabled = on
+    prefs.edit().putBoolean(ReliabilityDiagnostics.ENABLED_KEY, on).apply()
+    showNotice(if (on) "Local diagnostics enabled" else "Local diagnostics cleared")
+}

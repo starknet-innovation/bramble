@@ -6,6 +6,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.bramble.core.HttpMethod
 import org.bramble.core.HttpOutcome
 import org.bramble.core.HttpRequest
+import org.bramble.wallet.GatewayAnalytics
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -86,7 +87,10 @@ object BoundedHttp : PortfolioTransport {
         connection.connectTimeout = request.deadlineMs.toInt()
         connection.readTimeout = request.deadlineMs.toInt()
         connection.requestMethod = if (request.method == HttpMethod.POST) "POST" else "GET"
-        request.headers.forEach { connection.setRequestProperty(it.name, it.value) }
+        request.headers
+            .filterNot { GatewayAnalytics.isAnalyticsHeader(it.name) }
+            .forEach { connection.setRequestProperty(it.name, it.value) }
+        GatewayAnalytics.apply(connection)
         request.body?.let { body ->
             connection.doOutput = true
             connection.outputStream.use { it.write(body.toByteArray()) }
