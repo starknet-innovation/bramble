@@ -118,4 +118,29 @@ describe("decimal calldata", () => {
       ).calls[0]?.kind,
     ).toBe("unknown");
   });
+
+  test("a decimal contract address is labelled and recognized like its hex spelling", () => {
+    const UNKNOWN = "0x06b17d1f2e12c4247f8bce6e563a40f2275d5e88540f0e9899d9ecfeeb8e0aff";
+    for (const call of [
+      { calldata: [RECIPIENT, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+      { calldata: [RECIPIENT, "0x1", "0x0"], contractAddress: UNKNOWN, entrypoint: "approve" },
+      {
+        calldata: [RECIPIENT, "0x1"],
+        contractAddress: UNKNOWN,
+        entrypoint: "set_approval_for_all",
+      },
+      { calldata: ["0x1"], contractAddress: UNKNOWN, entrypoint: "mint" },
+    ]) {
+      const hex = verifyCalls([call], context);
+      const dec = verifyCalls(
+        [{ ...call, contractAddress: decimal(call.contractAddress) }],
+        context,
+      );
+      expect({ ...dec, calls: dec.calls.map(({ contractAddress: _, ...rest }) => rest) }).toEqual({
+        ...hex,
+        calls: hex.calls.map(({ contractAddress: _, ...rest }) => rest),
+      });
+      expect(JSON.stringify(dec.flags)).not.toContain(decimal(call.contractAddress));
+    }
+  });
 });

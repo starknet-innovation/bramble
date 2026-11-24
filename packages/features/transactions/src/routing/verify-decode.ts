@@ -92,6 +92,14 @@ export {
 export const canonical = (value: string): string => canonicalFelt(value) ?? value;
 
 /**
+ * The short label for the contract a call targets. The background accepts a
+ * call's contract address in any felt spelling (decimal included), so it is
+ * canonicalized before the shared shortener sees it, as calldata felts are in
+ * {@link readAddressAt}.
+ */
+export const contractLabel = (call: Call): string => addressLabel(canonical(call.contractAddress));
+
+/**
  * Reads the string felt at `index` in canonical `0x` hex, or "" when the slot is
  * absent or not a string. Keeps calldata-shape guards in one place so every
  * decoder and every flag rule reads positions the same way.
@@ -276,7 +284,7 @@ const decodeErc1155BatchTransferCall: CallDecoder = (call, calldata) => {
     return null;
   }
   const facts = {
-    collection: addressLabel(call.contractAddress),
+    collection: contractLabel(call),
     count: String(count),
     to: addressLabel(recipient),
   };
@@ -302,7 +310,7 @@ const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
     return null;
   }
   const facts = {
-    collection: addressLabel(call.contractAddress),
+    collection: contractLabel(call),
     party: addressLabel(operator),
   };
   return decoded(
@@ -336,7 +344,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
       reviewText("review.call.send", { amount: amountLabel(amount, token), to: party }),
     );
   }
-  const contract = addressLabel(call.contractAddress);
+  const contract = contractLabel(call);
   if (isWatchedNftContract(context, call.contractAddress)) {
     return decoded(
       call,
@@ -403,7 +411,7 @@ const decodeUnknownCall = (call: Call): DecodedCall =>
     call,
     "unknown",
     reviewText("review.call.unknown", {
-      contract: addressLabel(call.contractAddress),
+      contract: contractLabel(call),
       entrypoint: call.entrypoint,
     }),
   );
