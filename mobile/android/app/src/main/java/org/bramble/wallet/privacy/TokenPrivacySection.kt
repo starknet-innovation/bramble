@@ -132,6 +132,10 @@ private fun DetailSummaryLine(
             PrivateBalanceLine(PrivacyCopy.registerToStart, muted = true)
         }
 
+        is DetailSummary.NotOnThisNetwork -> {
+            PrivateBalanceLine(PrivacyCopy.blockedNetworkTitle, muted = true)
+        }
+
         is DetailSummary.Amount -> {
             PrivateBalanceLine(summary.text, muted = false)
         }

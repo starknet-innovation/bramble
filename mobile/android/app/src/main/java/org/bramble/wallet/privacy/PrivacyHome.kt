@@ -15,7 +15,9 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.launch
+import org.bramble.core.HomePrivateRow
 import org.bramble.core.PrivacyStatus
+import org.bramble.core.homePrivateRow
 import org.bramble.core.privacyStatus
 import org.bramble.core.shieldedBalancesIncluded
 import org.bramble.wallet.WalletStore
@@ -34,6 +36,9 @@ import org.bramble.wallet.design.textStyle
 
 /** `privacyDataIssue`: the core's private-balance status for the active reading. */
 val WalletStore.privacyHeaderStatus: PrivacyStatus get() = privacyStatus(network, privacy.reading)
+
+/** Home's private-balances row under the token list: the retry, the no-pool answer, or none. */
+val WalletStore.privacyHomeRow: HomePrivateRow get() = homePrivateRow(network, privacy.reading)
 
 /** The header's spoken private-balance status, or null while the reading is current. */
 val WalletStore.privacyStatusText: String?
@@ -61,20 +66,33 @@ fun ShieldedHeroLabel(store: WalletStore) {
     }
 }
 
-/** `data-privacy-retry`: "Private balances · Try again" under the list after a failed read. */
+/**
+ * `data-privacy-retry`: "Private balances · Try again" under the list after a failed read, or
+ * "Not available on this network" in its place, without a retry, where no pool is configured.
+ */
 @Composable
 fun PrivacyRetryRow(store: WalletStore) {
-    if (store.privacyHeaderStatus != PrivacyStatus.UNAVAILABLE) return
+    val row = store.privacyHomeRow
+    if (row == HomePrivateRow.NONE) return
+    val retry = row == HomePrivateRow.RETRY
+    val value = if (retry) PrivacyCopy.retry else PrivacyCopy.blockedNetworkTitle
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
+    val pressable =
+        if (retry) {
+            Modifier.fillPress(Color.Transparent, skin.softPress, RectangleShape, pressedScale = 1f) {
+                scope.launch { store.refreshPrivacy() }
+            }
+        } else {
+            Modifier
+        }
     Row(
         Modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
-                contentDescription = "${PrivacyCopy.privateBalances}, ${PrivacyCopy.retry}"
-            }.fillPress(Color.Transparent, skin.softPress, RectangleShape, pressedScale = 1f) {
-                scope.launch { store.refreshPrivacy() }
-            }.heightIn(min = BrambleControl.hit)
+                contentDescription = "${PrivacyCopy.privateBalances}, $value"
+            }.then(pressable)
+            .heightIn(min = BrambleControl.hit)
             .padding(horizontal = BrambleSpace.sm),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -86,6 +104,6 @@ fun PrivacyRetryRow(store: WalletStore) {
             style = textStyle(BrambleTypeScale.label),
             modifier = Modifier.weight(1f),
         )
-        Text(PrivacyCopy.retry, color = skin.muted, style = textStyle(BrambleTypeScale.label))
+        Text(value, color = skin.muted, style = textStyle(BrambleTypeScale.label))
     }
 }

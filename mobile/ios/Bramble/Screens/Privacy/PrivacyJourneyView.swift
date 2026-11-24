@@ -254,6 +254,9 @@ struct TokenPrivacySection: View {
         case .registerToStart:
             line(PrivacyCopy.registerToStart, muted: true)
 
+        case .notOnThisNetwork:
+            line(PrivacyCopy.blockedNetworkTitle, muted: true)
+
         case let .amount(text):
             line(text, muted: false)
         }

@@ -207,8 +207,8 @@ dependencies = [
 
 [[package]]
 name = "bramble-core"
-version = "0.6.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.6.0#b8feaf3e4c27b93c7efb0536e595b14078f16491"
+version = "0.7.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.7.0#267c3ec8829663e1b24dbf8eea1c64bcb45e5d9d"
 dependencies = [
  "bip39",
  "serde",
@@ -956,9 +956,9 @@ dependencies = [
 
 [[package]]
 name = "krusty-kms"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54a937f848c566781e3f2a3ab08d15777874c336548395f1e2401e76a87f9ca"
+checksum = "48f3ff6a6735ccab80300dc598200caccb2b96723f3b535c365b2f8891d78c3a"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -1773,8 +1773,8 @@ dependencies = [
 
 [[package]]
 name = "starknet-wallet-core"
-version = "0.6.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.6.0#b8feaf3e4c27b93c7efb0536e595b14078f16491"
+version = "0.7.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.7.0#267c3ec8829663e1b24dbf8eea1c64bcb45e5d9d"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
