@@ -58,8 +58,8 @@ export const VAULT_IMPORTED_FIXTURE_PATH = "mobile/core/tests/fixtures/vault-v13
 
 const kmsFor = async () => createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
 
-/** The extension's vault service over a fresh memory store. */
-const vaultService = async (store: KeyValueStore) =>
+/** The extension's vault service over `store` (a fresh memory store for each fixture). */
+export const vaultService = async (store: KeyValueStore) =>
   createWalletVaultService({
     encryptedStore: createEncryptedStore(store, VAULT_STORE_KEY),
     kms: await kmsFor(),
@@ -105,16 +105,17 @@ const writeParityVault = async (): Promise<KeyValueStore> => {
   return store;
 };
 
-/** The phrase's OpenZeppelin key at `accountIndex`, as the extension derives it. */
+/** The phrase's OpenZeppelin account at `accountIndex`, as the extension derives it. */
+export const phraseAccount = async (accountIndex: number) =>
+  deriveAccount(await kmsFor(), {
+    accountContractType: "openzeppelin",
+    accountIndex,
+    mnemonic,
+    networkId: "SN_MAIN",
+  });
+
 const phraseKey = async (accountIndex: number): Promise<string> =>
-  (
-    await deriveAccount(await kmsFor(), {
-      accountContractType: "openzeppelin",
-      accountIndex,
-      mnemonic,
-      networkId: "SN_MAIN",
-    })
-  ).privateKey;
+  (await phraseAccount(accountIndex)).privateKey;
 
 /** A phrase wallet with OpenZeppelin index 0, then two raw-key imports, through the service. */
 const writeImportedVault = async (): Promise<KeyValueStore> => {
@@ -150,7 +151,7 @@ export type VaultParity = {
 };
 
 /** The schema-13 vault a v14 payload came from: no `accountProvenance`, key order kept. */
-const asV13 = (payload: unknown): unknown => {
+export const asV13 = (payload: unknown): unknown => {
   const v13 = Object.fromEntries(
     Object.entries(payload as Record<string, unknown>)
       .filter(([key]) => key !== "accountProvenance")
@@ -160,9 +161,11 @@ const asV13 = (payload: unknown): unknown => {
   return v13;
 };
 
-/** Seals `payload` with the extension's own encrypted store, as the service does. */
-const sealPayload = async (payload: unknown): Promise<unknown> => {
-  const store = createMemoryStore();
+/** Seals `payload` into `store` with the extension's own encrypted store, as the service does. */
+export const sealPayload = async (
+  payload: unknown,
+  store: KeyValueStore = createMemoryStore(),
+): Promise<unknown> => {
   await createEncryptedStore(store, VAULT_STORE_KEY).write(
     payload as Parameters<EncryptedStore["write"]>[0],
     vaultPassphrase,
@@ -171,7 +174,7 @@ const sealPayload = async (payload: unknown): Promise<unknown> => {
 };
 
 /** The decrypted payload the service sealed into `store`. */
-const writtenPayload = async (store: KeyValueStore): Promise<unknown> => {
+export const writtenPayload = async (store: KeyValueStore): Promise<unknown> => {
   const sealed = await store.get(VAULT_STORE_KEY);
   if (!isEncryptedEnvelope(sealed)) throw new Error("the vault service wrote no envelope");
   return decryptJson(sealed, vaultPassphrase, VAULT_PARITY_SCOPE);
@@ -182,7 +185,10 @@ const writtenPayload = async (store: KeyValueStore): Promise<unknown> => {
  * same payload (a fresh seal draws a new salt, IV, lineage and commit, so re-sealing every run
  * would churn the fixture with no change in meaning).
  */
-const parityFor = async (payload: unknown, committedSealed: unknown): Promise<VaultParity> => {
+export const parityFor = async (
+  payload: unknown,
+  committedSealed: unknown,
+): Promise<VaultParity> => {
   const keep = await sealedIsCurrent(committedSealed, payload, vaultPassphrase, VAULT_PARITY_SCOPE);
   return {
     mnemonic,

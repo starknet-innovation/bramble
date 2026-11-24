@@ -42,6 +42,12 @@ import {
   VAULT_IMPORTED_FIXTURE_PATH,
   VAULT_PARITY_FIXTURE_PATH,
 } from "./mobile-parity-vault";
+import {
+  computeFullV13VaultParity,
+  computeV14VaultParity,
+  computeVaultMigrationParity,
+  VAULT_FULL_FIXTURE_PATHS,
+} from "./mobile-parity-vault-full";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -123,13 +129,25 @@ const readCommittedVaultSeal = async (path: string): Promise<unknown> => {
 };
 
 // The v13 vault keeps its committed seal when the extension still opens it to the same payload.
-// So does the imported-key vault (P3).
+// So do the imported-key vault (P3) and the full vault at 13 and 14 (G7b).
 for (const [path, compute] of [
   [VAULT_PARITY_FIXTURE_PATH, computeVaultParity],
   [VAULT_IMPORTED_FIXTURE_PATH, computeImportedVaultParity],
+  [VAULT_FULL_FIXTURE_PATHS.v13, computeFullV13VaultParity],
+  [VAULT_FULL_FIXTURE_PATHS.v14, computeV14VaultParity],
 ] as const) {
   const vault = await compute(await readCommittedVaultSeal(path));
   await writeFile(path, `${JSON.stringify(vault, null, 2)}\n`);
+  console.log(`wrote ${path}`);
+}
+
+{
+  const path = VAULT_FULL_FIXTURE_PATHS.migration;
+  const committedMigration = await readFile(path, "utf8")
+    .then((text) => JSON.parse(text) as Parameters<typeof computeVaultMigrationParity>[0])
+    .catch(() => undefined);
+  const migration = await computeVaultMigrationParity(committedMigration);
+  await writeFile(path, `${JSON.stringify(migration, null, 2)}\n`);
   console.log(`wrote ${path}`);
 }
 
