@@ -49,8 +49,21 @@ const walk = async (dir: string): Promise<string[]> => {
   return files.sort();
 };
 
-const run = async (cmd: string[], cwd = "."): Promise<void> => {
-  const child = Bun.spawn(cmd, { cwd, stderr: "inherit", stdout: "inherit" });
+// `zip` stores the local time of each member. Both the stamp and the archive
+// are written in UTC so a second machine reproduces the bytes.
+const utcTime: Readonly<Record<string, string>> = { TZ: "UTC" };
+
+const run = async (
+  cmd: string[],
+  cwd = ".",
+  env?: Readonly<Record<string, string>>,
+): Promise<void> => {
+  const child = Bun.spawn(cmd, {
+    cwd,
+    stderr: "inherit",
+    stdout: "inherit",
+    ...(env === undefined ? {} : { env: { ...process.env, ...env } as Record<string, string> }),
+  });
   const exitCode = await child.exited;
 
   if (exitCode !== 0) {
@@ -82,13 +95,13 @@ const zipPath = resolve(artifactDir, zipName);
 await rm(zipPath, { force: true });
 await rm(`${zipPath}.sha256`, { force: true });
 
-await run(["touch", "-t", reproducibleZipTime, ...files], distDir);
+await run(["touch", "-t", reproducibleZipTime, ...files], distDir, utcTime);
 // `zip` stores each file's permission bits, and those come from whoever built
 // it: copied assets keep the mode of the source tree, which depends on the
 // umask the source archive was unpacked with (an Ubuntu root unpack keeps
 // git's 0664, a user unpack gives 0644). Fix one mode so the bytes do not.
 await Promise.all(files.map((file) => chmod(join(distDir, file), 0o644)));
-await run(["zip", "-X", "-q", zipPath, ...files], distDir);
+await run(["zip", "-X", "-q", zipPath, ...files], distDir, utcTime);
 
 const digest = createHash("sha256")
   .update(await readFile(zipPath))

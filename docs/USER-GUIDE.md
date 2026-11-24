@@ -20,13 +20,46 @@ it, start with the [engineering onboarding](../engineering/) instead.
 
 ### Install
 
-Bramble is a Manifest V3 browser extension. Download a published extension
-archive from the
-[GitHub Releases page](https://github.com/starknet-innovation/bramble/releases),
-verify it against the accompanying `.sha256` file, extract it, then open
-`chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and
-select the extracted directory. Contributors can instead build `dist/` locally;
-see the [README](https://github.com/starknet-innovation/bramble#quick-start).
+The Chrome Web Store installs the latest Bramble and updates it later. To
+install one release and check the file, download `bramble-X.Y.Z.zip` and
+`bramble-X.Y.Z.zip.sha256` from the
+[GitHub release](https://github.com/starknet-innovation/bramble/releases) tagged
+`vX.Y.Z`. Replace `X.Y.Z` with that version. In the download directory:
+
+```sh
+sha256sum -c bramble-X.Y.Z.zip.sha256
+gh release verify vX.Y.Z --repo starknet-innovation/bramble
+gh release verify-asset vX.Y.Z bramble-X.Y.Z.zip --repo starknet-innovation/bramble
+gh attestation verify bramble-X.Y.Z.zip \
+  --repo starknet-innovation/bramble \
+  --signer-workflow starknet-innovation/bramble/.github/workflows/release-build.yml
+unzip bramble-X.Y.Z.zip -d bramble-X.Y.Z
+```
+
+On macOS the checksum command is `shasum -a 256 -c bramble-X.Y.Z.zip.sha256`.
+`sha256sum` checks the file against the published checksum. `gh release verify`
+and `gh release verify-asset` check GitHub's signature that this file is the
+published release. That signature is on releases published after the repository
+keeps releases immutable. Older releases still check with `sha256sum`. `gh attestation verify` checks the signature that the Bramble release workflow built the zip. Those `gh` commands need GitHub CLI 2.81 or newer.
+
+Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**,
+and select `bramble-X.Y.Z`. This copy does not update itself. It is a separate
+extension from the store install, with its own wallet. Unzip a later release
+into that same folder and reload the extension. A different folder is a
+different extension. Removing the extension deletes that wallet.
+
+For Firefox, download `bramble-firefox-X.Y.Z.zip` and
+`bramble-firefox-X.Y.Z.zip.sha256` and run the same checks on that file. At
+`about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on** and
+pick the zip. Firefox removes it when the browser quits. The add-on id is
+`bramble@starknet.org`, the same id as a signed Firefox install, so load the
+zip in a separate profile if that add-on is installed. A Firefox that stays
+installed is the signed add-on, and that one updates itself. Keeping this zip
+loaded across restarts takes a Firefox that allows unsigned add-ons, which
+turns signature checking off.
+
+Contributors can instead build `dist/` locally; see the
+[README](https://github.com/starknet-innovation/bramble#quick-start).
 
 ### First run
 

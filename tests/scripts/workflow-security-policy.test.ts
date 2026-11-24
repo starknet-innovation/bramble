@@ -238,9 +238,9 @@ describe("workflow security policy", () => {
     {
       name: "rejects release publishing that executes checked-out source",
       workflow: "release-build.yml",
-      search: "steps:\n      - uses: actions/download-artifact@",
+      search: "  publish-release:\n    needs:",
       replacement:
-        "steps:\n      - uses: actions/checkout@0000000000000000000000000000000000000000\n      - uses: actions/download-artifact@",
+        "  publish-release:\n    steps:\n      - uses: actions/checkout@0000000000000000000000000000000000000000\n    needs:",
       failure: "the hosted release publisher must not check out or execute wallet source",
     },
     {

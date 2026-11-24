@@ -490,9 +490,8 @@ Every build input is pinned: Bun `1.4.4` (`packageManager` + CI), a frozen lockf
 the exact published Krusty KMS package and both runtime-file digests, the exact Argent
 account-contract release and official artifact digests, and GitHub Actions by commit SHA. The
 Privacy SDK source and browser
-bundle digest are pinned by its vendor/check scripts. Reproduce a release, then compare
-`artifacts/*.zip.sha256` against the CI artifact checksum:
-
-```bash
-cd artifacts && shasum -a 256 -c bramble-0.2.0.zip.sha256
-```
+bundle digest are pinned by its vendor/check scripts. The release workflow
+rebuilds the tag on a hosted runner and fails if those zips differ from the
+published release. A local rebuild follows [BUILDING.md](../BUILDING.md); check
+it with `sha256sum -c` against the `.sha256` attached to that release, then
+`gh release verify-asset` and `gh attestation verify` as the README describes.

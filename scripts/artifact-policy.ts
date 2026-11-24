@@ -127,6 +127,9 @@ export const artifactPolicyFailures = (
   if (packageChmod === -1 || packageZip === -1 || packageChmod > packageZip) {
     failures.push("scripts/package-extension.ts must normalize file modes before zipping");
   }
+  if (packageScript.split("distDir, utcTime").length - 1 !== 2) {
+    failures.push("scripts/package-extension.ts must stamp and zip in UTC");
+  }
 
   const packageDigest = packageScript.indexOf('createHash("sha256")');
   // Matched on the write itself rather than on the first ".sha256" in the file:

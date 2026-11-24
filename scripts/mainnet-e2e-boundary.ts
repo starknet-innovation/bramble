@@ -30,6 +30,7 @@ export const MAINNET_E2E_WORKFLOW = "mainnet-e2e.yml";
 /** Job-level reusable-workflow calls that are reviewed, by `file:job`. The target has its own named policy. */
 const REVIEWED_CALLS: Readonly<Record<string, string>> = {
   "auto-release.yml:release": "./.github/workflows/release-build.yml",
+  "release-build.yml:verify-rebuild": "./.github/workflows/release-verify.yml",
   "release.yml:build-release": "./.github/workflows/release-build.yml",
 };
 

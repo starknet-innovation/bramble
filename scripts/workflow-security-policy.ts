@@ -16,6 +16,7 @@
 import { LEDGER_E2E_WORKFLOW, ledgerE2eWorkflowFailures } from "./ledger-e2e-workflow-policy";
 import { mainnetE2eBoundaryFailures } from "./mainnet-e2e-boundary";
 import { mainnetE2eWorkflowFailures } from "./mainnet-e2e-workflow-policy";
+import { releaseProvenanceFailures } from "./release-provenance-policy";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
 import {
@@ -447,7 +448,10 @@ const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
  * inventory is itself a failure: its rules would otherwise vanish with it.
  */
 export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string[] => {
-  const failures: string[] = [...pinnedWorkflowPresenceFailures(sources)];
+  const failures: string[] = [
+    ...pinnedWorkflowPresenceFailures(sources),
+    ...releaseProvenanceFailures(sources),
+  ];
   for (const name of Object.keys(NAMED_POLICIES)) {
     if (!Object.hasOwn(sources, name)) {
       failures.push(`${workflowPath(name)} is missing; its reviewed policy cannot be enforced`);

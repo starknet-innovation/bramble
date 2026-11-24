@@ -89,6 +89,13 @@ echo "<sha256 of the submitted zip>  bramble-firefox-<version>.zip" | sha256sum 
 That generated checksum only describes the rebuild itself, so checking the zip against it
 proves nothing; step 4 compares against the checksum of the archive that was submitted.
 
+The release workflow runs this recipe on a hosted Ubuntu runner, for both the
+Chromium zip (`bun run package:extension`) and the Firefox zip, and fails the
+release if the bytes differ from the published assets. Packaging stamps every
+member in UTC (`TZ=UTC` around `touch` and `zip`), so the archive does not
+depend on the machine's timezone. A local rebuild should export `TZ=UTC` as
+well; the package script sets it for the stamp and the zip.
+
 The source archive is the shipped tag's tracked tree. It holds no vendored or built
 output, so step 2 rebuilds those rather than shipping them:
 

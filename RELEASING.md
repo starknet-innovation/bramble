@@ -124,11 +124,15 @@ bun run package:extension:firefox   # writes artifacts/bramble-firefox-<version>
 bun run check:firefox               # AMO's validator over dist-firefox/
 ```
 
-`scripts/package-extension.ts` produces a **reproducible** zip (normalized
-mtimes, pinned file set) plus a matching `.sha256`, so a rebuild of the same
-commit on the same toolchain should give the same bytes. No workflow compares
-the Release zip with the CI `bramble-extension` artifact: the release build's
-checksum step only checks the zip against the `.sha256` it wrote itself.
+`scripts/package-extension.ts` produces a **reproducible** zip (UTC timestamps,
+pinned file set, `zip -X`) plus a matching `.sha256`. The checksum step in the
+build job only shows that the zip and the `.sha256` it just wrote agree.
+`.github/workflows/release-verify.yml` checks the tag out on a separate hosted
+runner, repeats the [BUILDING.md](BUILDING.md) recipe for both browser zips, and
+fails the release if those bytes differ from the build artifact. When a release
+is already published, it also fails if they differ from the published assets.
+The publish job compares the draft assets with the build before it publishes,
+and a read-only job compares the published release again.
 
 Verify the checksum before trusting a zip:
 
@@ -160,16 +164,22 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y`, `X.Y.Z`
    from a `release/vX.Y.Z` patch branch (or the package version for a hotfix) and **fails** if `package.json`/`manifest` do
    not match, so a promotion that skipped the version bump cannot ship;
-3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
-   idempotent, so a re-run never double-cuts);
+3. creates the `vX.Y.0` tag on the merge commit when it is missing. A re-run
+   skips only when that tag already has a **published** release. A draft is
+   finished; its assets are not replaced;
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does, runs `vendor:argent`, builds and packages both browser targets,
-   runs AMO's validator (`check:firefox`) over the Gecko build, re-asserts the
-   tag ↔ version gate, verifies each `.zip` matches its `.sha256`, and uploads
-   the `bramble-release` artifact. A separate hosted job that never checks out
-   wallet source creates the **GitHub Release** with both zips and their
-   `.sha256` files attached: `bramble-<version>.zip` for Chromium and
-   `bramble-firefox-<version>.zip` for addons.mozilla.org.
+   as CI does, runs `vendor:argent` and `vendor:privacy`, builds and packages
+   both browser targets, runs AMO's validator (`check:firefox`) over the Gecko
+   build, re-asserts the tag ↔ version gate, and uploads the `bramble-release`
+   artifact. A hosted rebuild then repeats the package steps from a fresh
+   checkout. After that matches, a hosted job that does not check out the
+   wallet signs build provenance for both zips (`actions/attest`) and checks
+   `gh attestation verify`. Another hosted job, still without a checkout,
+   creates a **draft** GitHub Release, uploads `bramble-<version>.zip`,
+   `bramble-firefox-<version>.zip`, and their `.sha256` files, compares the
+   uploaded bytes, and only then publishes the draft. A read-only job downloads
+   the published release and runs `gh release verify` and
+   `gh release verify-asset`.
 
 Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
 current on the release branch via `bun run changelog` — falling back to a
@@ -189,14 +199,56 @@ A tag that does not match `v*` triggers nothing.
 
 ### Cutting a release (manual fallback)
 
-Run steps 1-2 locally, then create the Release by hand (Releases → Draft a new
-release), attaching `artifacts/bramble-<version>.zip`,
-`artifacts/bramble-firefox-<version>.zip`, and their `.sha256` files.
+Run steps 1-2 locally, then draft the Release (Releases → Draft a new release)
+and attach `artifacts/bramble-<version>.zip`,
+`artifacts/bramble-firefox-<version>.zip`, and their `.sha256` files **before**
+publishing. With immutable releases, a published release cannot gain or replace
+assets. The workflow does not replace an asset that is already there. If a
+draft holds different bytes, delete the draft and re-run; do not publish it.
 
-Creating the release via the GitHub UI is also supported: the release step is
-create-or-upload, so it attaches the built assets to an existing (UI-created)
-release rather than failing on the duplicate tag — either a tag push or a UI
-release works.
+### Immutable releases
+
+A repository admin turns on immutable releases at **Settings → General →
+Releases → Enable release immutability**. The workflow cannot do this. The
+setting applies only to releases published after it is enabled. Releases that
+already exist stay mutable, and turning the setting on later does not freeze
+them.
+
+`gh release verify` and `gh release verify-asset` check the signature GitHub
+creates for an immutable release. Until the setting is on, those commands fail.
+The publish job then deletes the release it just created, when GitHub still
+allows deletion, and the workflow fails. The tag is left in place. Enable the
+setting and re-run the failed workflow.
+
+`gh attestation verify` checks a different signature: the one
+`actions/attest` creates to say `.github/workflows/release-build.yml` built
+the zip. That check does not depend on the repository setting. The exact
+commands a user runs are in the README and the [user guide](docs/USER-GUIDE.md).
+
+After the first release published with the setting on, propose that release's
+Chromium zip as the reference build in the [ETHBEAT privacy adversaries
+thread](https://forum.ethbeat.org/t/privacy-adversaries-framework/455). Name
+the tag, `bramble-<version>.zip`, its `.sha256`, and the verify commands.
+ETHBEAT's "Pinned" rating is their decision.
+
+### Chrome extension id
+
+An unpacked Chrome extension with no manifest `key` gets its id from the
+directory path. That id is not the Chrome Web Store item id, so the pinned
+install does not open the store install's wallet. Chrome can use the store id
+when the manifest carries the item's public key (Developer Dashboard → Package
+→ View public key).
+
+That key is not in this repository. Putting it in
+`apps/extension/public/manifest.json` would put it in the zip uploaded to the
+store as well as the GitHub zip. Chrome has rejected uploads whose `key` does
+not match the item, and stripping the key from only the store zip would make
+those bytes differ from the attested release. Firefox's manifest derivation
+would also have to classify `key` as Chrome-only and drop it. This stays a
+follow-up until a maintainer can confirm a store upload of a package that
+contains the real public key. Until then, the pinned install is a separate
+extension. Loading each release from the same directory keeps that install's
+id and its wallet.
 
 ## 4. Chrome Web Store — one-time prerequisites
 
@@ -381,9 +433,14 @@ recovery steps are in the README ("Upgrading") and on the website support page.
   version from the merged branch, tag, and cut the Release.
 - `.github/workflows/release.yml` — tag-driven backfill Release + optional CWS
   publish.
-- `.github/workflows/release-build.yml` — the reusable heavy build both paths
-  call (read-only self-hosted build/package/tag ↔ version gate/notes, followed
-  by hosted Release publication).
+- `.github/workflows/release-build.yml` — the reusable build both paths call
+  (read-only self-hosted package, hosted rebuild, signed provenance, draft
+  publication).
+- `.github/workflows/release-verify.yml` — the independent rebuild. It fails
+  the release when its bytes differ from the artifact or the published assets.
+- `scripts/github-release-publish.sh` — the publish commands. The publisher
+  inlines this file and does not check out the tag. A test fails if the copy
+  drifts.
 - `scripts/release-version.ts` — the single-source version gate and
   branch → version derivation (#59).
 - `scripts/generate-changelog.ts` — deterministic `CHANGELOG.md` section
