@@ -409,6 +409,74 @@ describe("multisig review uses the same trusted set (#163)", () => {
     });
     await expect(review(PAID)).resolves.toMatchObject({ summary: expect.any(String) });
   });
+
+  test("a frozen multisig approval to a lookalike spender is refused; its revoke is not", async () => {
+    const session = createUnlockSession();
+    session.unlock(passphrase);
+    const record = {
+      address: "0x0123450000000000000000000000000000000000000000000000000000006789",
+      id: "SN_MAIN:0x0123450000000000000000000000000000000000000000000000000000006789",
+      networkId: "SN_MAIN",
+    };
+    const deps = {
+      activity: memoryActivityLog(() => 10),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      session,
+      wallet: {
+        async readVault() {
+          return { accounts: [account, SECOND] };
+        },
+      },
+    } as never;
+    const approve = (spender: string, amount: string) =>
+      reviewArgentMultisigCalls(
+        deps,
+        { record } as never,
+        [
+          {
+            calldata: [canonicalFelt(spender) ?? spender, amount, "0x0"],
+            contractAddress: canonicalFelt(ETH) ?? ETH,
+            entrypoint: "approve",
+          },
+        ],
+        null,
+      );
+    await expect(approve(SECOND_TWIN, "0x5")).resolves.toEqual({
+      error: expect.stringContaining("The address this allows closely mimics"),
+    });
+    await expect(approve(SECOND.address, "0x5")).resolves.toMatchObject({
+      summary: expect.stringContaining("Allow"),
+    });
+    await expect(approve(SECOND_TWIN, "0x0")).resolves.toMatchObject({
+      summary: expect.stringContaining("Allow"),
+    });
+  });
+});
+
+describe("dapp approval to a lookalike spender", () => {
+  test("is queued with the poisoning flag, which leaves the card Deny-only", async () => {
+    const harness = await makeHandler();
+    void harness.handler(
+      {
+        calls: [
+          {
+            calldata: [PADDED_TWIN, "0xffffffff", "0x0"],
+            contractAddress: ETH,
+            entrypoint: "approve",
+          },
+        ],
+        origin,
+        type: "wallet.addInvokeTransaction",
+      },
+      contentSender,
+    );
+    const pending = await waitForPendingApprovals<{
+      readonly flags?: readonly { readonly code: string }[];
+      readonly id: string;
+    }>(harness.handler, extensionSender);
+    expect(pending.at(-1)?.flags?.map((flag) => flag.code)).toContain("address-poisoning");
+    expect(harness.submitted).toEqual([]);
+  });
 });
 
 describe("paidCounterparty", () => {

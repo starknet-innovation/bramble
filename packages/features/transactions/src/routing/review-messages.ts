@@ -48,6 +48,8 @@ const en = {
   "review.flag.operatorApproval":
     "This lets one address transfer EVERY item you own in this collection, including ones you acquire later, until you revoke it. Grant it only to a marketplace you trust.",
   "review.flag.selfTransfer": "The recipient is this wallet's own address.",
+  "review.flag.spenderPoisoning":
+    "The address this allows closely mimics an address you saved or paid but is a different account. Re-check every character before approving.",
   "review.flag.tokenContractRecipient":
     "This is a token contract, not a wallet. Tokens sent here are usually lost.",
   "review.flag.undecodedSwap":
@@ -101,6 +103,8 @@ export const reviewMessages = {
     "review.flag.operatorApproval":
       "此授权将允许该地址转移你在此合集中拥有的【全部】资产，包括你之后获得的，直到你取消授权为止。请仅授权给你信任的交易平台。",
     "review.flag.selfTransfer": "收款地址是此钱包自己的地址。",
+    "review.flag.spenderPoisoning":
+      "被授权的地址与你保存或付过款的某个地址极为相似，但属于另一个账户。批准前逐个字符核对。",
     "review.flag.tokenContractRecipient": "这是代币合约，不是钱包。发送到这里的代币通常会丢失。",
     "review.flag.undecodedSwap":
       "钱包无法读取此兑换的收款方或最低兑得数量。除非你信任此网站，否则拒绝。",

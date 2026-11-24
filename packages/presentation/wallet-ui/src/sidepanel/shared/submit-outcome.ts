@@ -75,8 +75,9 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "strk20 privacy leak",
   // The public balance a shield or registration spends, read before signing.
   PRIVACY_PUBLIC_BALANCE_UNCONFIRMED.toLowerCase(),
-  // The shared poisoned-recipient refusal (verify.ts).
+  // The shared poisoned-recipient and poisoned-spender refusals (verify.ts).
   "the recipient closely mimics an address you saved or paid but is a different account. re-check every character before sending.",
+  "the address this allows closely mimics an address you saved or paid but is a different account. re-check every character before approving.",
   // Fee ceilings and fee reviews, checked before signing.
   "retry the fee estimate before approving this transaction",
   "couldn't estimate the network fee, so nothing was signed. try again.",
