@@ -4,15 +4,17 @@
  *
  * Usage: `bun scripts/fetch-previous-release.ts <out-dir> [X.Y.Z]`
  *
- * Without a version it picks the newest published (non-draft) `vX.Y.Z`
- * release at or below `package.json`'s version: the release live users run
- * while a branch is unbumped, and the one before it once it is. It downloads
+ * Without a version it picks the newest `vX.Y.Z` tag at or below
+ * `package.json`'s version: the release live users run while a branch is
+ * unbumped, and the one before it once it is. It downloads
  * `bramble-<v>.zip` and its `.sha256` over public HTTPS, checks the
  * digest, unzips into `<out-dir>` (which must not exist yet), checks the
  * unpacked manifest carries that version, and prints `<out-dir>`. Any mismatch
  * exits non-zero with nothing left in `<out-dir>`. The digest is published
  * beside the zip, so it guards against a corrupt or swapped download, not a
- * compromised release. No token: the repository is public, so the nightly
+ * compromised release. A tag whose release has no assets yet fails the
+ * download, loudly. Tags come from `git ls-remote`, not the REST API, whose
+ * anonymous limit (60 an hour per IP) a shared runner IP can exhaust. No token: the repository is public, so the nightly
  * never hands a credential to this release-branch code.
  */
 import { createHash } from "node:crypto";
@@ -65,7 +67,7 @@ const run = (command: readonly string[]): string => {
 };
 
 const get = async (url: string): Promise<Response> => {
-  const response = await fetch(url, { headers: { accept: "application/vnd.github+json" } });
+  const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
   return response;
 };
@@ -81,11 +83,15 @@ const main = async (outArg: string | undefined, versionArg: string | undefined):
     if (!tag) throw new Error(`version ${versionArg} is not X.Y.Z`);
   } else {
     const pkg = (await Bun.file("package.json").json()) as { version: unknown };
-    // ponytail: unauthenticated API (60 requests/hour per IP), one call per run.
-    const listed = (await (
-      await get(`https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`)
-    ).json()) as { tag_name: string; draft: boolean }[];
-    const tags = listed.filter((release) => !release.draft).map((release) => release.tag_name);
+    const tags = run([
+      "git",
+      "ls-remote",
+      "--tags",
+      "--refs",
+      `https://github.com/${REPOSITORY}.git`,
+    ])
+      .split("\n")
+      .map((line) => line.split("refs/tags/")[1] ?? "");
     tag = previousReleaseTag(tags, String(pkg.version));
     if (!tag) throw new Error(`no release at or below ${String(pkg.version)}`);
   }
