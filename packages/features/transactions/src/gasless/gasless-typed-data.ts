@@ -308,8 +308,31 @@ const hashesMatch = (
     [...calls, { calldata: [...fee.calldata], contractAddress: fee.to, entrypoint: "transfer" }],
     OutsideExecutionVersion.V2,
   );
+  // starknet.js getOutsideCall always runs getSelectorFromName(entrypoint), so
+  // an entrypoint given as a selector felt would be hashed as if it were a name.
+  // Put each user call's real selector back; the fee call is a named "transfer".
+  const selectors = calls.map((call) => selectorOf(call.entrypoint));
+  const rebuiltMessage: unknown = rebuilt.message;
+  const rebuiltCalls = isRecord(rebuiltMessage) ? rebuiltMessage["Calls"] : null;
+  if (
+    !isRecord(rebuiltMessage) ||
+    !Array.isArray(rebuiltCalls) ||
+    rebuiltCalls.length !== calls.length + 1 ||
+    selectors.some((selector) => selector === null)
+  ) {
+    return false;
+  }
+  const expected: TypedData = {
+    ...rebuilt,
+    message: {
+      ...rebuiltMessage,
+      Calls: rebuiltCalls.map((call: unknown, index) =>
+        index < selectors.length && isRecord(call) ? { ...call, Selector: selectors[index] } : call,
+      ),
+    },
+  };
   const supplied = typedData.getMessageHash(value as TypedData, accountAddress);
-  return sameFelt(supplied, typedData.getMessageHash(rebuilt, accountAddress));
+  return sameFelt(supplied, typedData.getMessageHash(expected, accountAddress));
 };
 
 /**
