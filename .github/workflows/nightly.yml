@@ -409,10 +409,10 @@ jobs:
             // Seed/runs: digits only. A seeded property failure keeps its seed in the state and stays listed until a human closes the issue.
             const key = (g) => `gate: ${g.name}` + (seed && `gate: ${g.name}` === PROP ? ` (seed ${seed})` : "");
             const current = [...failingGates.map(key), ...failedTests.map((t) => `test: ${t}`)];
-            const show = (key) => {
-              const name = key.slice(6); // after "gate: " or "test: "
-              if (key.startsWith("test: ")) return `- ${code(name)}`;
-              const gate = failingGates.find((g) => g.name === name);
+            const show = (k) => {
+              const name = k.slice(6); // after "gate: " or "test: "
+              if (k.startsWith("test: ")) return `- ${code(name)}`;
+              const gate = failingGates.find((g) => key(g) === k); // a seeded key matches only tonight's seed
               return gate ? `- ${name} (${gate.outcome || "no result"})` : `- ${name}`;
             };
 

@@ -128,6 +128,7 @@ describe("nightly report", () => {
       "Property seed: 123 (reproduce: `BRAMBLE_PROPERTY_SEED=123 BRAMBLE_PROPERTY_RUNS=3000 bun test tests/property`)",
     );
     expect(issues[0]?.body).toContain("Property seed: 123");
+    expect(seeded.summary).toContain("- Security property suite (seed 123) (failure)");
     expect(issues[0]?.body).toMatch(/<!-- nightly-state: .* -->$/);
     const hostile = await run({ PROPERTY_SEED: "1`; x", PROPERTY_RUNS: "3000" }, []);
     expect(hostile.summary).not.toContain("Property seed");
