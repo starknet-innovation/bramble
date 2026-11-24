@@ -19,6 +19,10 @@
  * (`legal winner thank year …`, also Krusty's adapter check). Every other key is the parity
  * phrase's own OpenZeppelin key at an index nothing else uses (7, 10, 12, 13), derived at run time;
  * no value in these fixtures is a secret. Keep-or-reseal as in `mobile-parity-vault.ts`.
+ *
+ * The v13 vault (and the migration's input) is the service's v14 payload with `accountProvenance`
+ * removed and the version set to 13 (`asV13`). That is valid only while 13→14 is a version bump
+ * (`packages/platform/vault/src/schema/migrations.ts`, the `fromVersion: 13` step).
  */
 
 import {

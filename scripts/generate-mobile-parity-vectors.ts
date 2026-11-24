@@ -150,6 +150,11 @@ for (const [path, compute] of [
   await writeFile(path, `${JSON.stringify(migration, null, 2)}\n`);
   console.log(`wrote ${path}`);
 }
+// The G7b vaults hold short arrays Biome collapses; format them as the scan fixtures are.
+const vaultPaths = Object.values(VAULT_FULL_FIXTURE_PATHS);
+if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...vaultPaths]).exitCode !== 0) {
+  throw new Error("biome could not format the G7b vault fixtures");
+}
 
 await writeFile(ACTIVITY_PARITY_FIXTURE_PATH, await renderActivityParity());
 console.log(`wrote ${ACTIVITY_PARITY_FIXTURE_PATH}`);

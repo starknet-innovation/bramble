@@ -23,7 +23,9 @@
  * Both stay at schema 13, which wallet-core still reads. The service now writes schema 14, which is
  * v13 plus an optional `accountProvenance` map (the 13→14 migration adds nothing else), so the v13
  * payload is the service's v14 without that map and at version 13. `isVaultV13` must accept it and
- * the extension's own encrypted store seals it.
+ * the extension's own encrypted store seals it. This holds only while 13→14 is a version bump
+ * (`packages/platform/vault/src/schema/migrations.ts`, the `fromVersion: 13` step); if that step
+ * ever reshapes the vault, `asV13` must stop deriving v13 from a v14 payload.
  */
 
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
