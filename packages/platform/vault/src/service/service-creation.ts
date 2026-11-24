@@ -25,7 +25,7 @@ import {
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV13, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV14, type Vault } from "../schema/schema";
 import type { ImportRawKeyAccountInput, WalletVaultService } from "./service-types";
 import { requireVaultCapacity } from "./vault-capacity";
 
@@ -45,7 +45,7 @@ export const writeVault = async (
   beforeCommit?: () => void,
 ): Promise<void> => {
   requireVaultCapacity(vault);
-  if (!isVaultV13(vault)) {
+  if (!isVaultV14(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
@@ -172,6 +172,7 @@ export const vaultCreationMethods = ({
       {
         ...vault,
         accounts: [...vault.accounts, account],
+        accountProvenance: { ...vault.accountProvenance, [account.id]: "created" },
         activeAccountId: account.id,
         signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
       },
@@ -200,6 +201,7 @@ export const vaultCreationMethods = ({
       {
         ...vault,
         accounts: [...vault.accounts, account],
+        accountProvenance: { ...vault.accountProvenance, [account.id]: "created" },
         activeAccountId: vault.activeAccountId ?? account.id,
         mnemonic: vault.mnemonic ?? input.mnemonic,
         schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -222,6 +224,10 @@ export const vaultCreationMethods = ({
       {
         ...vault,
         accounts: [...vault.accounts, ...derived.map(({ account }) => account)],
+        accountProvenance: {
+          ...vault.accountProvenance,
+          ...Object.fromEntries(derived.map(({ account }) => [account.id, "imported" as const])),
+        },
         activeAccountId: first.account.id,
         signingKeys: [
           ...vault.signingKeys,
@@ -272,6 +278,9 @@ export const vaultCreationMethods = ({
       encryptedStore,
       {
         accounts: derived.map(({ account }) => account),
+        accountProvenance: Object.fromEntries(
+          derived.map(({ account }) => [account.id, "imported" as const]),
+        ),
         accountSecrets: [],
         multisigStrk20KeyConflicts: [],
         multisigStrk20ViewingKeys: [],

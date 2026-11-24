@@ -32,6 +32,7 @@ import { snip12MerkleLayout, snip12MerkleRoot } from "@bramble/starknet/snip12-m
 import { snip12Scalar } from "@bramble/starknet/snip12-scalars";
 import { type Snip12Field, snip12Vocabulary } from "@bramble/starknet/snip12-vocabulary";
 import { isTypedDataShape } from "@bramble/starknet/typed-data";
+import { t } from "../../i18n/messages";
 import {
   emptySplit,
   isFieldList,
@@ -40,7 +41,7 @@ import {
   merkleLeafKey,
   merkleRootKey,
   ownFieldValue,
-  PRIMARY_TYPE_KEY,
+  primaryTypeKey,
   type SignRequestRow,
   type SignRequestSplit,
   type Split,
@@ -235,7 +236,7 @@ const pushU256Total = (
     return;
   }
   const total = (BigInt(high.encoded) << U256_HIGH_SHIFT) + BigInt(low.encoded);
-  out.signed.push([path, `${total.toString()} (u256 total of high and low)`]);
+  out.signed.push([path, t("signing.u256Total", { total: total.toString() })]);
 };
 
 function walkType(
@@ -409,7 +410,7 @@ const withPrimaryType = (
   if (primaryType.length === 0) {
     return split;
   }
-  const row: SignRequestRow = [PRIMARY_TYPE_KEY, primaryType];
+  const row: SignRequestRow = [primaryTypeKey(), primaryType];
   return {
     signed: hashed ? [row, ...split.signed] : split.signed,
     unclassified: split.unclassified,

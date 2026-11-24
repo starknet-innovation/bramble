@@ -5,18 +5,20 @@
  */
 
 import {
+  addressLabel,
+  addressText,
   canonicalAddress,
   isStarknetNetworkId,
   normalizeFeltInput,
 } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
+import { t } from "../../i18n/messages";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, renderFragment, showToast } from "../shared/dom";
-import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
 import { createStagePacer, type StagePacer, type StageTimers } from "../shared/stage-pacer";
 import {
@@ -43,19 +45,19 @@ const decisionWords = (
   readonly pending: string;
   readonly title: string;
 } => {
-  if (notice) return { done: "Closed", line: "", pending: "", title: "" };
+  if (notice) return { done: t("approval.decision.closed"), line: "", pending: "", title: "" };
   return action === "approve"
     ? {
-        done: "Request approved",
-        line: "The reviewed request is locked while the wallet signs and submits it.",
-        pending: "Approved. Signing and broadcasting…",
-        title: "Authorizing request",
+        done: t("approval.decision.approved"),
+        line: t("approval.decision.approvedLine"),
+        pending: t("approval.decision.approvedPending"),
+        title: t("approval.decision.approvedTitle"),
       }
     : {
-        done: "Request denied",
-        line: "The wallet is returning control to the requesting site.",
-        pending: "Rejecting request…",
-        title: "Denying request",
+        done: t("approval.decision.denied"),
+        line: t("approval.decision.deniedLine"),
+        pending: t("approval.decision.deniedPending"),
+        title: t("approval.decision.deniedTitle"),
       };
 };
 
@@ -132,9 +134,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
       const networkId = form.elements.namedItem("networkId");
       const currentNetwork = networkId instanceof HTMLInputElement ? networkId.value : "";
       if (!card || card.networkId !== currentNetwork) {
-        const message = card
-          ? "This wallet card belongs to a different network."
-          : "That wallet card is not recognized.";
+        const message = card ? t("shell.card.otherNetwork") : t("shell.card.unrecognized");
         walletCardField.setCustomValidity(message);
         if (result) result.textContent = message;
         return;
@@ -148,7 +148,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         const input = form.elements.namedItem(name);
         if (input instanceof HTMLInputElement) input.value = value;
       }
-      if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      if (result) result.textContent = t("shell.card.verified");
       rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
       const label = form.elements.namedItem("label");
       if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
@@ -176,16 +176,16 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
       .then(
         async () => {
           clearAddressBookDraft();
-          showToast("Address saved", "success", form);
+          showToast(t("shell.addressBook.saved"), "success", form);
           if (result) {
-            result.textContent = "Address saved";
+            result.textContent = t("shell.addressBook.saved");
           }
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Address save failed"), "error", form);
+          showToast(errorDetails(error, t("shell.addressBook.saveFailed")), "error", form);
           if (result) {
-            result.textContent = errorLine(error, "Address save failed");
+            result.textContent = errorLine(error, t("shell.addressBook.saveFailed"));
           }
           buttonBusy(submitButton, false);
         },
@@ -215,7 +215,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
         qr,
         payload === "card" && card
           ? qrSvg(card, RECEIVE_QR_LABELS.card)
-          : qrSvg(address, RECEIVE_QR_LABELS.address),
+          : qrSvg(addressText(address), RECEIVE_QR_LABELS.address),
       );
       qr.dataset["qrPayload"] = payload;
     }
@@ -264,11 +264,11 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       if (cardCopy) {
         cardCopy.dataset["copy"] = card;
         cardCopy.disabled = false;
-        if (cardCopy.lastChild) cardCopy.lastChild.textContent = "Copy wallet card";
+        if (cardCopy.lastChild) cardCopy.lastChild.textContent = t("receive.card.copy");
       }
       if (keyStatus) keyStatus.hidden = true;
       if (key) {
-        key.textContent = accountLabel(nostrPublicKey);
+        key.textContent = addressLabel(nostrPublicKey);
         key.title = nostrPublicKey;
       }
       if (keyCopy) keyCopy.dataset["copy"] = nostrPublicKey;
@@ -286,7 +286,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       if (explainer) explainer.hidden = true;
       if (cardCopy) cardCopy.hidden = true;
       if (keyStatus) {
-        keyStatus.textContent = "Coordination is unavailable. Share the account address instead.";
+        keyStatus.textContent = t("shell.card.coordinationUnavailable");
         keyStatus.hidden = false;
       }
       if (keyValue) keyValue.hidden = true;
@@ -328,12 +328,12 @@ export const bindApprovals = ({
   const showFailure = (error: unknown, button: HTMLButtonElement): void => {
     // An approved call whose reply was lost may be on chain: amber, not "failed".
     showToast(
-      errorDetails(error, "Approval failed"),
+      errorDetails(error, t("approval.decision.failed")),
       isOutcomeUnknown(error) ? "warning" : "error",
       button,
     );
     if (result) {
-      result.textContent = errorLine(error, "Approval failed");
+      result.textContent = errorLine(error, t("approval.decision.failed"));
     }
   };
   app?.querySelectorAll<HTMLButtonElement>("[data-connect-choice]").forEach((button) => {
@@ -365,10 +365,10 @@ export const bindApprovals = ({
       const words =
         button.dataset["multisigProposal"] === "true"
           ? {
-              done: "Saved for signers",
-              line: "Other signers still need to sign.",
-              pending: "Saving…",
-              title: "Saving for signers",
+              done: t("approval.decision.saved"),
+              line: t("approval.decision.savedLine"),
+              pending: t("approval.decision.savedPending"),
+              title: t("approval.decision.savedTitle"),
             }
           : decisionWords(action, notice);
       if (liveTitle) {
@@ -467,7 +467,7 @@ export const bindApprovals = ({
       void wallet.retryApprovalFee(id).then(
         async () => render(await wallet.loadStatus()),
         (error: unknown) => {
-          showToast(errorDetails(error, "Fee estimate failed"), "error", button);
+          showToast(errorDetails(error, t("approval.decision.feeFailed")), "error", button);
           buttonBusy(button, false);
         },
       );

@@ -30,6 +30,8 @@ const [collectible, discoveredOnly] = visibleNftItems(
 if (!collectible || !discoveredOnly) {
   throw new Error("Missing UI Lab collectible fixture");
 }
+// A watched NFT whose metadata named no art, as the background marks it.
+const artUnavailable = { ...collectible, artUnavailable: true, image: "" };
 
 export const RequestCards: CatalogStory = {
   name: "Request cards",
@@ -58,6 +60,7 @@ export const CollectibleCards: CatalogStory = {
         `<div class="catalog-grid wide">
           ${catalogSample("Gallery card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(collectible, true)}</ul>`)}
           ${catalogSample("Discovered card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(discoveredOnly, true)}</ul>`)}
+          ${catalogSample("Art unavailable", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(artUnavailable, true)}</ul>`)}
         </div>`,
       ),
       args.theme,

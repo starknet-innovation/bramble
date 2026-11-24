@@ -10,6 +10,7 @@ import {
   DEVELOPMENT_SOURCE_FILES,
   EXCLUDED_DIRECTORIES,
   EXTENSION_SURFACE_EDGES,
+  isExactVersion,
   NON_LITERAL_MODULE_LOADS,
   SHARED_SURFACE_MODULES,
   STRUCTURED_SOURCE_ROOTS,
@@ -34,6 +35,7 @@ type Workspace = {
 const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   "@bramble/extension": [
     "@bramble/core",
+    "@bramble/flags",
     "@bramble/kms-krusty",
     "@bramble/ledger-browser",
     "@bramble/ledger-protocol",
@@ -52,6 +54,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/wallet-ui",
   ],
   "@bramble/core": [],
+  "@bramble/flags": ["@bramble/core", "@bramble/store"],
   "@bramble/kms-krusty": ["@bramble/core", "@bramble/vault", "@bramble/wallet-model"],
   "@bramble/ledger-browser": [
     "@bramble/core",
@@ -122,6 +125,8 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/core",
     "@bramble/ledger-protocol",
     "@bramble/multisig",
+    // Site-warning catalog only (`insight-messages`), shown in the reader's language.
+    "@bramble/permissions",
     "@bramble/portfolio",
     "@bramble/privacy",
     "@bramble/settings",
@@ -135,6 +140,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   ],
   bramble: [
     "@bramble/core",
+    "@bramble/flags",
     "@bramble/kms-krusty",
     "@bramble/ledger-browser",
     "@bramble/ledger-protocol",
@@ -203,9 +209,6 @@ const dependencyEntries = (manifest: Manifest): Array<readonly [string, string]>
   ...Object.entries(manifest.dependencies ?? {}),
   ...Object.entries(manifest.devDependencies ?? {}),
 ];
-
-const isExactVersion = (version: string): boolean =>
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) || version === "workspace:*";
 
 for (const workspace of workspaces) {
   if (workspace.manifest.private !== true || workspace.manifest.type !== "module") {

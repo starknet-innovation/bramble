@@ -1,3 +1,4 @@
+import { addressText } from "@bramble/wallet-model/networks";
 import { expect, userEvent, within } from "storybook/test";
 import { RECIPIENT_ADDRESS } from "../../fixtures/fixtures";
 import {
@@ -67,7 +68,7 @@ export const SendPrivately: LabStory = {
     expect(review).toHaveTextContent("Relay fee action");
     await step("Inspect the exact transfer and relay parameters", async () => {
       await stepForward(canvasElement, "Inspect transfer parameters");
-      expect(walletBody(canvasElement)).toHaveTextContent(RECIPIENT_ADDRESS);
+      expect(walletBody(canvasElement)).toHaveTextContent(addressText(RECIPIENT_ADDRESS));
     });
     await step("Lock the frozen request during authorization", async () => {
       await stepForward(canvasElement, "Authorize private transfer");

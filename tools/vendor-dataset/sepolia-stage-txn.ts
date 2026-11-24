@@ -1,0 +1,221 @@
+/**
+ * Sepolia accounts on S-TXN, the nightly send suite's own seed (issue 976):
+ * one deployed account per signing shape the wallet imports, so the suite can
+ * self-transfer from each without ever touching an import fixture, plus TX-00,
+ * the bank that funds the suite's throwaway deploy accounts. All funded by TA-01.
+ *
+ * Re-running tops every sender back up to its float, so a local run of this
+ * stage is also how the suite is refilled. Without S-TXN in the seed file the
+ * stage is skipped, so the other stages keep running.
+ */
+import { hash } from "starknet";
+import {
+  argentConstructor,
+  braavosKeypair,
+  brambleKeypair,
+  CLASSES,
+  classAt,
+  type ManifestEntry,
+  offLadderKeypair,
+  readyKeypair,
+  tokenBalance,
+} from "./matrix-lib";
+import { BraavosDeploySigner, type KP } from "./matrix-signers";
+import {
+  appSeed,
+  deployer,
+  norm,
+  type SepoliaFixture,
+  STRK,
+  selfDeploy,
+  topUp,
+  upgradeTo,
+} from "./sepolia-fixtures";
+import { sepoliaVar } from "./sepolia-seeds";
+import { braavosDeployParams } from "./sepolia-stage-brv";
+
+// Measured on Sepolia (2026-11-19/20). Send run: about 0.041 STRK per
+// self-transfer from each of six senders, about 0.25 STRK a night, so roughly
+// 45 nights per sender float. Deploy run: about 2 STRK a night from the bank
+// (1 STRK out to each of five throwaway accounts, about 0.65 swept back): each
+// transfer, deploy, send and sweep costs about 0.05 STRK, and the sweep's
+// reserve (three times its fee estimate) stays behind as dust. 50 STRK lasts
+// about 25 nights. The nightly's runway check (#976, PR 6) flags a low bank;
+// re-run this stage to refill.
+const BANK_FLOAT = 50n * STRK;
+const SENDER_FLOAT = 2n * STRK;
+const ETH_FLOAT = 10n ** 15n; // 0.001 ETH, for TX-01's one ETH self-transfer
+// TX-10's salt, standing in for the random one sncast picks.
+const SNCAST_SALT = "0x7c10";
+
+/** A deploy shape: class, constructor calldata and salt, plus the deploy signer. */
+type Shape = {
+  readonly classHash: string;
+  readonly calldata: readonly string[];
+  readonly salt: string;
+  readonly signer?: BraavosDeploySigner;
+};
+
+const oz = (kp: KP, salt = "0x0", classHash: string = CLASSES.oz300): Shape => ({
+  classHash,
+  calldata: [kp.pub],
+  salt,
+});
+const argent = (kp: KP, classHash: string): Shape => ({
+  classHash,
+  calldata: argentConstructor(kp.pub, classHash),
+  salt: kp.pub,
+});
+const braavos = (kp: KP, impl: string): Shape => ({
+  classHash: CLASSES.braavosDeploy,
+  calldata: [kp.pub],
+  salt: kp.pub,
+  signer: new BraavosDeploySigner(kp, braavosDeployParams(false, impl)),
+});
+
+/** One S-TXN account: deployed once, then kept at `float` STRK (and ETH, when given). */
+function sender(
+  seed: string,
+  id: string,
+  derivation: ManifestEntry["vendorDerivation"],
+  index: number,
+  kp: KP,
+  shape: Shape,
+  card: {
+    readonly expected: string;
+    readonly detectability: ManifestEntry["detectability"];
+    readonly float?: bigint;
+    readonly eth?: bigint;
+    readonly after?: (e: ManifestEntry) => Promise<Record<string, unknown>>;
+  },
+): SepoliaFixture {
+  return {
+    id,
+    seed,
+    vendorDerivation: derivation,
+    index,
+    address: norm(
+      hash.calculateContractAddressFromHash(shape.salt, shape.classHash, [...shape.calldata], 0),
+    ),
+    pubkey: kp.pub,
+    classAtDeploy: shape.classHash,
+    expected: card.expected,
+    detectability: card.detectability,
+    backedBy: "none",
+    step: async (e) => {
+      const deployedClass = await selfDeploy(e, {
+        signer: shape.signer ?? kp.priv,
+        classHash: shape.classHash,
+        calldata: shape.calldata,
+        salt: shape.salt,
+      });
+      // A shape that computes a different address than the deploy used would
+      // leave the recorded address empty; never record that as deployed.
+      if (!deployedClass) throw new Error(`no class at ${e.address} after deploy`);
+      // Top up before `after`, so an upgrade (TX-06) that used up the fee
+      // float on a failed attempt has STRK for its retry.
+      await topUp(e, "STRK", card.float ?? SENDER_FLOAT);
+      const extra = card.after ? await card.after(e) : {};
+      // Read again after `after`: an upgrade (TX-06) changes the live class.
+      const liveClass = card.after ? await classAt(e.address) : deployedClass;
+      // And top up again, so the upgrade's fee does not leave it below float.
+      if (card.after) await topUp(e, "STRK", card.float ?? SENDER_FLOAT);
+      // ETH is optional: the bank may hold none, and the suite skips its ETH
+      // spec on an account without ETH. Recorded, never an error.
+      let eth: string | undefined;
+      if (card.eth) {
+        const held = await tokenBalance("ETH", e.address);
+        const spare = await tokenBalance("ETH", deployer.address);
+        if (held >= card.eth || spare >= card.eth - held) await topUp(e, "ETH", card.eth);
+        else eth = "unfunded: the bank lacks the Sepolia ETH";
+      }
+      return {
+        state: { deployed: true, salt: shape.salt, liveClass, ...extra, ...(eth && { eth }) },
+      };
+    },
+  };
+}
+
+const fixtures = (mnemonic: string): readonly SepoliaFixture[] => {
+  const seed = sepoliaVar("S-TXN");
+  const bramble = (account: number): KP => brambleKeypair(mnemonic, account);
+  const ready = (index: number): KP => readyKeypair(mnemonic, index);
+  const brv = (index: number): KP => braavosKeypair(mnemonic, index);
+  const key = (index: number): KP => offLadderKeypair(mnemonic, index);
+  // Bramble account 0 and Braavos index 0 share a path (m/44'/9004'/0'/0/0),
+  // so TX-00 (the bank) and TX-07 sign with one key, as on any real phrase.
+  // Harmless: separate nonces, and the suite's firewall allows one sender per spec.
+  return [
+    sender(seed, "s-txn/TX-00", "bramble-account", 0, bramble(0), oz(bramble(0)), {
+      expected:
+        "the send suite's bank: funds its throwaway deploy accounts; never sent from in the UI",
+      detectability: "D1",
+      float: BANK_FLOAT,
+    }),
+    sender(seed, "s-txn/TX-01", "bramble-account", 1, bramble(1), oz(bramble(1)), {
+      expected: "sends: Bramble OZ 3.0 (STRK and ETH)",
+      detectability: "D1",
+      eth: ETH_FLOAT,
+    }),
+    sender(
+      seed,
+      "s-txn/TX-02",
+      "bramble-account",
+      2,
+      bramble(2),
+      argent(bramble(2), CLASSES.argent040),
+      { expected: "sends: Argent 0.4 on Bramble's ladder", detectability: "D1" },
+    ),
+    sender(
+      seed,
+      "s-txn/TX-03",
+      "bramble-account",
+      3,
+      bramble(3),
+      argent(bramble(3), CLASSES.xverse040),
+      { expected: "sends: Xverse Argent 0.4 on Bramble's ladder", detectability: "D1" },
+    ),
+    sender(seed, "s-txn/TX-04", "ready-double", 0, ready(0), argent(ready(0), CLASSES.argent040), {
+      expected: "sends: Ready Argent 0.4",
+      detectability: "D1",
+    }),
+    sender(seed, "s-txn/TX-05", "ready-double", 1, ready(1), argent(ready(1), CLASSES.argent031), {
+      expected: "sends: Ready Argent 0.3.1",
+      detectability: "D2",
+    }),
+    sender(seed, "s-txn/TX-06", "ready-double", 2, ready(2), argent(ready(2), CLASSES.argent040), {
+      expected: "Ready Argent 0.4 upgraded to 0.5.0: send or refusal set by the suite's first run",
+      detectability: "D2",
+      after: upgradeTo(CLASSES.argent050, ready(2)),
+    }),
+    sender(seed, "s-txn/TX-07", "braavos-direct", 0, brv(0), braavos(brv(0), CLASSES.braavosImpl), {
+      expected: "sends: Braavos, current implementation",
+      detectability: "D2",
+    }),
+    sender(
+      seed,
+      "s-txn/TX-08",
+      "braavos-direct",
+      1,
+      brv(1),
+      braavos(brv(1), CLASSES.braavosImpl110),
+      {
+        expected: "Braavos 1.1.0 implementation: send or refusal set by the suite's first run",
+        detectability: "D2",
+      },
+    ),
+    sender(seed, "s-txn/TX-09", "key", 0, key(0), oz(key(0)), {
+      expected: "sends: OZ 3.0 imported by private key",
+      detectability: "D1",
+    }),
+    sender(seed, "s-txn/TX-10", "key", 1, key(1), oz(key(1), SNCAST_SALT, CLASSES.ozSncast), {
+      expected: "sends: sncast's OZ class and salt, imported by key and address",
+      detectability: "D5",
+    }),
+  ];
+};
+
+const mnemonic = appSeed("S-TXN", "TX-00…TX-10");
+
+/** S-TXN's fixtures, or none until the seed is in the seed file. */
+export const TXN_FIXTURES: readonly SepoliaFixture[] = mnemonic ? fixtures(mnemonic) : [];

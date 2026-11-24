@@ -20,6 +20,8 @@
  * {@link guardedCopyCanClear}). Anywhere a clear is refused or cannot run, the
  * user is told and the phrase is never reported as cleared.
  */
+import { t } from "../../i18n/messages";
+import { shellMessages } from "../../i18n/messages/shell";
 import { showToast } from "./dom";
 
 /** The clear outcome when nothing secret was copied: there is nothing to clear. */
@@ -76,17 +78,13 @@ export const GUARDED_COPY_CLEAR_MS = 60_000;
  * What the user accepts by copying, shown beside a guarded copy control where
  * the wallet can clear the clipboard afterwards.
  */
-export const GUARDED_COPY_NOTE =
-  "Other apps can read the clipboard, and it may sync to your other devices. Bramble clears it after about a minute, but not from clipboard history.";
+export const GUARDED_COPY_NOTE = shellMessages.en["shell.clipboard.note"];
 
 /**
  * The same warning where the wallet cannot clear the clipboard (Firefox): it
  * says so instead of promising an overwrite that will be refused.
  */
-export const GUARDED_COPY_NOTE_NO_CLEAR =
-  "Other apps can read the clipboard, and it may sync to your other devices. Bramble cannot clear it in this browser, so copy something else afterwards.";
-
-const CLEAR_FAILED = "Couldn't clear the clipboard. Copy something else to overwrite it.";
+export const GUARDED_COPY_NOTE_NO_CLEAR = shellMessages.en["shell.clipboard.noteNoClear"];
 
 /**
  * Whether this page can overwrite the clipboard a minute after the copy.
@@ -101,7 +99,7 @@ const guardedCopyCanClear = (view: Window | null | undefined): view is Window =>
  * The clipboard warning that is true for the page `view` belongs to.
  */
 export const guardedCopyNote = (view: Window | null | undefined): string =>
-  guardedCopyCanClear(view) ? GUARDED_COPY_NOTE : GUARDED_COPY_NOTE_NO_CLEAR;
+  t(guardedCopyCanClear(view) ? "shell.clipboard.note" : "shell.clipboard.noteNoClear");
 
 /**
  * Closes the onboarding page once the latest clipboard clear has run, saying
@@ -113,14 +111,13 @@ export const guardedCopyNote = (view: Window | null | undefined): string =>
 export const closeAfterGuardedClear = (status: HTMLElement | null, close: () => void): void => {
   const target = status;
   if (clearPending && target) {
-    target.textContent =
-      "Opening the wallet… This tab stays open until the clipboard clear finishes.";
+    target.textContent = t("shell.clipboard.waiting");
   }
   void pendingClear.then((cleared) => {
     if (cleared) {
       close();
     } else if (target) {
-      target.textContent = `${CLEAR_FAILED} Then close this tab.`;
+      target.textContent = t("shell.clipboard.clearFailedClose");
     }
   });
 };
@@ -138,7 +135,7 @@ export const bindGuardedCopy = (button: HTMLButtonElement | null, read: () => st
     const view = button.ownerDocument.defaultView;
     const clipboard = view?.navigator.clipboard;
     if (text.length === 0 || !clipboard) {
-      showToast("Nothing to copy", "error", button);
+      showToast(t("shell.copy.nothing"), "error", button);
       return;
     }
     void clipboard.writeText(text).then(
@@ -149,10 +146,10 @@ export const bindGuardedCopy = (button: HTMLButtonElement | null, read: () => st
           clearGeneration += 1;
           clearPending = false;
           pendingClear = NOT_CLEARED;
-          showToast("Copied — copy something else afterwards to overwrite it", "success", button);
+          showToast(t("shell.clipboard.copiedNoClear"), "success", button);
           return;
         }
-        showToast("Copied — the clipboard is cleared in about a minute", "success", button);
+        showToast(t("shell.clipboard.copiedClears"), "success", button);
         const generation = ++clearGeneration;
         clearPending = true;
         pendingClear = new Promise((resolve) => {
@@ -168,7 +165,7 @@ export const bindGuardedCopy = (button: HTMLButtonElement | null, read: () => st
                 clearPending = false;
               }
               if (!cleared) {
-                showToast(CLEAR_FAILED, "error", button);
+                showToast(t("shell.clipboard.clearFailed"), "error", button);
               }
               resolve(cleared);
             };
@@ -180,7 +177,7 @@ export const bindGuardedCopy = (button: HTMLButtonElement | null, read: () => st
         });
       },
       () => {
-        showToast("Copy failed", "error", button);
+        showToast(t("shell.copy.failed"), "error", button);
       },
     );
   });

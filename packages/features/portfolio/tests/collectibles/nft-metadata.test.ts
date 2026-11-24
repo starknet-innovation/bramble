@@ -160,6 +160,12 @@ describe("isDiscoveredNft", () => {
     expect(isDiscoveredNft({ ...valid, animationUrl: "https://example.com/a.html" })).toBe(false);
   });
 
+  test("accepts only a true artUnavailable mark", () => {
+    expect(isDiscoveredNft({ ...valid, artUnavailable: true, image: "" })).toBe(true);
+    expect(isDiscoveredNft({ ...valid, artUnavailable: false })).toBe(false);
+    expect(isDiscoveredNft({ ...valid, artUnavailable: "yes" })).toBe(false);
+  });
+
   test("rejects a mismatched id, bad network, or non-https image", () => {
     expect(isDiscoveredNft({ ...valid, id: "SN_MAIN:0x511a2b3:6" })).toBe(false);
     expect(isDiscoveredNft({ ...valid, networkId: "SN_FAKE" })).toBe(false);

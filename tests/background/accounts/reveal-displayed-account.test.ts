@@ -63,7 +63,7 @@ const wallet = {
       importedSeeds: [],
       mnemonic,
       originGrants: [],
-      schemaVersion: 13 as const,
+      schemaVersion: 14 as const,
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],

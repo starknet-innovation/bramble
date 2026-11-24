@@ -62,7 +62,7 @@ export const WEBSITE_DEPLOY_WORKFLOW = "website-deploy.yml";
  * `sha256sum .github/workflows/website-deploy.yml` in the same pull request.
  */
 export const WEBSITE_DEPLOY_SHA256 =
-  "14efc081b2e5b0711ea515a0753558a069cfd62233b6e4af233b136a9d7a3706";
+  "f0464f88e69a8a37fb4b8bb06c9f9914aabb6c5a0bdd0afa083f4b60065c5a28";
 
 const PRODUCTION_ENVIRONMENT = "bramble-production";
 const DEPLOY_STEP_NAME = "Deploy to Cloudflare Workers";

@@ -5,9 +5,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   createSidePanelNoticeClient,
-  SIDE_PANEL_NOTICE_BODY,
-  SIDE_PANEL_NOTICE_DISMISS,
-  SIDE_PANEL_NOTICE_TITLE,
+  sidePanelNoticeBody,
+  sidePanelNoticeDismiss,
+  sidePanelNoticeTitle,
   startSidePanelNotice,
   startSidePanelVisibility,
 } from "../../../src/sidepanel/shell/side-panel-notice";
@@ -41,10 +41,10 @@ describe("side panel notice", () => {
     await startSidePanelNotice({ doc: document, notice: client });
     const shown = document.querySelectorAll("#side-panel-notice");
     expect(shown).toHaveLength(1);
-    expect(shown[0]?.textContent).toContain(SIDE_PANEL_NOTICE_TITLE);
-    expect(shown[0]?.textContent).toContain(SIDE_PANEL_NOTICE_BODY);
+    expect(shown[0]?.textContent).toContain(sidePanelNoticeTitle());
+    expect(shown[0]?.textContent).toContain(sidePanelNoticeBody());
     const button = shown[0]?.querySelector("button");
-    expect(button?.textContent).toBe(SIDE_PANEL_NOTICE_DISMISS);
+    expect(button?.textContent).toBe(sidePanelNoticeDismiss());
     button?.click();
     expect(document.querySelector("#side-panel-notice")).toBeNull();
     expect(dismissed).toEqual([1]);

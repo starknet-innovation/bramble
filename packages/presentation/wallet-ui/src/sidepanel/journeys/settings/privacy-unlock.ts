@@ -7,38 +7,39 @@
  */
 import { callout } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { flowHeader, flowScreen } from "../../shared/parts";
 
-/** Menu label and screen title. */
-export const PRIVACY_UNLOCK_TITLE = "Unlock private transactions";
+/** Menu label and screen title, in the active language. */
+export const privacyUnlockTitle = (): string => t("settings.privacyUnlock.title");
 
-/** Shown once a pause was cleared. */
-export const PRIVACY_UNLOCK_DONE = "Unlocked. Check Activity before you send again.";
+/** Shown once a pause was cleared, in the active language. */
+export const privacyUnlockDone = (): string => t("settings.privacyUnlock.done");
 
-/** Shown when nothing was paused. */
-export const PRIVACY_UNLOCK_NONE = "Nothing to unlock.";
+/** Shown when nothing was paused, in the active language. */
+export const privacyUnlockNone = (): string => t("settings.privacyUnlock.none");
 
 /**
  * Renders the unlock screen: what is paused, the risk of clearing it, and the
  * one control that does.
  */
 export const privacyUnlockFlow = (status: WalletStatus): string =>
-  flowHeader(PRIVACY_UNLOCK_TITLE, status) +
+  flowHeader(privacyUnlockTitle(), status) +
   flowScreen(
     "privacy-unlock",
     `<section class="section stack">
-      <p>Private transactions from this account pause while an earlier one may still be in progress.</p>
+      <p>${th("settings.privacyUnlock.body")}</p>
       ${callout({
-        body: "That earlier transaction could still go through. If you send again, both could complete.",
+        body: t("settings.privacyUnlock.risk"),
         icon: "alert",
         role: "alert",
-        title: "Unlocking does not cancel it",
+        title: t("settings.privacyUnlock.riskTitle"),
       })}
       ${button({
         attributes: { id: "privacy-unlock-confirm" },
-        label: "Unlock anyway",
+        label: t("settings.privacyUnlock.confirm"),
         tone: "danger",
       })}
     </section>
@@ -62,11 +63,11 @@ export const bindPrivacyUnlock = (deps: PrivacyUnlockDeps): void => {
     buttonBusy(control, true);
     void deps.wallet.releasePendingPrivateWrite().then(
       (released) => {
-        if (result) result.textContent = released ? PRIVACY_UNLOCK_DONE : PRIVACY_UNLOCK_NONE;
+        if (result) result.textContent = released ? privacyUnlockDone() : privacyUnlockNone();
         buttonBusy(control, false);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Private unlock failed"), "error", control);
+        showToast(errorDetails(error, t("settings.privacyUnlock.failed")), "error", control);
         buttonBusy(control, false);
       },
     );

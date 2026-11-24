@@ -267,6 +267,53 @@ const decodeByteArray = (response: readonly string[]): string | null => {
   }
 };
 
+const MAX_SHORT_STRING = (1n << 248n) - 1n;
+
+// One non-empty, printable-ASCII Cairo short string (at most 31 bytes), or null.
+const decodeShortStringPiece = (felt: bigint): string | null => {
+  if (felt <= 0n || felt > MAX_SHORT_STRING) {
+    return null;
+  }
+  let piece = "";
+  for (let value = felt; value > 0n; value >>= 8n) {
+    const code = Number(value & 0xffn);
+    if (code < 0x20 || code > 0x7e) {
+      return null;
+    }
+    piece = String.fromCharCode(code) + piece;
+  }
+  return piece;
+};
+
+// Decodes the legacy `Array<felt252>` token URI (a length, then one Cairo short
+// string per felt) used by older ERC721 contracts. Every piece must be a
+// non-empty printable-ASCII short string and the declared length must match
+// exactly, so a ByteArray response (length + 3) can never also decode here.
+const decodeShortStringArray = (response: readonly string[]): string | null => {
+  // Bound the reply and check every element's felt grammar before any BigInt.
+  // A piece holds at least one byte, so the URI bound also bounds the count.
+  if (
+    response.length < 2 ||
+    response.length > MAX_NFT_URI_BYTES + 1 ||
+    !response.every(isStarkFieldElement) ||
+    BigInt(response[0] ?? "") !== BigInt(response.length - 1)
+  ) {
+    return null;
+  }
+  let uri = "";
+  for (const felt of response.slice(1)) {
+    const piece = decodeShortStringPiece(BigInt(felt));
+    if (piece === null) {
+      return null;
+    }
+    uri += piece;
+    if (uri.length > MAX_NFT_URI_BYTES) {
+      return null;
+    }
+  }
+  return uri;
+};
+
 const tryTokenUriEntrypoint = async (
   provider: RpcProvider,
   entrypoint: string,
@@ -278,7 +325,7 @@ const tryTokenUriEntrypoint = async (
       { calldata, contractAddress, entrypoint },
       "latest",
     );
-    return decodeByteArray(response);
+    return decodeByteArray(response) ?? decodeShortStringArray(response);
   } catch (error) {
     if (isTransportRpcError(error)) {
       throw error;
@@ -290,8 +337,9 @@ const tryTokenUriEntrypoint = async (
 /**
  * Reads an ERC721 metadata URI through both Starknet naming conventions.
  *
- * The returned Cairo ByteArray is length-bounded and shape-checked before it
- * crosses the RPC boundary. Missing, malformed, or unsupported metadata fails
+ * The returned Cairo ByteArray, or an older contract's felt array of short
+ * strings, is length-bounded and shape-checked before it crosses the RPC
+ * boundary. Missing, malformed, or unsupported metadata fails
  * closed with a stable error; no network content is fetched here.
  */
 export const getNftTokenUri = async ({

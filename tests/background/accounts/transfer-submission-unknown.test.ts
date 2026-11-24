@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { RpcGatewayRefusalError } from "@bramble/starknet/rpc-gateway-refusal";
 import { readSubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import {
   account,
@@ -81,6 +82,25 @@ describe("wallet.transfer with a lost broadcast reply", () => {
     const response = await handler(transfer, extensionSender);
 
     expect(response).toEqual({ error: "RPC refused the transaction" });
+    expect(await activity.list()).toEqual([]);
+  });
+
+  test("shows a gateway refusal as not sent, with no pending row (issue 910)", async () => {
+    const refusal = new RpcGatewayRefusalError("screening_unavailable");
+    const { activity, handler } = makeHarness({
+      async submitTransfer(input) {
+        await input.onSigned?.({
+          nonce: "0x1",
+          senderAddress: account.address,
+          transactionHash: SIGNED,
+        });
+        throw refusal;
+      },
+    });
+    const response = await handler(transfer, extensionSender);
+
+    expect(response).toEqual({ error: refusal.message });
+    expect(readSubmissionUnknownError(response)).toBeNull();
     expect(await activity.list()).toEqual([]);
   });
 

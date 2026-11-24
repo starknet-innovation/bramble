@@ -11,7 +11,7 @@ import {
   reviewMultisigStrk20Relay,
   reviewMultisigStrk20TypedData,
 } from "@bramble/privacy/multisig-strk20-review";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { addressText, STARKNET_NETWORKS, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import {
   type Call,
   num,
@@ -83,13 +83,13 @@ describe("decoded multisig CallSet review", () => {
     );
     expect(review).toEqual({
       lines: [
-        `Account ${ACCOUNT}`,
+        `Account ${addressText(ACCOUNT)}`,
         "Network Starknet Mainnet",
         "Register this multisig's private balance",
         "Deposit 3 STRK",
-        `Send 1.5 STRK to ${BOB}`,
+        `Send 1.5 STRK to ${addressText(BOB)}`,
         "Keep 0.25 STRK in this multisig",
-        `Withdraw 2 STRK to ${BOB}`,
+        `Withdraw 2 STRK to ${addressText(BOB)}`,
       ],
       title: "Privacy pool · compile_actions",
     });
@@ -149,10 +149,10 @@ describe("decoded multisig relay typed data", () => {
     const value = envelope([approve(POOL, 2n * ONE)]);
     expect(reviewMultisigStrk20TypedData(value, digest(value), NOW, SCOPE)).toEqual({
       lines: [
-        `Account ${ACCOUNT}`,
+        `Account ${addressText(ACCOUNT)}`,
         "Network Starknet Mainnet",
         "Allow the privacy pool to spend 2 STRK",
-        "Relayer 0x99",
+        `Relayer ${addressText("0x99")}`,
       ],
       title: "Token approval",
     });
@@ -183,9 +183,9 @@ describe("decoded multisig relay before Send", () => {
     };
     expect(reviewMultisigStrk20Relay(relay, SCOPE)).toEqual({
       lines: [
-        `Account ${ACCOUNT}`,
+        `Account ${addressText(ACCOUNT)}`,
         "Network Starknet Mainnet",
-        `Send 1 STRK to ${BOB}`,
+        `Send 1 STRK to ${addressText(BOB)}`,
         "Relay fee 0.1 STRK",
       ],
       title: "Privacy pool · apply_actions",

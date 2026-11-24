@@ -7,6 +7,7 @@ import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -171,9 +172,9 @@ describe("cluster views", () => {
     // The spender leads truncated, with the full address on hover and a copy
     // control beside it; the revoke stays the row's only other control.
     expect(html).toContain(
-      '<span class="allowance-spender"><code title="0x5abcdef1234">0x5abc…1234</code><button class="icon-button ghost copy-inline" data-copy="0x5abcdef1234" type="button" aria-label="Copy spender address"',
+      `<span class="allowance-spender"><code title="${addressText("0x5abcdef1234")}">0x0000…1234</code><button class="icon-button ghost copy-inline" data-copy="${addressText("0x5abcdef1234")}" type="button" aria-label="Copy spender address"`,
     );
-    expect(html).not.toContain("<code>0x5abcdef1234</code>");
+    expect(html).not.toContain(`<code>${addressText("0x5abcdef1234")}</code>`);
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -250,7 +251,7 @@ describe("cluster views", () => {
   test("NFT detail shows identifiers and routes to a focused send flow", () => {
     const html = dashboardWithNft("nft-detail", ownedNft.id);
     expect(html).toContain('data-view="nft-send"');
-    expect(html).toContain("0x511a…a2b3");
+    expect(html).toContain("0x0000…a2b3");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     const send = dashboardWithNft("nft-send", ownedNft.id);
     expect(send).toContain('id="nft-send-form"');

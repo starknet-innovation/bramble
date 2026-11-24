@@ -13,6 +13,9 @@
  * origin that was not pending when the request arrived must appear, and must
  * still be pending at the moment the popup would open. A request that is
  * refused, needs no approval, or is decided elsewhere first opens nothing.
+ * A connection request is the one exception: the queue keeps one connect
+ * approval per origin, so a repeated Connect joins the one already pending,
+ * and that approval counts as its own (#973).
  *
  * It opens no window, moves no focus, writes nothing, and never reaches the
  * side-panel learner: a refused open says nothing about whether this browser
@@ -46,7 +49,11 @@ export type SurfaceRescueBrowser = {
 };
 
 /** A pending approval's identity, as the queue lists it. */
-export type RescueApproval = { readonly id: string; readonly origin: string };
+export type RescueApproval = {
+  readonly id: string;
+  readonly kind?: string;
+  readonly origin: string;
+};
 
 /** Runs a prepared rescue once its side panel open was refused. Never rejects. */
 export type RescueAttempt = () => Promise<void>;
@@ -56,6 +63,8 @@ export type RescueAttempt = () => Promise<void>;
  * approvals already pending for its origin are known before it can queue one.
  */
 export type SurfaceRescue = (request: {
+  /** A connection request, which joins its origin's pending connect approval. */
+  readonly connect?: boolean;
   readonly origin: string;
   readonly windowId: number | undefined;
 }) => RescueAttempt;
@@ -102,12 +111,14 @@ export const createSurfaceRescue = ({
 }): SurfaceRescue => {
   let lastAt: number | null = null;
   let running = false;
-  const pendingFrom = (origin: string): readonly string[] =>
-    approvals().flatMap((approval) => (approval.origin === origin ? [approval.id] : []));
+  const pendingFrom = (origin: string): readonly RescueApproval[] =>
+    approvals().filter((approval) => approval.origin === origin);
+  const idsFrom = (origin: string): readonly string[] =>
+    pendingFrom(origin).map((approval) => approval.id);
   // The approval this request queued, waited for up to the accept window's length.
   const accepted = async (origin: string, known: ReadonlySet<string>): Promise<string | null> => {
     for (let waited = 0; ; waited += POLL_MS) {
-      const id = pendingFrom(origin).find((candidate) => !known.has(candidate));
+      const id = idsFrom(origin).find((candidate) => !known.has(candidate));
       if (id !== undefined) return id;
       if (waited >= SURFACE_RESCUE_ACCEPT_MS) return null;
       await wait(POLL_MS);
@@ -117,15 +128,19 @@ export const createSurfaceRescue = ({
   // interval since the last rescued popup has passed. Taking the slot here,
   // not at admission, keeps two delayed rescues from opening back to back.
   const admit = (origin: string, id: string) => (): boolean => {
-    if (!pendingFrom(origin).includes(id)) return false;
+    if (!idsFrom(origin).includes(id)) return false;
     const at = now();
     if (lastAt !== null && at >= lastAt && at - lastAt < SURFACE_RESCUE_THROTTLE_MS) return false;
     lastAt = at;
     return true;
   };
-  return ({ origin, windowId }) => {
+  return ({ connect = false, origin, windowId }) => {
     if (!browser?.sidePanel || typeof windowId !== "number") return nothing;
-    const known = new Set(pendingFrom(origin));
+    const known = new Set(
+      pendingFrom(origin)
+        .filter((approval) => !(connect && approval.kind === "connect"))
+        .map((approval) => approval.id),
+    );
     return async () => {
       // At most one outstanding rescue; a later one is dropped.
       if (running) return;

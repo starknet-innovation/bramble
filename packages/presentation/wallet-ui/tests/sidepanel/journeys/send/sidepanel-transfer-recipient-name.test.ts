@@ -10,11 +10,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, secondAccount } from "@bramble/testkit/sidepanel";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindTransferCompose } from "../../../../src/sidepanel/journeys/send/transfer-compose-ui";
 import type { TransferStage } from "../../../../src/sidepanel/journeys/send/transfer-model";
-import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import { paint } from "../../../support/transfer-ui-harness";
 
@@ -105,7 +105,7 @@ describe("Send names a pasted recipient it already knows", () => {
 
     expect(stages).toEqual(["details"]);
     expect(field(form, "recipientLabel")).toBe(name);
-    expect(field(form, "recipientLabel")).not.toBe(accountLabel(spelled));
+    expect(field(form, "recipientLabel")).not.toBe(addressLabel(spelled));
   });
 
   test("a saved contact on this network reads as the contact", () => {
@@ -121,7 +121,7 @@ describe("Send names a pasted recipient it already knows", () => {
 
     pasteAndContinue(form, grace);
 
-    expect(field(form, "recipientLabel")).toBe(accountLabel(grace));
+    expect(field(form, "recipientLabel")).toBe(addressLabel(grace));
   });
 
   test("an unknown address keeps its truncated form and is offered for saving", () => {
@@ -132,7 +132,7 @@ describe("Send names a pasted recipient it already knows", () => {
     expect(saveOffered(form)).toBe(true);
     form.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
 
-    expect(field(form, "recipientLabel")).toBe(accountLabel(stranger));
+    expect(field(form, "recipientLabel")).toBe(addressLabel(stranger));
   });
 
   test("a known address is not offered for saving", () => {

@@ -5,6 +5,8 @@
  */
 import { friendlyNetworkError } from "@bramble/core/network-error";
 import { resolveSpring } from "@bramble/ui-kit/spring";
+import { localizeErrorCopy } from "../../i18n/error-copy";
+import { t } from "../../i18n/messages";
 import { friendlyError } from "../runtime/friendly-error";
 import { icon } from "./icons";
 import { animate } from "./motion";
@@ -15,7 +17,7 @@ import { animate } from "./motion";
  */
 export const errorMessage = (error: unknown, fallback: string): string => {
   const raw = errorDetails(error, fallback);
-  return friendlyNetworkError(raw) ?? raw;
+  return localizeErrorCopy(friendlyNetworkError(raw) ?? raw);
 };
 
 /** Complete safe diagnostic carried by an Error for an explicit user copy action. */
@@ -35,7 +37,7 @@ export const errorDetails = (error: unknown, fallback: string): string =>
  * a refusal raised before anything was sent (issue 652 review, F2).
  */
 export const errorLine = (error: unknown, fallback: string): string =>
-  friendlyError(errorDetails(error, fallback)).message;
+  localizeErrorCopy(friendlyError(errorDetails(error, fallback)).message);
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -87,22 +89,22 @@ const toastCopyButton = (doc: Document, message: string): HTMLButtonElement => {
   const copy = doc.createElement("button");
   copy.className = "icon-button toast-copy";
   copy.type = "button";
-  copy.setAttribute("aria-label", "Copy error details");
-  copy.title = "Copy error details";
+  copy.setAttribute("aria-label", t("shell.toast.copyError"));
+  copy.title = t("shell.toast.copyError");
   copy.innerHTML = icon("copy");
   copy.addEventListener("click", () => {
     const clipboard = copy.ownerDocument.defaultView?.navigator.clipboard;
     void (clipboard?.writeText(message) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
       () => {
         copy.innerHTML = icon("check");
-        copy.title = "Error details copied";
-        copy.setAttribute("aria-label", "Error details copied");
+        copy.title = t("shell.toast.errorCopied");
+        copy.setAttribute("aria-label", t("shell.toast.errorCopied"));
       },
       () => {
         // Never raise another toast from inside a toast; say it in place instead
         // of failing silently, which reads as a dead control.
-        copy.title = "Copy failed";
-        copy.setAttribute("aria-label", "Copy failed");
+        copy.title = t("shell.copy.failed");
+        copy.setAttribute("aria-label", t("shell.copy.failed"));
       },
     );
   });
@@ -221,7 +223,7 @@ export const showToast = (
   details: string = message,
 ): void =>
   renderToast(
-    tone === "success" ? message : friendlyError(message).message,
+    tone === "success" ? message : localizeErrorCopy(friendlyError(message).message),
     tone,
     context,
     details,
@@ -250,7 +252,7 @@ export const showNoticeToast = (
 export const showRefusalToast = (
   message: string,
   context: Document | Element | null | undefined,
-): void => renderToast(friendlyError(message).message, "error", context, null);
+): void => renderToast(localizeErrorCopy(friendlyError(message).message), "error", context, null);
 
 const renderToast = (
   display: string,
@@ -266,6 +268,12 @@ const renderToast = (
     stack.className = "toast-stack";
     stack.setAttribute("aria-live", "polite");
     doc.body.append(stack);
+  }
+  // The same sentence already on screen says nothing new; stacking a copy of it
+  // only reads as a second failure (issue 951).
+  const showing = Array.from(stack.querySelectorAll(`.toast.${tone} .toast-text`));
+  if (showing.some((existing) => existing.textContent === display)) {
+    return;
   }
 
   const problem = tone !== "success";
@@ -342,15 +350,15 @@ export const bindCopyButtons = (app: Element | null): void => {
       const clipboard = button.ownerDocument.defaultView?.navigator.clipboard;
       void (clipboard?.writeText(value) ?? Promise.reject(new Error("Clipboard unavailable"))).then(
         () => {
-          if (!scopedStatus(button, "Copied")) {
-            showToast("Copied", "success", button);
+          if (!scopedStatus(button, t("shell.copy.done"))) {
+            showToast(t("shell.copy.done"), "success", button);
           }
           buttonBusy(button, false);
           confirmCopyGlyph(button);
         },
         () => {
-          scopedStatus(button, "Copy failed");
-          showToast("Copy failed", "error", button);
+          scopedStatus(button, t("shell.copy.failed"));
+          showToast(t("shell.copy.failed"), "error", button);
           buttonBusy(button, false);
         },
       );

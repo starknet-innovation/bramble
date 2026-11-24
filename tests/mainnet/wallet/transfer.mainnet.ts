@@ -4,16 +4,11 @@
  * the receipt fee, which the review had to show before Confirm.
  */
 import { expect, test } from "../../e2e/fixtures";
+import { receiptStrkFee, transferredToSelf, waitForSuccessfulReceipt } from "../../live/chain";
+import { expectActivity, selfTransfer } from "../../live/send";
 import { requireLocalMainnetAccount } from "../local-mainnet-account";
-import {
-  mainnetToken,
-  readPublicBalance,
-  receiptStrkFee,
-  transferredToSelf,
-  waitForSuccessfulReceipt,
-} from "../local-mainnet-chain";
-import { SELF_TRANSFER_AMOUNT, selfTransferRaw } from "../local-mainnet-limits";
-import { expectActivity, selfTransfer } from "./send";
+import { mainnetToken, readPublicBalance } from "../local-mainnet-chain";
+import { MAX_TX_FEE_STRK, SELF_TRANSFER_AMOUNT, selfTransferRaw } from "../local-mainnet-limits";
 import { expectDisplayedBalance, openFundedWallet } from "./session";
 
 const account = await requireLocalMainnetAccount();
@@ -37,7 +32,10 @@ test("self-transfers dust STRK and shows it in Activity", async ({ extension }) 
   const before = await readPublicBalance(account.rpcUrl, account.address, "STRK");
   const hash = await selfTransfer(page, {
     amount: SELF_TRANSFER_AMOUNT,
+    maxFeeStrk: MAX_TX_FEE_STRK,
+    networkId: "SN_MAIN",
     recipient: account.address,
+    sender: account.address,
     symbol: "STRK",
   });
   const receipt = await waitForSuccessfulReceipt(account.rpcUrl, hash);
@@ -66,7 +64,10 @@ test("self-transfers dust ETH when the account holds ETH", async ({ extension },
   const strkBefore = await readPublicBalance(account.rpcUrl, account.address, "STRK");
   const hash = await selfTransfer(page, {
     amount: SELF_TRANSFER_AMOUNT,
+    maxFeeStrk: MAX_TX_FEE_STRK,
+    networkId: "SN_MAIN",
     recipient: account.address,
+    sender: account.address,
     symbol: "ETH",
   });
   const receipt = await waitForSuccessfulReceipt(account.rpcUrl, hash);

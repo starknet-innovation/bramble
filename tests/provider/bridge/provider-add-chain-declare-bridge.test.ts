@@ -56,7 +56,7 @@ describe("wallet_addStarknetChain bridge mapping", () => {
 
   test("accepts the optional api_version beside the chain fields and drops it", () => {
     const expected = toRuntimeMessage(request("wallet_addStarknetChain", chainParams), origin);
-    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+    for (const api_version of ["0.10", "0.10.4", "0.10.5"]) {
       expect(
         toRuntimeMessage(
           request("wallet_addStarknetChain", { ...chainParams, api_version }),
@@ -67,7 +67,7 @@ describe("wallet_addStarknetChain bridge mapping", () => {
   });
 
   test("rejects a malformed api_version", () => {
-    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", "0.10.4-rc.0", 10, null]) {
       expect(
         toRuntimeMessage(
           request("wallet_addStarknetChain", { ...chainParams, api_version }),
@@ -109,7 +109,7 @@ describe("wallet_addDeclareTransaction bridge mapping", () => {
       request("wallet_addDeclareTransaction", declareParams),
       origin,
     );
-    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+    for (const api_version of ["0.10", "0.10.4", "0.10.5"]) {
       expect(
         toRuntimeMessage(
           request("wallet_addDeclareTransaction", { ...declareParams, api_version }),
@@ -120,7 +120,7 @@ describe("wallet_addDeclareTransaction bridge mapping", () => {
   });
 
   test("rejects a malformed api_version, or one nested inside the declare", () => {
-    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", "0.10.4-rc.0", 10, null]) {
       expect(
         toRuntimeMessage(
           request("wallet_addDeclareTransaction", { ...declareParams, api_version }),

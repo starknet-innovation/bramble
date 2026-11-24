@@ -210,11 +210,11 @@ describe("the AVNU route calldata is bound to the reviewed swap", () => {
   // Disclosure, not only refusal: the reviewed line names the minimum and the
   // account being paid, so two builds that differ in those fields can no
   // longer read identically. Before the decode both produced the same
-  // "Call multi_route_swap on 0x4270…3b0f".
+  // "Call multi_route_swap on 0x0427…3b0f".
   test("the frozen route is summarised by what it pays, and to whom", async () => {
     const prepared = await prepareSwap([approveRouter, routeCall]).response;
     const summaries = "swapPreparation" in prepared ? prepared.swapPreparation.summaries : [];
-    expect(summaries).toContain(`Swap 0.01 ETH for at least 12.4375 STRK, paid to 0x1234…bcde`);
+    expect(summaries).toContain(`Swap 0.01 ETH for at least 12.4375 STRK, paid to 0x0123…bcde`);
     expect(summaries.join(" ")).not.toContain("Call multi_route_swap");
     expect("swapPreparation" in prepared ? prepared.swapPreparation.minBuyAmount : "").toBe(
       "12.4375",

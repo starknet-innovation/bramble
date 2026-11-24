@@ -43,6 +43,12 @@ export const HTTP_BODY_LIMITS = {
    */
   errorDetail: 8 * 1024,
   /**
+   * The signed bramble-ff feature-flag file. This is the publisher's own
+   * contract ceiling (16 KiB), not headroom: the verifier rejects anything
+   * larger, so the read stops at the same byte.
+   */
+  flagDocument: 16 * 1024,
+  /**
    * Indexer NFT listings. A large account's listing can be thousands of records
    * before the wallet's own discovery cap trims it, so the budget is well above
    * a realistic page rather than tuned to the trimmed result.
@@ -321,4 +327,37 @@ export const fetchBoundedJson = async (
     throw new WalletError("Request failed");
   }
   return readBoundedJson(response, maxBytes, expiry);
+};
+
+/**
+ * Fetches one untrusted body as text with a plain `GET` under a hard byte budget
+ * and a hard deadline, for boundaries that must see the exact bytes the host
+ * sent (a signed document whose verifier owns its own parsing).
+ *
+ * The request carries {@link UNTRUSTED_REQUEST_INIT} and nothing else: no
+ * method override, no headers, no body. A caller therefore cannot attach an
+ * identifier to the request even by accident. Throws a {@link WalletError} for a
+ * non-ok status, an over-budget body, an expired deadline, or an unreadable
+ * transport, exactly like {@link fetchBoundedJson}.
+ */
+export const fetchBoundedText = async (
+  http: BoundedHttpFetch,
+  url: string,
+  maxBytes: number,
+  timeoutMs: number = HTTP_REQUEST_TIMEOUT_MS,
+): Promise<string> => {
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const expiry = expiryOf(deadline);
+  const response = await Promise.race([
+    http(url, { ...UNTRUSTED_REQUEST_INIT, method: "GET", signal: deadline }),
+    expiry,
+  ]);
+  if (!response.ok) {
+    throw new WalletError("Request failed");
+  }
+  const text = await boundedText(response, maxBytes, expiry);
+  if (text === null) {
+    throw new WalletError("Response body was not readable");
+  }
+  return text;
 };

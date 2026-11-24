@@ -36,6 +36,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
   // key mismatch") by their words; matched here, never read, logged, or persisted.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
+  // Chinese for the error copy above, keyed by its exact English, so the keys
+  // quote the same sentences ("…passphrase…", "…signature…"). Text only.
+  "packages/presentation/wallet-ui/src/i18n/error-copy-zh-a.ts",
+  "packages/presentation/wallet-ui/src/i18n/error-copy-zh-b.ts",
   // Decides whether a rejected send is known not sent; it names the Ledger
   // catalog code "signature-verify-failed" as a lookup key and reads no secret.
   "packages/presentation/wallet-ui/src/sidepanel/shared/submit-outcome.ts",
@@ -107,6 +111,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Queues approvals only. Since the execution half moved out, its sole match
   // is the `./signature-waiters` import path; no secret material transits here.
   "apps/extension/src/background/privacy/strk20-ops.ts",
+  // Registration queueing split out of strk20-ops.ts by size. Like it, the sole
+  // match is the `./signature-waiters` import path; no secret material transits.
+  "apps/extension/src/background/privacy/strk20-register-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
   "apps/extension/src/background/privacy/strk20-op-context.ts",
@@ -121,6 +128,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
   "apps/extension/src/background/accounts/wallet-ops.ts",
+  // Ready key status: hands the non-renewing session passphrase to the vault's
+  // public-key check and returns only an account id and a boolean.
+  "apps/extension/src/background/accounts/ready-key-status.ts",
   // Deploy handlers split from wallet-ops (issue 431); the vault passphrase only
   // transits into the protected hash-signer wiring, never logged or stored.
   "apps/extension/src/background/accounts/deploy-account-ops.ts",
@@ -146,6 +156,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
   "packages/platform/ledger-protocol/src/client.ts",
   "packages/platform/ledger-protocol/src/errors.ts",
+  // Translations of errors.ts's sentences by rejection code ("signature-verify-failed").
+  "packages/platform/ledger-protocol/src/errors-i18n.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
@@ -155,6 +167,26 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-phrase-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  // Onboarding copy catalog: its sentences and message ids name the passphrase
+  // the reader types ("Vault passphrase", "Incorrect passphrase"). It holds
+  // text only — never a value — and nothing in it reads, logs, or stores one.
+  "packages/presentation/wallet-ui/src/i18n/messages/onboarding.ts",
+  // Multisig account copy catalog: its sentences and message ids name the
+  // co-signer signatures the reader collects ("Signature copied", "That
+  // signature isn't valid"). Text only; nothing in it reads or stores one.
+  "packages/presentation/wallet-ui/src/i18n/messages/multisig.ts",
+  // Multisig review catalog (signing text): it names the co-signer signatures a
+  // reviewer collects and verifies ("Signature fragment"). Text only, pinned.
+  "packages/presentation/wallet-ui/src/i18n/messages/review-steps-multisig.ts",
+  // Ledger journey copy catalog: its chooser and first-run sentences name a
+  // "Private key" import route and the passphrase. Text only, like the above.
+  "packages/presentation/wallet-ui/src/i18n/messages/ledger.ts",
+  // Settings copy catalog: the reveal-secrets screen names the vault passphrase
+  // it asks for ("Confirm vault passphrase"). Text only, like the onboarding one.
+  "packages/presentation/wallet-ui/src/i18n/messages/settings.ts",
+  // Signing-screen copy catalog: the Ledger takeover names the signature the
+  // device returns ("Signature received"). Text only, like the above.
+  "packages/presentation/wallet-ui/src/i18n/messages/review-sign.ts",
   // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
   "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
@@ -201,6 +233,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
+  // bramble-ff feature-flag documents carry the publisher's public Ed25519
+  // signature over public flag data; verified against bundled public keys
+  // only. No wallet key, vault credential, or signing path is involved.
+  "packages/features/flags/src/verify.ts",
   // Public account ABI serialization and signer façades. These files carry
   // public keys/signature fragments; private-key operations remain in Krusty.
   "packages/platform/starknet/src/accounts/account-contracts.ts",
@@ -230,6 +266,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // shared scalar is redacted before it reaches this module and is only
   // substituted while recomputing the digest.
   "packages/features/privacy/src/multisig/records.ts",
+  // Held proof requests. Names the compiled invocation's signature field only
+  // to keep it out of the stored envelope; the scalar never enters this module.
+  "packages/features/privacy/src/multisig/held-proof.ts",
   // Relay invites carry the same public Stark fragments as CallSet records.
   // The proof never enters this module.
   "packages/features/privacy/src/multisig/relay-invite.ts",
@@ -238,6 +277,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/multisig/multisig-strk20-session.ts",
   "apps/extension/src/background/multisig/multisig-strk20-prove.ts",
   "apps/extension/src/background/multisig/multisig-strk20-actions.ts",
+  // Puts the co-owners' public aggregate in a held request's signature field.
+  // The scalar only restores calldata the stored digest already covers.
+  "apps/extension/src/background/multisig/multisig-strk20-held.ts",
   // Relay fragment collection. The vault credential only transits into the
   // hash signer. Proof bytes stay on this device and are never wrapped.
   "apps/extension/src/background/multisig/multisig-strk20-relay.ts",
@@ -283,6 +325,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // the phrase key signs here and nothing is logged or persisted.
   "packages/platform/starknet/src/transactions/argent-recovery.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  // Pre-3.0 Ready key check: passes each stored phrase to Krusty's public-only
+  // derivation and returns account ids; no key or phrase leaves the call.
+  "packages/platform/vault/src/accounts/ready-key-drift.ts",
   // Multisig STRK20 viewing keys (#826): generated in the vault, stored only
   // here, and wrapped for co-owners. The key never enters a message or the UI.
   "packages/platform/vault/src/accounts/multisig-strk20-key.ts",

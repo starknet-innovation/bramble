@@ -24,6 +24,10 @@ export const fakeKms = (validMnemonic = true) => ({
       publicKeyX: `0xa9${addressIndex.toString(16)}bc`,
     };
   },
+  async deriveArgentLegacyPublicKey(_mnemonic: string, addressIndex: number) {
+    // Matches deriveArgentLegacyKeypair, so a fresh restore reads as current.
+    return `0xa9${addressIndex.toString(16)}bc`;
+  },
   async deriveStarknetKeypair(
     _mnemonic: string,
     _addressIndex: number,

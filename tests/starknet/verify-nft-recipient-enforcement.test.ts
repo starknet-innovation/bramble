@@ -229,7 +229,7 @@ describe("safe-transfer summaries state only what the span proves", () => {
   test("an unambiguous ERC721 span names the item, with no invented quantity", () => {
     expect(summaryOf("safe_transfer_from", [owner, CLEAN_RECIPIENT, "5", "0", "0"])).toMatchObject({
       kind: "transfer",
-      summary: "Send NFT #5 to 0x777b…bbcc",
+      summary: "Send NFT #5 to 0x0777…bbcc",
     });
   });
 
@@ -238,7 +238,7 @@ describe("safe-transfer summaries state only what the span proves", () => {
     // into the conservative wording, or the user loses real information.
     expect(
       summaryOf("safe_transfer_from", [owner, CLEAN_RECIPIENT, "342", "0", "1", "0", "0"]),
-    ).toMatchObject({ kind: "transfer", summary: "Send 1 of NFT #342 to 0x777b…bbcc" });
+    ).toMatchObject({ kind: "transfer", summary: "Send 1 of NFT #342 to 0x0777…bbcc" });
   });
 
   test("a span that fits both standards states the id and refuses to guess a count", () => {
@@ -247,7 +247,7 @@ describe("safe-transfer summaries state only what the span proves", () => {
     // storage tells the wallet which, so the count is omitted rather than picked.
     expect(
       summaryOf("safeTransferFrom", [owner, CLEAN_RECIPIENT, "5", "0", "2", "0", "0"]),
-    ).toMatchObject({ kind: "transfer", summary: "Safe transfer of NFT #5 to 0x777b…bbcc" });
+    ).toMatchObject({ kind: "transfer", summary: "Safe transfer of NFT #5 to 0x0777…bbcc" });
   });
 
   test("ERC721 data felts are never read as an edition count", () => {
@@ -256,7 +256,7 @@ describe("safe-transfer summaries state only what the span proves", () => {
     // to the user as a quantity.
     expect(
       summaryOf("safe_transfer_from", [owner, CLEAN_RECIPIENT, "5", "0", "2", "0xdead", "0xdead"]),
-    ).toMatchObject({ kind: "transfer", summary: "Send NFT #5 to 0x777b…bbcc" });
+    ).toMatchObject({ kind: "transfer", summary: "Send NFT #5 to 0x0777…bbcc" });
   });
 
   test("a batch states how many ids move and to whom, not a total", () => {
@@ -278,7 +278,7 @@ describe("safe-transfer summaries state only what the span proves", () => {
       ]),
     ).toMatchObject({
       kind: "transfer",
-      summary: "Send 2 token ids of collection 0x511a…ff00 to 0x777b…bbcc",
+      summary: "Send 2 token ids of collection 0x0511…ff00 to 0x0777…bbcc",
     });
     expect(
       summaryOf("safeBatchTransferFrom", [
@@ -292,7 +292,7 @@ describe("safe-transfer summaries state only what the span proves", () => {
         "0",
         "0",
       ])?.summary,
-    ).toBe("Send 1 token id of collection 0x511a…ff00 to 0x777b…bbcc");
+    ).toBe("Send 1 token id of collection 0x0511…ff00 to 0x0777…bbcc");
   });
 
   test("a span that fits no standard stays opaque rather than being described", () => {

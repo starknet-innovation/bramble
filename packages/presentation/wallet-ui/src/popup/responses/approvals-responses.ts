@@ -11,7 +11,6 @@ import {
   isJson,
   isOwnDataProperty,
   isRecord,
-  isRiskFlagCode,
   isSafeDecimals,
   isTokenName,
   isTokenSymbol,
@@ -20,7 +19,7 @@ import {
 import { isWalletOrigin } from "@bramble/core/origin";
 import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
 import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
-import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isAccountId, isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -38,6 +37,7 @@ import {
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
+import { isOptionalInsightTexts, isOptionalSummaryTexts, isReviewedRiskFlag } from "./review-flags";
 
 /**
  * Shared approval and connected-site wire shapes after runtime validation.
@@ -123,13 +123,7 @@ const isInsightText = (value: unknown): value is string =>
 const isSummaryText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
 
-const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["code", "message"]) &&
-  isRiskFlagCode(value["code"]) &&
-  typeof value["message"] === "string" &&
-  value["message"].length > 0 &&
-  value["message"].length <= 300;
+const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag => isReviewedRiskFlag(value);
 
 const isApprovalContext = (value: unknown): value is ApprovalContext =>
   isRecord(value) &&
@@ -203,6 +197,12 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
     value["feeAffordability"] === "ok" ||
     value["feeAffordability"] === "unknown") &&
   (value["feeEstimateFailed"] === undefined || typeof value["feeEstimateFailed"] === "boolean") &&
+  (value["feeEstimateDetail"] === undefined ||
+    (value["feeEstimateFailed"] === true &&
+      typeof value["feeEstimateDetail"] === "string" &&
+      value["feeEstimateDetail"].length > 0 &&
+      value["feeEstimateDetail"].length <= 300 &&
+      !/[\r\n]/.test(value["feeEstimateDetail"]))) &&
   (value["feeEstimatePending"] === undefined || typeof value["feeEstimatePending"] === "boolean") &&
   (value["requiresDeployment"] === undefined || typeof value["requiresDeployment"] === "boolean") &&
   (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null) &&
@@ -238,10 +238,12 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "fee",
       "feeAffordability",
       "feeEstimateFailed",
+      "feeEstimateDetail",
       "feeEstimatePending",
       "flags",
       "gaslessFees",
       "id",
+      "insightTexts",
       "insights",
       "kind",
       "multisigThreshold",
@@ -252,6 +254,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "reviewAssets",
       "requiresDeployment",
       "summaries",
+      "summaryTexts",
       "token",
       "typedData",
     ]) ||
@@ -277,8 +280,16 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
     (value["insights"] !== undefined &&
       !(Array.isArray(value["insights"]) && value["insights"].every(isInsightText))) ||
+    !isOptionalInsightTexts(
+      value["insightTexts"],
+      Array.isArray(value["insights"]) ? value["insights"].length : 0,
+    ) ||
     (value["summaries"] !== undefined &&
       !(Array.isArray(value["summaries"]) && value["summaries"].every(isSummaryText))) ||
+    !isOptionalSummaryTexts(
+      value["summaryTexts"],
+      Array.isArray(value["summaries"]) ? value["summaries"].length : 0,
+    ) ||
     (value["reviewAssets"] !== undefined &&
       !(
         Array.isArray(value["reviewAssets"]) && value["reviewAssets"].every(isApprovalReviewAsset)
@@ -313,6 +324,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
         value["deploymentFeeEstimateFailed"] === undefined &&
         value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
+        value["feeEstimateDetail"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["feeEstimatePending"] === undefined &&
         value["requiresDeployment"] === undefined;
@@ -418,12 +430,17 @@ const parsePendingApprovals = (value: unknown): ParsedPendingApprovals | null =>
   return { approvals, dropped };
 };
 
+const isGrantedIds = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every(isAccountId) && hasUniqueStrings(value);
+
+// The count must equal the ids listed, so the summary never disagrees with
+// the accounts the row offers to disconnect.
 const isConnectedSite = (value: unknown): value is ConnectedSite =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
-  typeof value["accountCount"] === "number" &&
-  Number.isSafeInteger(value["accountCount"]) &&
-  value["accountCount"] >= 0 &&
+  hasOnlyKnownKeys(value, ["accountCount", "accountIds", "multisigIds", "origin"]) &&
+  isGrantedIds(value["accountIds"]) &&
+  isGrantedIds(value["multisigIds"]) &&
+  value["accountCount"] === value["accountIds"].length + value["multisigIds"].length &&
   typeof value["origin"] === "string" &&
   isWalletOrigin(value["origin"]);
 

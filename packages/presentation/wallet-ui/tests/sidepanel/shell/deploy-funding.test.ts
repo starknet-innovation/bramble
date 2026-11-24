@@ -16,8 +16,8 @@ import { FIRST_SEND_DEPLOYS } from "../../../src/sidepanel/journeys/send/transfe
 import { RPC_REJECTED } from "../../../src/sidepanel/runtime/friendly-error-copy";
 import { outcomeReceiptSection } from "../../../src/sidepanel/shared/outcome-receipt";
 import {
-  DEPLOY_NEEDS_STRK,
   deployErrorLine,
+  deployNeedsStrk,
   deployToastText,
 } from "../../../src/sidepanel/shell/deploy-errors";
 import { bindDeploy, type ShellBindingDeps } from "../../../src/sidepanel/shell/shell-bindings";
@@ -94,8 +94,8 @@ describe("deploy screen error copy", () => {
 
   test("the reported exceed-balance dump reads as the funding sentence", () => {
     const error = new Error(REPORTED);
-    expect(deployErrorLine(error, "Deployment failed")).toBe(DEPLOY_NEEDS_STRK);
-    expect(deployToastText(error, "Deployment failed")).toBe(DEPLOY_NEEDS_STRK);
+    expect(deployErrorLine(error, "Deployment failed")).toBe(deployNeedsStrk());
+    expect(deployToastText(error, "Deployment failed")).toBe(deployNeedsStrk());
   });
 
   test("an unrecognised RPC dump reads as the RPC sentence, never the dump", () => {
@@ -107,7 +107,7 @@ describe("deploy screen error copy", () => {
 
   test("an unknown outcome is never read as the funding sentence", () => {
     const error = new SubmissionUnknownError("exceed balance", null);
-    expect(deployErrorLine(error, "Deployment failed")).not.toBe(DEPLOY_NEEDS_STRK);
+    expect(deployErrorLine(error, "Deployment failed")).not.toBe(deployNeedsStrk());
   });
 
   test("the multisig deploy recognises the same rejection", () => {
@@ -129,8 +129,8 @@ describe("deploy screen error copy", () => {
     app.querySelector<HTMLButtonElement>("#deploy-button")?.click();
     await settle();
 
-    expect(app.querySelector("#deploy-result")?.textContent).toBe(DEPLOY_NEEDS_STRK);
-    expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(DEPLOY_NEEDS_STRK);
+    expect(app.querySelector("#deploy-result")?.textContent).toBe(deployNeedsStrk());
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(deployNeedsStrk());
     for (const marker of RAW_MARKERS) expect(visibleText(app)).not.toContain(marker);
     expect(app.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
@@ -144,8 +144,8 @@ describe("deploy screen error copy", () => {
     );
     await settle();
 
-    expect(app.querySelector("#deploy-review")?.textContent).toContain(DEPLOY_NEEDS_STRK);
-    expect(app.querySelector("#deploy-result")?.textContent).toBe(DEPLOY_NEEDS_STRK);
+    expect(app.querySelector("#deploy-review")?.textContent).toContain(deployNeedsStrk());
+    expect(app.querySelector("#deploy-result")?.textContent).toBe(deployNeedsStrk());
     for (const marker of RAW_MARKERS) expect(visibleText(app)).not.toContain(marker);
   });
 
@@ -182,7 +182,7 @@ describe("deploy screen notes", () => {
 
   test("an undeployed account with no STRK is told to add STRK, and that a send deploys it", () => {
     const html = screen({ balances: [strk("0")] });
-    expect(html).toContain(DEPLOY_NEEDS_STRK);
+    expect(html).toContain(deployNeedsStrk());
     expect(html).toContain(FIRST_SEND_DEPLOYS);
     // Softened, not hidden: an untracked STRK balance must not strand the action.
     expect(html).toMatch(/<button[^>]*id="deploy-button"(?![^>]*disabled)/);
@@ -190,17 +190,17 @@ describe("deploy screen notes", () => {
 
   test("a funded account is not told to add STRK", () => {
     const html = screen({ balances: [strk("1000")] });
-    expect(html).not.toContain(DEPLOY_NEEDS_STRK);
+    expect(html).not.toContain(deployNeedsStrk());
     expect(html).toContain(FIRST_SEND_DEPLOYS);
   });
 
   test("an unread balance says nothing about funding", () => {
-    expect(screen({ error: "balances unavailable" })).not.toContain(DEPLOY_NEEDS_STRK);
+    expect(screen({ error: "balances unavailable" })).not.toContain(deployNeedsStrk());
   });
 
   test("a deployed account shows neither note", () => {
     const html = screen({ balances: [strk("0")] }, true);
-    expect(html).not.toContain(DEPLOY_NEEDS_STRK);
+    expect(html).not.toContain(deployNeedsStrk());
     expect(html).not.toContain(FIRST_SEND_DEPLOYS);
   });
 
@@ -214,7 +214,7 @@ describe("deploy screen notes", () => {
       { balances: [strk("0")] },
       false,
     );
-    expect(html).toContain(DEPLOY_NEEDS_STRK);
+    expect(html).toContain(deployNeedsStrk());
     expect(html).not.toContain(FIRST_SEND_DEPLOYS);
   });
 });

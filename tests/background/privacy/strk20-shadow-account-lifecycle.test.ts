@@ -13,6 +13,7 @@
  * builder has assembled it. Proving and settlement need a prover and mainnet,
  * which this suite cannot reach.
  */
+
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -22,11 +23,12 @@ import {
   type PrivacySdkRuntime,
 } from "@bramble/privacy/official-sdk-service";
 import { transfersFor } from "@bramble/privacy/official-sdk-transfers";
+import { strk20English } from "@bramble/privacy/review-messages";
 import { SHADOW_INVOKE_CONTROL, SHADOW_INVOKE_SETTLES } from "@bramble/privacy/shadow-account-copy";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { activityToCsv, memoryActivityLog } from "@bramble/transactions/activity";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { addressText, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { RpcProvider } from "starknet";
 import { num, shortString } from "starknet";
@@ -245,11 +247,14 @@ describe.skipIf(!sdkBuilt)("shadow account lifecycle against the rc.8 SDK", () =
     const [card] = await waitForPendingApprovals<{
       readonly id: string;
       readonly summaries: readonly string[];
+      readonly summaryTexts?: readonly import("@bramble/core/i18n").MessageRef[];
     }>(handler, panel);
+    // Each line carries its review reference, which renders to exactly it.
+    expect(card?.summaryTexts?.map(strk20English)).toEqual([...(card?.summaries ?? [])]);
     expect(card?.summaries).toEqual(
       expect.arrayContaining([
         `Runs 1 call through your shadow account #1 for ${ORIGIN}`,
-        `Shadow account anonymizer ${ANONYMIZER}`,
+        `Shadow account anonymizer ${addressText(ANONYMIZER)}`,
         SHADOW_INVOKE_SETTLES("STRK"),
         SHADOW_INVOKE_CONTROL,
       ]),
@@ -335,7 +340,7 @@ describe.skipIf(!sdkBuilt)("shadow account lifecycle against the rc.8 SDK", () =
     });
     expect(prepared.strk20Preparation.summaries.slice(0, 3)).toEqual([
       `Sweep your shadow account #1 for ${ORIGIN}`,
-      `Shadow account anonymizer ${ANONYMIZER}`,
+      `Shadow account anonymizer ${addressText(ANONYMIZER)}`,
       SHADOW_INVOKE_SETTLES("STRK"),
     ]);
     const executed = await awaitStrk20Job(

@@ -24,6 +24,7 @@ import {
   hasValidShadowAccountScopes,
   type ShadowAccountScopeRef,
 } from "../accounts/shadow-account-scopes";
+import { type AccountProvenance, validAccountProvenance } from "./schema-provenance";
 import { hasValidSeedBindings, type ImportedSeedRef } from "./schema-seeds";
 import type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
 
@@ -42,14 +43,11 @@ import {
   type MultisigStrk20KeyConflict,
   type MultisigStrk20ViewingKeyRef,
 } from "../accounts/multisig-strk20-key";
-
 /**
- * Current vault schema version accepted by validators and writers.
- * Version 13 retains a multisig's shared STRK20 viewing key (#826).
- * The older steps are recorded in `docs/ARCHITECTURE.md`.
+ * Current schema. Version 14 records explicit origins; migration leaves older
+ * accounts unknown. Earlier versions retain their pinned validators below.
  */
-export const CURRENT_SCHEMA_VERSION = 13;
-
+export const CURRENT_SCHEMA_VERSION = 14;
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
  * separate from {@link AccountRef}: account metadata is safe to project to the
@@ -66,13 +64,11 @@ export type VaultV4 = {
   readonly schemaVersion: 4;
   readonly signingKeys: readonly SigningKeyRef[];
 };
-
 /**
  * Current encrypted vault schema. Version 5 makes every account identity and
  * public-key felt canonical so aliases cannot survive as distinct records.
  */
 export type VaultV5 = Omit<VaultV4, "schemaVersion"> & { readonly schemaVersion: 5 };
-
 /**
  * Current encrypted vault schema. Every account carries explicit contract
  * semantics; historical accounts migrate deterministically to OpenZeppelin.
@@ -81,7 +77,6 @@ export type VaultV6 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
   readonly accounts: readonly LegacyV6AccountRef[];
   readonly schemaVersion: 6;
 };
-
 /**
  * Current encrypted vault schema. Argent accounts retain the exact deployment
  * salt so externally created accounts remain deployable at their real address.
@@ -90,7 +85,6 @@ export type VaultV7 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
   readonly accounts: readonly AccountRef[];
   readonly schemaVersion: 7;
 };
-
 /**
  * Legacy encrypted vault schema. Version 8 retains imported seeds so accounts
  * recovered from another wallet's phrase stay re-derivable and revealable; its
@@ -100,28 +94,24 @@ export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
   readonly importedSeeds: readonly ImportedSeedRef[];
   readonly schemaVersion: 8;
 };
-
 /**
  * Schema-v9 vault, accepted only by the adjacent v10 migration. Admits a Ledger
  * derivation under Ready's `argentx` path scheme beside Bramble's `LedgerW`; the
  * record shape is unchanged from v8.
  */
 export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion: 9 };
-
 /**
  * Current encrypted vault schema. Version 10 admits Braavos accounts, and Argent
  * accounts at any release they could have been deployed with; the record shape
  * is unchanged, only the values a record may hold have widened.
  */
 export type VaultV10 = Omit<VaultV9, "schemaVersion"> & { readonly schemaVersion: 10 };
-
 /**
  * Schema-v11 vault, accepted only by the adjacent v12 migration. Version 11
  * admits accounts derived with Ready's ETH-seeded scheme (`argentx-bip44`,
  * issue 505); the record shape is unchanged from v10.
  */
 export type VaultV11 = Omit<VaultV10, "schemaVersion"> & { readonly schemaVersion: 11 };
-
 /**
  * Current encrypted vault schema. Version 12 adds the shadow-account scope
  * records (#443): which sites, labels, and exact nonces each account drove a
@@ -132,7 +122,6 @@ export type VaultV12 = Omit<VaultV11, "schemaVersion"> & {
   readonly schemaVersion: 12;
   readonly shadowAccountScopes: readonly ShadowAccountScopeRef[];
 };
-
 /**
  * Current encrypted vault. One shared STRK20 viewing key per multisig, chain,
  * and pool, plus a conflict mark when a co-owner offered a different key.
@@ -142,11 +131,14 @@ export type VaultV13 = Omit<VaultV12, "schemaVersion"> & {
   readonly multisigStrk20ViewingKeys: readonly MultisigStrk20ViewingKeyRef[];
   readonly schemaVersion: 13;
 };
+/** Alias for the latest supported vault schema. */
+export type Vault = VaultV14;
 
-/**
- * Alias for the latest supported vault schema.
- */
-export type Vault = VaultV13;
+/** Current vault; historical accounts retain missing (unknown) provenance. */
+export type VaultV14 = Omit<VaultV13, "schemaVersion"> & {
+  readonly schemaVersion: 14;
+  readonly accountProvenance?: Readonly<Record<string, AccountProvenance>>;
+};
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -496,4 +488,12 @@ export const isVaultV13 = (value: unknown): value is VaultV13 => {
     isVaultV12({ ...rest, schemaVersion: 12 }) &&
     hasValidMultisigStrk20VaultData(multisigStrk20ViewingKeys, multisigStrk20KeyConflicts)
   );
+};
+
+/** Validates the current schema without guessing origins for historical accounts. */
+export const isVaultV14 = (value: unknown): value is Vault => {
+  if (!isRecord(value) || value["schemaVersion"] !== 14) return false;
+  const { accountProvenance, ...rest } = value;
+  const previous = { ...rest, schemaVersion: 13 };
+  return isVaultV13(previous) && validAccountProvenance(accountProvenance, previous.accounts);
 };

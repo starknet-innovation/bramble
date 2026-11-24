@@ -11,7 +11,9 @@ import { displayRpcUrl } from "./gasless-mainnet-rpc";
 
 /**
  * The create/fund/deploy commands. The class hash is the one the wallet
- * derives, not sncast's default OpenZeppelin class.
+ * derives, not sncast's default OpenZeppelin class, and the salt is 0x0
+ * because the wallet derives an imported key's address with salt 0x0; sncast's
+ * default random salt gives an address the wallet can never import.
  */
 export const setupInstructions =
   (): string => `Create a mainnet OpenZeppelin account with Bramble's class, fund it, and deploy it.
@@ -20,19 +22,28 @@ export const setupInstructions =
     --network mainnet \\
     --name bramble \\
     --type oz \\
-    --class-hash ${OPENZEPPELIN_ACCOUNT_CLASS_HASH}
+    --class-hash ${OPENZEPPELIN_ACCOUNT_CLASS_HASH} \\
+    --salt 0x0
 
-Fund the printed address with STRK (0.5 STRK covers several runs), then:
+Keep --salt 0x0: the wallet derives the key's address with salt 0x0, so an
+account with sncast's random salt cannot be imported. An existing key can be
+reused by adding an accounts-file entry with "salt": "0x0" and the address
+that salt gives; this script checks the address before any browser starts.
+
+Fund the printed address with STRK (keep at least 1 STRK: the review caps
+the estimated fee at 0.2 STRK per send), then:
 
   sncast account deploy --network mainnet --name bramble
 
 STRK token: ${STRK_TOKEN_ADDRESS}
 
-Export the dedicated RPC and the acknowledgement, then name the account:
+Name the account. That permits mainnet writes from this shell:
 
-  export BRAMBLE_MAINNET_E2E_ACK=I_UNDERSTAND_THIS_WRITES_TO_MAINNET
-  export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
   export BRAMBLE_MAINNET_SNCAST_ACCOUNT=bramble
+
+The RPC defaults to the Foundation's public endpoint. To use your own:
+
+  export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
 
 Optional: BRAMBLE_MAINNET_SNCAST_ACCOUNTS_FILE, BRAMBLE_MAINNET_SNCAST_PROFILE,
 BRAMBLE_MAINNET_SNFOUNDRY. Direct key instead of sncast:

@@ -71,10 +71,13 @@ export const STANDARD_STRK_LIMITS = { cap: "0.2", max: "2", min: "0.05" } as con
 /** Standard-tier native USDC window: minimum, maximum, per-run cap. */
 export const STANDARD_USDC_LIMITS = { cap: "0.05", max: "5", min: "0.02" } as const;
 /**
- * STRK20-tier STRK window. The lifecycle can spend about four pool fees plus
- * a small deposit; 22 STRK is the per-run cap and 30 STRK is still refused.
+ * STRK20-tier STRK window. A v0.10.11 lifecycle on mainnet spent about 27 STRK:
+ * four 4.5 STRK pool fees plus about 2.2 STRK of gas per proof transaction.
+ * Each proof transaction must also find its pool fee and declared maximum fee
+ * (about 5.4 STRK) on hand, so the minimum is the run plus that headroom. The
+ * cap leaves room over the observed spend; 40 STRK is still refused.
  */
-export const STRK20_STRK_LIMITS = { cap: "22", max: "30", min: "21" } as const;
+export const STRK20_STRK_LIMITS = { cap: "32", max: "40", min: "32" } as const;
 
 const strkRaw = (amount: string): bigint => parseTokenAmount(amount, STRK_TOKEN_DECIMALS);
 const usdcRaw = (amount: string): bigint => parseTokenAmount(amount, USDC_DECIMALS);

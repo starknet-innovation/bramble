@@ -89,7 +89,12 @@ describe("multisig dapp audit follow-ups", () => {
       multisigId: "SN_MAIN:0x123",
     });
     expect(await grants.sites(vaultPassphrase)).toEqual([
-      { accountCount: 1, origin: "https://b.example" },
+      {
+        accountCount: 1,
+        accountIds: [],
+        multisigIds: ["SN_MAIN:0x456"],
+        origin: "https://b.example",
+      },
     ]);
     expect(await grants.idsFor("https://b.example", vaultPassphrase)).toEqual(["SN_MAIN:0x456"]);
   });

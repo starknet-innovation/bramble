@@ -231,8 +231,9 @@ if (import.meta.main) {
     // signed.
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    // No entry for the live phishing feed: it is read through CORS, and a new
-    // host here would be a privilege increase on update (issue 772).
+    // No entry for the live phishing feed or the signed feature-flag document
+    // (bramble-ff): both are read through CORS, and a new host here would be a
+    // privilege increase on update (issue 772).
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];
@@ -302,6 +303,7 @@ if (import.meta.main) {
       "content_security_policy",
       "author",
       "content_scripts",
+      "default_locale",
       "description",
       "homepage_url",
       "host_permissions",

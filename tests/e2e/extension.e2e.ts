@@ -4,7 +4,7 @@
  * the injected provider.
  */
 import { expect, test } from "./fixtures";
-import { startTestDapp } from "./test-dapp-server";
+import { BRAMBLE_PROVIDER_STATUS, startTestDapp } from "./test-dapp-server";
 import {
   createWalletFromGeneratedPhrase,
   expectInvokeApprovalWithheld,
@@ -132,7 +132,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText(BRAMBLE_PROVIDER_STATUS);
 
     await dapp.getByTestId("connect").click();
     await expect(dapp.getByTestId("connect-result")).toHaveText("pending");
@@ -309,8 +309,8 @@ test("surfaces a SNIP wire-format multicall as a transaction approval", async ({
 
     await expectInvokeApprovalWithheld(sidepanel, dappServer.origin);
     await expect(sidepanel.getByText("What will happen")).toBeVisible();
-    await expect(sidepanel.getByText("Allow 0x4270…3b0f to spend 0.5 STRK")).toBeVisible();
-    await expect(sidepanel.getByText("Call multi_route_swap on 0x4270…3b0f")).toBeVisible();
+    await expect(sidepanel.getByText("Allow 0x0427…3b0f to spend 0.5 STRK")).toBeVisible();
+    await expect(sidepanel.getByText("Call multi_route_swap on 0x0427…3b0f")).toBeVisible();
     await expect(sidepanel.locator("code", { hasText: /^approve$/ })).toHaveCount(1);
     await expect(sidepanel.locator("code", { hasText: /^multi_route_swap$/ })).toHaveCount(1);
     await expect(dapp.locator("body")).toHaveAttribute("data-multicall", "pending");
@@ -329,11 +329,11 @@ test("detects the injected provider after a page reload", async ({ extension }) 
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText(BRAMBLE_PROVIDER_STATUS);
 
     await dapp.reload();
     await dapp.getByTestId("detect").click();
-    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText(BRAMBLE_PROVIDER_STATUS);
   } finally {
     await dappServer.close();
   }

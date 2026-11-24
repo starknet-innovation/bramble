@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./blocklist": "./src/blocklist.ts",
+    "./insight-messages": "./src/insight-messages.ts",
     "./origin-history": "./src/origin-history.ts",
     "./phishing-feed": "./src/phishing-feed.ts",
     "./phishing-feed-cache": "./src/phishing-feed-cache.ts"
