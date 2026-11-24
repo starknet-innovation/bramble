@@ -15,6 +15,7 @@ import { WalletError } from "@bramble/core/errors";
 import { unavailablePriceService } from "@bramble/portfolio/prices";
 import { STRK20_SERVICE_UNAVAILABLE, strk20ConvertedFeeCeiling } from "@bramble/privacy/fee-policy";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
+import { strk20Lines, strk20Text } from "@bramble/privacy/review-messages";
 import {
   formatStrk20PoolFee,
   prepareStrk20Registration,
@@ -269,11 +270,11 @@ const registrationPreparationWork = async (
       networkFee,
       poolAddress: config.poolAddress,
       poolFeeFri,
-      summaries: [
-        "Register this account with the privacy pool",
-        "Registration is public and links this wallet address to its viewing key",
-        `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee from this account`,
-      ],
+      ...strk20Lines([
+        strk20Text("strk20Review.wallet.register"),
+        strk20Text("strk20Review.wallet.registerPublic"),
+        strk20Text("strk20Review.wallet.registerFee", { fee: formatStrk20PoolFee(poolFeeFri) }),
+      ]),
       token: context.token,
     };
     const approvalContext = await createApprovalContext(

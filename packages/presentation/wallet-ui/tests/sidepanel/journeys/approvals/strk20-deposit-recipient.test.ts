@@ -7,6 +7,7 @@
  * (`strk20-invoke` and `strk20-prepare`). A self-deposit stays warning-free.
  */
 import { describe, expect, test } from "bun:test";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 
@@ -67,10 +68,10 @@ describe("STRK20 deposit recipient on approval cards", () => {
       const html = card(kind, PAYEE);
 
       expect(html).toContain("<dt>Recipient</dt>");
-      expect(html).toContain(`<code>${PAYEE}</code>`);
+      expect(html).toContain(`<code>${addressText(PAYEE)}</code>`);
       expect(html).toContain("Copy action 1 recipient address");
       expect(html).toContain("Risk and recovery");
-      expect(html).toContain(`This deposit pays 0xa77a…7ac4: the amount becomes`);
+      expect(html).toContain(`This deposit pays 0x00a7…7ac4: the amount becomes`);
       expect(html).toContain(WARNING);
     });
 

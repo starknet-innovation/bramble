@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { constants } from "starknet";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { addressText } from "@bramble/wallet-model/networks";
 import { TOKEN_PRESETS } from "../../create/token-presets";
 
 const wallet = vi.hoisted(() => ({
@@ -81,12 +82,14 @@ describe("Create", () => {
     expect(request.calls).toHaveLength(1);
     expect(request.calls[0].contractAddress).toBe(constants.UDC.ADDRESS);
     expect(request.calls[0].calldata[0]).toBe(BigInt(TOKEN_PRESETS.erc20.classHash).toString());
-    expect(request.details[0]).toEqual({ label: "Contract address", value: address.textContent });
+    // The review shows the predicted address padded; the request carries it as computed.
+    expect(request.details[0]?.label).toBe("Contract address");
+    expect(addressText(request.details[0]?.value)).toBe(address.textContent);
     expect(request.warning).toBeUndefined();
     expect(runtime.confirmTokenDeployment).toHaveBeenCalledWith(
       "0x534e5f5345504f4c4941",
       "0xabc",
-      address.textContent,
+      request.details[0]?.value,
       TOKEN_PRESETS.erc20.classHash,
     );
     expect(screen.getByRole("link", { name: /Open contract/ }).getAttribute("href")).toContain("sepolia.");
@@ -236,7 +239,7 @@ describe("Create tools", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Review create" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Created at"));
     const created = document.querySelector(".create-review__address")?.textContent;
-    expect((screen.getByLabelText("Contract") as HTMLInputElement).value).toBe(created);
+    expect(addressText((screen.getByLabelText("Contract") as HTMLInputElement).value)).toBe(created);
   });
 });
 

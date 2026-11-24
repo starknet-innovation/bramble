@@ -7,11 +7,13 @@
  */
 
 import { resolveSpring } from "@bramble/ui-kit/spring";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
+import { bindReadyKeyNotice } from "./ready-key-notice-ui";
 import { bindRecoverAccount } from "./recovery-ui";
 import { bindVipNotice } from "./vip-notice-ui";
 
@@ -244,14 +246,16 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           }
           deps.setDrawerOpen(false);
           showToast(
-            keepsSharedAccount ? "Multisig signer switched" : "Account switched",
+            keepsSharedAccount
+              ? t("portfolio.home.signerSwitched")
+              : t("portfolio.home.accountSwitched"),
             "success",
             button,
           );
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Account switch failed"), "error", button);
+          showToast(errorDetails(error, t("portfolio.home.switchFailed")), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -370,10 +374,14 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
   }
 };
 
-/** Wires the Home drawer, portfolio menu, the read-only recover-account entry and the VIP notice. */
+/**
+ * Wires the Home drawer, portfolio menu, the read-only recover-account entry,
+ * the Ready key notice and the VIP notice.
+ */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
   bindPortfolioMenu(deps);
   bindRecoverAccount(deps);
+  bindReadyKeyNotice(deps);
   bindVipNotice(deps);
 };

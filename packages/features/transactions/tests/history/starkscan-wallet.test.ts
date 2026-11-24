@@ -87,7 +87,7 @@ describe("Starkscan wallet adapters", () => {
       amount: "0.047053608819441904",
       counterparty: OTHER,
       status: "accepted",
-      summary: "Sent 0.047053608819441904 STRK to 0x1176…f3d8",
+      summary: "Sent 0.047053608819441904 STRK to 0x0117…f3d8",
     });
   });
 
@@ -125,7 +125,7 @@ describe("Starkscan wallet adapters", () => {
       );
 
     const [entry] = await read("FAKE");
-    expect(entry?.summary).toBe("Received 1 TOKEN from 0x1176…f3d8");
+    expect(entry?.summary).toBe("Received 1 TOKEN from 0x0117…f3d8");
     expect(entry?.summary).not.toContain(transfer.tokenName);
     expect(entry?.summary).not.toContain("FAKE");
   });

@@ -70,7 +70,7 @@ final class NostrMultisigBridgeTests: XCTestCase {
             XCTFail("garbage is unrecognised")
             return
         }
-        XCTAssertEqual(shortAddress("0x0123456789abcdef"), "0x0123…cdef")
+        XCTAssertEqual(shortAddress("0x0123456789abcdef"), "0x0000…cdef")
     }
 
     func testRelayUrlsAreSecureOnly() throws {

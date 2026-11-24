@@ -24,6 +24,7 @@ import { workingStatus } from "../packages/presentation/wallet-ui/src/sidepanel/
 import { reviewedState } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-submit";
 import { confirmationOutcome } from "../packages/presentation/wallet-ui/src/sidepanel/shared/confirm-submitted";
 import { reviewFeeSection } from "../packages/presentation/wallet-ui/src/sidepanel/shared/review-render";
+import { unescapeHtml } from "./mobile-parity-portfolio/shared";
 
 const MAINNET_ACCOUNT = "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9";
 const LOOKALIKE = "0x2083610000000000000000000000000000000000000000000000000000098d9";
@@ -40,7 +41,7 @@ const errorText = (run: () => unknown): string | null => {
 const stripTags = (html: string): string[] =>
   html
     .split(/<[^>]+>/)
-    .map((part) => part.replace(/\s+/g, " ").trim())
+    .map((part) => unescapeHtml(part.replace(/\s+/g, " ").trim()))
     .filter((part) => part.length > 0);
 
 /** Every send-journey string the mobile screens show, read from the modules that export it. */

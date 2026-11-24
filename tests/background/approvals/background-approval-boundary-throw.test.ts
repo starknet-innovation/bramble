@@ -46,7 +46,7 @@ const vault = {
   importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: ORIGIN }],
-  schemaVersion: 13,
+  schemaVersion: 14,
   multisigStrk20KeyConflicts: [],
   multisigStrk20ViewingKeys: [],
   shadowAccountScopes: [],

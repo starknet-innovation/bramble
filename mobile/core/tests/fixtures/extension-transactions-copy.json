@@ -37,17 +37,17 @@
       }
     ],
     "mode": {
+      "confirmLabel": "Confirm and send",
+      "reviewNote": "Confirm only if the recipient, amount, and decoded action are correct.",
+      "reviewTitle": "Review send",
       "amountLabel": "Amount to send",
       "closeLabel": "Close Send",
-      "confirmLabel": "Confirm and send",
       "noun": "Send",
       "preparing": "Preparing send",
       "progressive": "Sending",
       "progressLabel": "Send progress",
       "reviewLabel": "Review send",
-      "reviewNote": "Confirm only if the recipient, amount, and decoded action are correct.",
-      "successTitle": "Send complete",
-      "verb": "send"
+      "successTitle": "Send complete"
     },
     "amountErrors": {
       "invalid": "Invalid transfer amount",
@@ -181,13 +181,13 @@
           "Pending",
           "STR",
           "Transaction",
-          "0x2270…f099",
+          "0x0227…f099",
           "Recipient",
-          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "0x03fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
           "Network",
           "Starknet Sepolia",
           "Status",
-          "Broadcast accepted. It can&#39;t be fee-bumped, replaced, or cancelled."
+          "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled."
         ]
       },
       "activityStatusLabels": {
@@ -207,7 +207,7 @@
           "Account",
           "Bold Ladybird",
           "Address",
-          "0x2083…98d9",
+          "0x0208…98d9",
           "Network",
           "Sepolia",
           "Account already deployed",
@@ -228,7 +228,7 @@
           "Account",
           "Bold Ladybird",
           "Address",
-          "0x2083…98d9",
+          "0x0208…98d9",
           "Network",
           "Sepolia",
           "This account is not deployed yet; the first send also submits its deployment.",
@@ -254,22 +254,22 @@
         "summary": [
           "From",
           "Account 1",
-          "0x2083…98d9",
+          "0x0208…98d9",
           "Show full sender address",
-          "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+          "0x0208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
           "To",
-          "0x3fa7…41a3",
-          "0x3fa7…41a3",
+          "0x03fa…41a3",
+          "0x03fa…41a3",
           "Show full recipient address",
-          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "0x03fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
           "Amount",
           "1.5 STRK",
           "Fiat estimate unavailable"
         ],
         "summaryLabels": [
           "Copy recipient address",
-          "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
-          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "0x0208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+          "0x03fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
           "Copy recipient address"
         ]
       },
@@ -294,14 +294,14 @@
           "text": [
             "Send from",
             "Bold Ladybird",
-            "0x2083…98d9",
+            "0x0208…98d9",
             "Send to",
             "Address book",
             "Save",
             "My accounts",
             "1",
             "Bold Ladybird",
-            "0x2083…98d9",
+            "0x0208…98d9",
             "Current",
             "No matching recipient.",
             "Continue with address"
@@ -322,7 +322,7 @@
             "Accounts",
             "From",
             "Bold Ladybird",
-            "0x2083…98d9",
+            "0x0208…98d9",
             "Private",
             "To",
             "Not selected",

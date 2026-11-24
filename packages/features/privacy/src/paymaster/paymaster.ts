@@ -31,6 +31,12 @@ import { BROADCAST_PAYMASTER_METHOD, rpc } from "./paymaster-rpc";
 
 import { bindPaymasterTypedData } from "./paymaster-typed-data";
 
+/**
+ * The one relay method that puts a transaction on the wire. Re-exported so the
+ * live test suites' broadcast firewall gates the same name the wallet sends.
+ */
+export { BROADCAST_PAYMASTER_METHOD };
+
 type PaymasterCall = {
   readonly calldata: readonly string[];
   readonly selector: string;

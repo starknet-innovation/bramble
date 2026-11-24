@@ -300,6 +300,7 @@ enum BrambleIconName: String, CaseIterable {
     case info = "Icons/info"
     case keyRound = "Icons/keyRound"
     case landmark = "Icons/landmark"
+    case languages = "Icons/languages"
     case layoutGrid = "Icons/layoutGrid"
     case leaf = "Icons/leaf"
     case maskedFace = "Icons/maskedFace"

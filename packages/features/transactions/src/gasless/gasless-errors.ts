@@ -7,21 +7,19 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { GATEWAY_SCREENING_CODES } from "@bramble/starknet/rpc-gateway-refusal";
 
 /**
- * Gateway `error` strings this client understands. On a quote, anything else
- * is still a determinate refusal, reported as `unrecognised`. On execute,
- * only the pre-forward allowlist is a refusal.
+ * Gateway `error` strings this client understands: the screening codes the
+ * plain RPC broadcast shares, plus the gasless route's own. On a quote,
+ * anything else is still a determinate refusal, reported as `unrecognised`.
+ * On execute, only the pre-forward allowlist is a refusal.
  */
 export const GASLESS_GATEWAY_CODES = [
-  "address_not_allowed",
+  ...GATEWAY_SCREENING_CODES,
   "gasless_disabled",
   "invalid_gasless_request",
-  "invalid_screening_transaction",
-  "screening_denied",
-  "screening_pending",
   "screening_subject_unverifiable",
-  "screening_unavailable",
   "upstream_rejected",
 ] as const;
 

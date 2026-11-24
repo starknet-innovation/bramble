@@ -9,11 +9,12 @@ import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../../e2e/fixtures";
 import { resolveConnectionApproval } from "../../e2e/wallet-helpers";
+import { transferredToSelf, waitForSuccessfulReceipt } from "../../live/chain";
+import { expectActivity } from "../../live/send";
 import { requireLocalMainnetAccount } from "../local-mainnet-account";
-import { mainnetToken, transferredToSelf, waitForSuccessfulReceipt } from "../local-mainnet-chain";
+import { mainnetToken } from "../local-mainnet-chain";
 import { selfTransferRaw } from "../local-mainnet-limits";
 import { approvePricedTransaction, resolvedOutput, startWalletDapp } from "./dapp";
-import { expectActivity } from "./send";
 import { openFundedWallet } from "./session";
 
 const account = await requireLocalMainnetAccount();

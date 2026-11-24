@@ -30,6 +30,10 @@ import {
 } from "./mobile-parity-activity-feed";
 import { ALLOWANCES_PARITY_FIXTURE_PATH, renderAllowancesParity } from "./mobile-parity-allowances";
 import { CALLS_PARITY_FIXTURE_PATH, renderCallsParity } from "./mobile-parity-calls";
+import {
+  MULTISIG_IMPORT_FIXTURE_PATH,
+  renderMultisigImportParity,
+} from "./mobile-parity-multisig-import";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
@@ -162,6 +166,9 @@ for (const [path, part] of multisig) {
 if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...multisig.keys()]).exitCode !== 0) {
   throw new Error("biome could not format the multisig transaction fixtures");
 }
+// And its import and call-summary cases (G7g).
+await writeFile(MULTISIG_IMPORT_FIXTURE_PATH, await renderMultisigImportParity());
+console.log(`wrote ${MULTISIG_IMPORT_FIXTURE_PATH}`);
 
 console.log(`wrote ${await writeNostrMultisigParity()}`);
 for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${path}`);

@@ -16,6 +16,7 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        language: "zh-Hans",
         productAnalytics: true,
         reliabilityDiagnostics: true,
         theme: "dark",
@@ -25,6 +26,7 @@ describe("readSetDisplayInput", () => {
     ).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      language: "zh-Hans",
       productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
@@ -49,7 +51,10 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
   });
 
-  test("rejects unknown currency or theme values", () => {
+  test("rejects unknown currency, language or theme values", () => {
+    for (const language of ["zh", "zh-CN", "zh-Hant", "fr", "", 1]) {
+      expect(readSetDisplayInput({ language, type: "wallet.setDisplay" })).toBeNull();
+    }
     expect(
       readSetDisplayInput({ approvalSurface: "window", type: "wallet.setDisplay" }),
     ).toBeNull();
@@ -60,6 +65,17 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
     expect(readSetDisplayInput({ productAnalytics: "yes", type: "wallet.setDisplay" })).toBeNull();
     expect(readSetDisplayInput({ type: "wallet.setDisplay", vipNotice: "off" })).toBeNull();
+  });
+
+  test("reads a Ready key notice dismissal only for a canonical account id", () => {
+    expect(
+      readSetDisplayInput({ readyKeyNoticeDismissed: "SN_MAIN:0x2a", type: "wallet.setDisplay" }),
+    ).toEqual({ readyKeyNoticeDismissed: "SN_MAIN:0x2a" });
+    for (const bad of ["", "0x2a", "SN_MAIN:zz", 42, ["SN_MAIN:0x2a"], null]) {
+      expect(
+        readSetDisplayInput({ readyKeyNoticeDismissed: bad, type: "wallet.setDisplay" }),
+      ).toBeNull();
+    }
   });
 });
 

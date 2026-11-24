@@ -134,6 +134,9 @@ describe("background strk20 messages", () => {
       kind: "strk20-balances",
       summaries: ["Share all private token balances"],
     });
+    expect(listed.at(-1)).toMatchObject({
+      summaryTexts: [{ facts: {}, key: "strk20Review.balances.all" }],
+    });
     const id = await latestApprovalId(handler, sender);
     await handler({ id, type: "wallet.denyOrigin" }, sender);
     await held;

@@ -3,6 +3,7 @@
  * through the verified send path and refreshes the tracked list.
  */
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
@@ -32,7 +33,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       .loadStatus()
       .then(render)
       .catch((error: unknown) => {
-        showToast(errorDetails(error, "Allowance refresh failed"), "error", refresh);
+        showToast(errorDetails(error, t("portfolio.allowance.refreshFailed")), "error", refresh);
         buttonBusy(refresh, false);
       });
   });
@@ -48,9 +49,9 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       buttonBusy(button, true);
       if (review) {
         review.hidden = false;
-        review.textContent = REVIEWED_FEES.has(button)
-          ? "Submitting…"
-          : "Estimating the maximum fee…";
+        review.textContent = t(
+          REVIEWED_FEES.has(button) ? "review.allowance.submitting" : "review.allowance.estimating",
+        );
       }
       if (result) {
         result.textContent = "";
@@ -62,27 +63,27 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           if (typeof response !== "string") {
             REVIEWED_FEES.set(button, response);
             const fee = formatFeeEstimate(response);
-            if (review)
-              review.textContent = `Maximum network fee: ${fee}. Confirm to set this spender's allowance to zero.`;
-            button.lastChild?.replaceWith(`Confirm revoke · ${fee}`);
+            if (review) review.textContent = t("review.allowance.review", { fee });
+            button.lastChild?.replaceWith(t("review.allowance.confirm", { fee }));
             buttonBusy(button, false);
             return;
           }
-          showToast("Revoke submitted", "success", button);
+          showToast(t("portfolio.allowance.submitted"), "success", button);
           if (result) {
-            result.textContent = `Submitted ${response}`;
+            result.textContent = t("review.allowance.submittedHash", { hash: response });
           }
-          if (review) review.textContent = "Revoke submitted. Follow it in Activity.";
+          if (review) review.textContent = t("review.allowance.submitted");
         },
         (error: unknown) => {
           REVIEWED_FEES.delete(button);
           // A revoke whose reply was lost may be on chain: amber, and the
           // button stays down until the list repaints (errors audit F3).
-          showToast(errorDetails(error, "Revoke failed"), failureTone(error), button);
+          const fallback = t("review.allowance.failed");
+          showToast(errorDetails(error, fallback), failureTone(error), button);
           if (result) {
-            result.textContent = errorLine(error, "Revoke failed");
+            result.textContent = errorLine(error, fallback);
           }
-          if (review) review.textContent = errorLine(error, "Revoke failed");
+          if (review) review.textContent = errorLine(error, fallback);
           if (!isOutcomeUnknown(error)) buttonBusy(button, false);
         },
       );

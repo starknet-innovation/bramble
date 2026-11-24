@@ -344,6 +344,7 @@ export const HOME_STYLES = `
   button[data-busy] .icon { animation: none; }
   #refresh-button[data-busy] .icon,
   #activity-refresh[data-busy] .icon,
+  [data-ms-sync-intents][data-busy] .icon,
   #swap-confirm-button[data-busy] .icon,
   #detect-tokens[data-busy] .icon { animation: spin 800ms linear infinite; }
 
@@ -385,6 +386,7 @@ export const HOME_STYLES = `
     .shell-animate .screen,
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
+    [data-ms-sync-intents][data-busy] .icon,
     #detect-tokens[data-busy] .icon,
     #swap-confirm-button[data-busy] .icon,
     .account-net.degraded .dot { animation: none; }

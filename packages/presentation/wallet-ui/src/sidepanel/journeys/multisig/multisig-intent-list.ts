@@ -4,6 +4,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
+import { t } from "../../../i18n/messages";
 import { tokenGlyph } from "../portfolio/token-row";
 
 type CompactIntentItem = {
@@ -27,24 +28,31 @@ export type CompactIntentList = {
 export const intentDeleteButton = (id: string, accountId: string): string =>
   button({
     attributes: { "data-ms-delete-intent": id, "data-ms-intent-account": accountId },
-    label: "Delete saved transaction",
+    label: t("multisig.intents.delete"),
     size: "small",
     tone: "danger",
     variant: "ghost",
   });
 
 /**
- * Renders pre-reviewed rows without handling wallet or signer data.
+ * Renders pre-reviewed rows without handling wallet or signer data. `action` is
+ * trusted, already-rendered markup placed at the end of the heading row; the
+ * row still renders without a heading when the queue is empty.
  */
 export const compactIntentListView = (
   heading: string,
   items: readonly CompactIntentItem[],
   emptyMessage: string,
+  action = "",
 ): string => {
+  const head =
+    items.length === 0 && action === ""
+      ? ""
+      : `<div class="multisig-intent-head">${items.length === 0 ? "" : `<p class="eyebrow">${escapeHtml(heading)}</p>`}${action}</div>`;
   const list =
     items.length === 0
-      ? emptyState(emptyMessage)
-      : `<p class="eyebrow">${escapeHtml(heading)}</p><ul class="menu-list multisig-intent-list">${items
+      ? `${head}${emptyState(emptyMessage)}`
+      : `${head}<ul class="menu-list multisig-intent-list">${items
           .map((item) => {
             const assetGlyphs =
               item.assets.length === 0
@@ -68,7 +76,7 @@ export const compactIntentListView = (
     className: "tab-more",
     icon: "chevronRight",
     iconPosition: "after",
-    label: "Import transaction",
+    label: t("multisig.intents.import"),
     size: "small",
     variant: "ghost",
   })}`;

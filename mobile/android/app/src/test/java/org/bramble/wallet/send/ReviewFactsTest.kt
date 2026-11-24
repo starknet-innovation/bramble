@@ -25,9 +25,9 @@ class ReviewFactsTest {
         requiresDeployment: Boolean = false,
         affordability: FeeAffordability = FeeAffordability.SUFFICIENT,
     ) = TransferReview(
-        summary = "Send 1 STRK to 0x3fa7…41a3",
+        summary = "Send 1 STRK to 0x03fa…41a3",
         recipient = "0x3fa7",
-        recipientShort = "0x3fa7…41a3",
+        recipientShort = "0x03fa…41a3",
         amountDisplay = "1",
         tokenSymbol = "STRK",
         fee = fee,

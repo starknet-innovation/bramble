@@ -6,8 +6,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   APP_STARKNET_REVISION,
+  LEDGER_APP_BIN_DIR,
   LEDGER_APP_BINARIES,
   LEDGER_APP_BUILDER_IMAGE,
+  ledgerAppBinaryPath,
   SPECULOS_IMAGE,
 } from "../../scripts/ledger-app-pins";
 import { ledgerAppBinaryFailure, ledgerAppPinFailures } from "../../scripts/ledger-app-policy";
@@ -52,5 +54,14 @@ describe("Ledger app pins", () => {
     expect(ledgerAppBinaryFailure("flex", DIGEST, DIGEST)).toBeNull();
     expect(ledgerAppBinaryFailure("flex", null, DIGEST)).toContain("not recorded");
     expect(ledgerAppBinaryFailure("flex", DIGEST, "b".repeat(64))).toContain("does not match");
+  });
+
+  test("each model's binary sits in the build directory outside the checkout", () => {
+    for (const model of Object.keys(LEDGER_APP_BINARIES) as Array<
+      keyof typeof LEDGER_APP_BINARIES
+    >) {
+      expect(ledgerAppBinaryPath(model)).toBe(`${LEDGER_APP_BIN_DIR}/${model}.elf`);
+    }
+    expect(ledgerAppBinaryPath("flex")).toBe("vendor/ledger-app-bin/flex.elf");
   });
 });

@@ -314,8 +314,8 @@ struct TokenMark: View {
     }
 }
 
-/// `0x1234…abcd`, the extension's `accountLabel`, computed by the core so both wallets truncate
-/// identically (no length guard, UTF-16 slicing).
+/// `0x0123…abcd`, the extension's `addressLabel` (padded to 64 hex digits, then 6…4; non-felt text
+/// unchanged), computed by the core so both wallets truncate identically.
 func shortAddress(_ address: String) -> String {
     accountLabel(address: address)
 }

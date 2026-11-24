@@ -24,7 +24,7 @@ final class SendReviewCopyTests: XCTestCase {
         flags: [ReviewFlag] = []
     ) -> TransferReview {
         TransferReview(
-            summary: "Send 1.5 STRK to 0x3fa7…41a3",
+            summary: "Send 1.5 STRK to 0x03fa…41a3",
             recipient: account1,
             recipientShort: shortAddress(account1),
             amountDisplay: "1.5",

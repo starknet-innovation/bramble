@@ -24,6 +24,7 @@ import {
   isVaultV11,
   isVaultV12,
   isVaultV13,
+  isVaultV14,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -235,6 +236,15 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 13,
   },
+  {
+    fromVersion: 13,
+    migrate(value) {
+      if (!isVaultV13(value)) throw new WalletError("Unsupported vault schema");
+      // No inference from derivation, seed bindings, class or deployment.
+      return { ...value, schemaVersion: 14 };
+    },
+    toVersion: 14,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -318,7 +328,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV13(value)) {
+  if (isVaultV14(value)) {
     return value;
   }
 
@@ -336,7 +346,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV13(migrated)) {
+  if (!isVaultV14(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

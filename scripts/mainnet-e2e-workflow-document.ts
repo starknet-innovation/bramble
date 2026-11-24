@@ -49,8 +49,11 @@ const STATUS_FUNCTION = /\b(?:always|cancelled|failure)\s*\(/;
 
 type Node = Record<string, unknown>;
 
-/** Anchors, aliases, explicit tags and `<<` merge keys anywhere in the document. */
-const indirections = (document: ReturnType<typeof parseDocument>): number => {
+/**
+ * Counts anchors, aliases, explicit tags and `<<` merge keys anywhere in the
+ * document. Shared with the Sepolia nightly policy; any count above zero fails.
+ */
+export const indirections = (document: ReturnType<typeof parseDocument>): number => {
   let found = 0;
   visit(document, {
     Node(_key, node) {

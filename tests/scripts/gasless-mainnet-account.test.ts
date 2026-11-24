@@ -7,14 +7,18 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hash } from "starknet";
+import { createTransactionReceipt, hash, ReceiptTx } from "starknet";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "../../packages/foundation/wallet-model/src/accounts/accounts";
 import { STARKNET_NETWORKS } from "../../packages/foundation/wallet-model/src/networks/networks";
 import {
   GASLESS_MAINNET_SKIP_MESSAGE,
   loadGaslessMainnetAccount,
 } from "../../scripts/gasless-mainnet-account";
-import { receiptSucceeded, transferredAmount } from "../../scripts/gasless-mainnet-receipt";
+import {
+  receiptReverted,
+  receiptSucceeded,
+  transferredAmount,
+} from "../../scripts/gasless-mainnet-receipt";
 import {
   displayRpcUrl,
   requireCiMainnetRpc,
@@ -232,6 +236,70 @@ describe("gasless mainnet receipt", () => {
     expect(receiptSucceeded(receipt)).toBe(true);
     expect(transferredAmount(receipt, token, from, to)).toBe(1000n);
     expect(receiptSucceeded({ execution_status: "REVERTED" })).toBe(false);
+    expect(receiptSucceeded({ receipt: { execution_status: "SUCCEEDED" } })).toBe(true);
+    expect(receiptReverted({ receipt: { execution_status: "REVERTED" } })).toBe(true);
+    // The nested receipt still answers when the outer field is present but does not.
+    expect(
+      receiptSucceeded({ execution_status: "PENDING", receipt: { execution_status: "SUCCEEDED" } }),
+    ).toBe(true);
+    expect(transferredAmount({ events: {}, receipt }, token, from, to)).toBe(1000n);
+  });
+
+  test("reads a starknet.js ReceiptTx, not only a plain object", () => {
+    const token = "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+    const from = "0x1234";
+    const to = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
+    const body = {
+      events: [
+        {
+          data: ["0x3e8", "0x0"],
+          from_address: token,
+          keys: [hash.getSelectorFromName("Transfer"), from, to],
+        },
+      ],
+      execution_status: "SUCCEEDED",
+      transaction_hash: "0x1",
+      type: "INVOKE",
+    };
+    const succeeded = createTransactionReceipt(
+      body as Parameters<typeof createTransactionReceipt>[0],
+    );
+    expect(Object.getPrototypeOf(succeeded)).toBe(ReceiptTx.prototype);
+    expect(receiptSucceeded(succeeded)).toBe(true);
+    expect(receiptReverted(succeeded)).toBe(false);
+    expect(transferredAmount(succeeded, token, from, to)).toBe(1000n);
+    const reverted = createTransactionReceipt({
+      ...body,
+      execution_status: "REVERTED",
+      revert_reason: "out of gas",
+    } as Parameters<typeof createTransactionReceipt>[0]);
+    expect(receiptSucceeded(reverted)).toBe(false);
+    expect(receiptReverted(reverted)).toBe(true);
+    expect(receiptSucceeded(1)).toBe(false);
+    expect(transferredAmount(1, token, from, to)).toBe(0n);
+  });
+
+  test("runs no getter on a receipt or its events", () => {
+    let ran = false;
+    const trap = {
+      enumerable: true,
+      get() {
+        ran = true;
+        return "SUCCEEDED";
+      },
+    };
+    const receipt = Object.defineProperty({}, "execution_status", trap);
+    const event = Object.defineProperty({ data: ["0x1", "0x0"], keys: [] }, "from_address", trap);
+    expect(receiptSucceeded(receipt)).toBe(false);
+    expect(receiptSucceeded({ receipt })).toBe(false);
+    expect(transferredAmount({ events: [event] }, "0x1", "0x2", "0x3")).toBe(0n);
+    const events = Object.defineProperty([], "0", trap);
+    const keys = Object.defineProperty(["0x1"], "0", trap);
+    expect(transferredAmount({ events }, "0x1", "0x2", "0x3")).toBe(0n);
+    expect(
+      transferredAmount({ events: [{ data: [], from_address: "0x1", keys }] }, "0x1", "0x2", "0x3"),
+    ).toBe(0n);
+    expect(ran).toBe(false);
   });
 });
 

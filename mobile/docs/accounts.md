@@ -22,7 +22,7 @@ the difference with **Decision**.
 | Display name | `preferences.accountLabels[id]`, else `friendlyAccountName(address)` = `ADJ[a mod 30] + " " + ANIMAL[(a div 131) mod 30]`, where `a = BigInt(address)` (0 if it doesn't parse). `0x0` gives "Amber Otter". There is no "Account N" name anywhere. | `wallet-ui/src/sidepanel/shared/parts.ts:193-295` |
 | Family name | openzeppelin → "Bramble", argent → "Ready", braavos → "Braavos" | `shell/account-types.ts` |
 | Label rules | Keyed by `"<networkId>:<canonical address>"`. The label is trimmed. Empty clears it. Otherwise it must be 1-64 characters (JS/UTF-16 length) or "Invalid account label". Labels are kept in plain preferences, not in the vault. | `features/settings/src/preferences.ts:116-135,345-360`; `wallet-model/src/preferences/preferences.ts` |
-| Truncation | `accountLabel = shortAddress = a.slice(0,6) + "…" + a.slice(-4)` (U+2026), applied to the canonical address. The full address goes in `title`. Onboarding preview only: `slice(0,10) + "…" + slice(-8)`. | `parts.ts:157-160`; `onboarding-ui.ts:427` |
+| Truncation | `addressLabel(a)`: a felt padded to 64 hex digits, then `slice(0,6) + "…" + slice(-4)` (U+2026); anything that is not a felt is returned unchanged (#884). Onboarding's preview uses the same rule. The full address goes in `title`. | `wallet-model/networks.ts` `addressLabel` |
 | Copy | Writes the full value. Shows "Copied" in the section's status line, or else a toast that lasts 3200 ms. The icon becomes a check for 1400 ms. Failure shows "Copy failed" (error toast, 8000 ms). | `shared/dom.ts:63,242-293` |
 | Where copy exists | Manage accounts & groups (inline copy on each row, plus a receipt with Copy address / signer public key / class hash), Receive (full address plus the "Copy address" button), deploy review, approvals | `app/screens/flows.ts:280-397`; `send/receive-view.ts` |
 | Where copy is deliberately absent | Drawer rows (the row is the switch control) and the header | `shell/account-drawer.ts:1-17`; `sidepanel-copy-affordance.test.ts` |
@@ -160,7 +160,7 @@ feedback moves to the shared `CopyButton` (§2.8).
 ### 2.6 Onboarding
 
 **Create.** The review step's label becomes "Primary Bramble account". The preview address uses
-`account_preview_label` (10…8). The account is OZ index 0 on the selected network.
+`account_preview_label` (6…4, as `addressLabel`). The account is OZ index 0 on the selected network.
 
 **Import.** The route becomes
 `recovery phrase → passphrase (vault written, recovery pending) → Find your accounts → all set`.
@@ -356,7 +356,7 @@ branches not yet merged; no screen on either platform uses them:
 #[uniffi::export] pub fn friendly_account_name(address: String) -> String;
 #[uniffi::export] pub fn account_display_name(address: String, label: Option<String>) -> String;
 #[uniffi::export] pub fn account_label(address: String) -> String;          // 6…4
-#[uniffi::export] pub fn account_preview_label(address: String) -> String;  // 10…8, onboarding
+#[uniffi::export] pub fn account_preview_label(address: String) -> String;  // 6…4 (addressLabel), onboarding
 #[uniffi::export] pub fn is_account_label(label: String) -> bool;           // trimmed 1..=64 UTF-16
 #[uniffi::export] pub fn account_family_name(family: AccountFamily) -> String;
 #[uniffi::export] pub fn account_classes() -> Vec<AccountClassInfo>;

@@ -20,16 +20,13 @@ import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type {
-  KeyAddressCandidate,
-  ReadOnlyReason,
-  RecoveryAccountCandidate,
-} from "@bramble/wallet-model/recovery";
+import type { KeyAddressCandidate, RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
 import type { DappMultisigAccount } from "@bramble/wallet-protocol/results";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
+import type { FeatureFlagsResponse } from "../flags/feature-flag-client";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
   ArgentMultisigDeploymentReview,
@@ -49,12 +46,13 @@ import type { StakingPreparationResponse } from "../staking/staking-preparations
 import type { StakingResponse } from "../staking/staking-view";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationResponse } from "../transactions/swap-preparations";
-import type { NostrCoordinationResponse } from "./nostr-types";
 import type {
-  AccountRecoveryState,
-  RecoverAccountResponse,
-  RecoveryReviewResponse,
-} from "./recovery-types";
+  AccountSignabilityResponse,
+  DeploymentStatusResponse,
+  ReadyKeyStatusResponse,
+} from "./account-status-types";
+import type { NostrCoordinationResponse } from "./nostr-types";
+import type { RecoverAccountResponse, RecoveryReviewResponse } from "./recovery-types";
 import type {
   ClassHashVerificationResponse,
   StarkNameResolutionResponse,
@@ -282,27 +280,6 @@ type AllowancesResponse = {
 };
 
 /**
- * Account contract deployment status returned to extension pages.
- */
-type DeploymentStatusResponse = {
-  readonly accountId: string;
-  readonly deployed: boolean;
-  readonly ok: true;
-};
-
-/**
- * Active-account signability verdict for the Home read-only flag; `reason`
- * accompanies `readOnly: true` and never carries secret material.
- */
-type AccountSignabilityResponse = {
-  readonly accountId: string;
-  readonly ok: true;
-  readonly readOnly: boolean;
-  readonly reason?: ReadOnlyReason;
-  readonly recovery?: AccountRecoveryState;
-};
-
-/**
  * Supported spec or wallet-API version list returned through the dapp provider
  * bridge for the discovery methods.
  */
@@ -419,6 +396,7 @@ type LedgerAccountStatusResponse = {
  */
 export type RuntimeResponse =
   | AccountSignabilityResponse
+  | ReadyKeyStatusResponse
   | RecoveryReviewResponse
   | RecoverAccountResponse
   | AccountsResponse
@@ -436,6 +414,7 @@ export type RuntimeResponse =
   | DeploymentStatusResponse
   | DetectTokensResponse
   | DiscoverNftsResponse
+  | FeatureFlagsResponse
   | {
       readonly candidates: readonly RecoveryAccountCandidate[];
       readonly complete: boolean;

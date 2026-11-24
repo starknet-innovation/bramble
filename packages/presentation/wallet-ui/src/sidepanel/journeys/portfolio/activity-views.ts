@@ -12,11 +12,12 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
-import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { RelaySignature } from "@bramble/transactions/relay-signatures";
 import { emptyState } from "@bramble/ui-kit/content";
 import { iconButton, segmentedControl } from "@bramble/ui-kit/controls";
 import { inputControl, selectField } from "@bramble/ui-kit/fields";
+import { t, th } from "../../../i18n/messages";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { approvalCard } from "../approvals/approval-cards";
@@ -29,78 +30,68 @@ import {
   activityFilterOptions,
   reconcileActivityFilter,
 } from "./activity-filter";
-import type { ActivityPricing } from "./activity-format";
+import { type ActivityPricing, activityStatusTitle, activityTitleText } from "./activity-format";
 import { activityViewState, setActivityViewState } from "./activity-view-state";
 import { activityEmptyCopy, transactionGroups, transactionList } from "./home-tabs";
 import { relaySection } from "./relay-rows";
-
-const HISTORY_UNAVAILABLE_NOTICE =
-  "Couldn't load on-chain history. Showing this device's records only.";
-
-// Status words as the filter offers them. Pre-confirmed carries its own
-// spelling, matching the row.
-const STATUS_TEXT: Readonly<Record<ActivityStatus, string>> = {
-  accepted: "Accepted",
-  pending: "Pending",
-  preconfirmed: "Pre-confirmed",
-  rejected: "Rejected",
-  reverted: "Reverted",
-};
 
 // The filter, sort and search controls. Each select option comes from the
 // options the feed currently offers, so a control never offers a value that
 // would match nothing, and every value is selected from the reconciled filter.
 const activityToolbar = (filter: ActivityFilter, options: ActivityFilterOptions): string => {
   return `<div class="activity-toolbar">
-    <label class="activity-search"><span>Search</span>${inputControl({
-      ariaLabel: "Search activity by address or saved name",
+    <label class="activity-search"><span>${th("portfolio.activity.search")}</span>${inputControl({
+      ariaLabel: t("portfolio.activity.searchLabel"),
       attributes: { id: "activity-search" },
       autocomplete: "off",
       className: "mono",
-      placeholder: "Address or saved name",
+      placeholder: t("portfolio.activity.searchPlaceholder"),
       spellcheck: false,
       type: "search",
       value: filter.query,
     })}</label>
     ${selectField({
       attributes: { id: "activity-type" },
-      label: "Type",
+      label: t("portfolio.activity.type"),
       name: "activity-type",
       options: [
-        { label: "All types", value: "all" },
-        ...options.actions.map((action) => ({ label: action, value: action })),
+        { label: t("portfolio.activity.allTypes"), value: "all" },
+        ...options.actions.map((action) => ({ label: activityTitleText(action), value: action })),
       ],
       selected: filter.action,
     })}
     ${selectField({
       attributes: { id: "activity-status" },
-      label: "Status",
+      label: t("portfolio.activity.status"),
       name: "activity-status",
       options: [
-        { label: "All statuses", value: "all" },
-        ...options.statuses.map((status) => ({ label: STATUS_TEXT[status], value: status })),
+        { label: t("portfolio.activity.allStatuses"), value: "all" },
+        ...options.statuses.map((status) => ({
+          label: activityStatusTitle(status),
+          value: status,
+        })),
       ],
       selected: filter.status,
     })}
     ${selectField({
       attributes: { id: "activity-token" },
-      label: "Token",
+      label: t("portfolio.activity.token"),
       name: "activity-token",
       options: [
-        { label: "All tokens", value: "all" },
+        { label: t("portfolio.activity.allTokens"), value: "all" },
         ...options.tokens.map((token) => ({ label: token.label, value: token.key })),
       ],
       selected: filter.token,
     })}
-    ${segmentedControl("Sort", [
+    ${segmentedControl(t("portfolio.activity.sort"), [
       {
         attributes: { "data-activity-sort": "date" },
-        label: "Date",
+        label: t("portfolio.activity.sortDate"),
         pressed: filter.sort === "date",
       },
       {
         attributes: { "data-activity-sort": "amount" },
-        label: "Amount",
+        label: t("portfolio.activity.sortAmount"),
         pressed: filter.sort === "amount",
       },
     ])}
@@ -154,18 +145,18 @@ export const activityScreen = (
   return dockScreen(
     "activity",
     `<div class="section-head activity-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
-      <h1 aria-label="Activity on ${escapeHtml(status.network)}">Activity</h1>
+      <h1 aria-label="${th("portfolio.activity.titleOn", { network: status.network })}">${th("portfolio.activity.title")}</h1>
       <div class="header-actions">
         ${iconButton({
           attributes: { id: "activity-export" },
           disabled: transactions.length === 0,
           icon: "receive",
-          label: "Export CSV",
+          label: t("portfolio.activity.export"),
         })}
         ${iconButton({
           attributes: { id: "activity-refresh" },
           icon: "refresh",
-          label: "Refresh transactions",
+          label: t("portfolio.activity.refresh"),
         })}
       </div>
     </div>
@@ -176,7 +167,7 @@ export const activityScreen = (
             <div class="menu-list">
               ${walletMenuRow(
                 "requests",
-                "Requests waiting for review",
+                t("portfolio.activity.requestsWaiting"),
                 "activity",
                 String(pending.length),
               )}
@@ -185,14 +176,14 @@ export const activityScreen = (
     }
     ${relaySection(relays)}
     <section class="section">
-      ${historyUnavailable ? emptyState(HISTORY_UNAVAILABLE_NOTICE, "status") : ""}
+      ${historyUnavailable ? emptyState(t("portfolio.activity.historyUnavailable"), "status") : ""}
       ${
         transactions.length === 0
           ? emptyState(activityEmptyCopy(historyUnavailable))
           : `${activityToolbar(filter, options)}
-      <section class="activity-summary" id="activity-party-summary" aria-label="Counterparty summary" hidden></section>
+      <section class="activity-summary" id="activity-party-summary" aria-label="${th("portfolio.activity.partySummary")}" hidden></section>
       <div id="activity-feed" data-activity-feed>${activityFeed(transactions, pricing, todayKey, contacts, filter)}</div>
-      <p class="activity-empty" id="activity-no-matches" hidden>No matching transactions.</p>`
+      <p class="activity-empty" id="activity-no-matches" hidden>${th("portfolio.activity.noMatches")}</p>`
       }
       <p id="activity-result" role="status"></p>
     </section>`,
@@ -209,16 +200,18 @@ export const requestsFlow = (
   picker?: ConnectPicker,
 ): string =>
   flowHeader(
-    "Wallet requests",
+    t("portfolio.requests.title"),
     status,
-    pending.length === 0 ? "Nothing waiting" : `${pending.length} waiting`,
+    pending.length === 0
+      ? t("portfolio.requests.none")
+      : t("portfolio.requests.waiting", { count: String(pending.length) }),
   ) +
   flowScreen(
     "requests",
     `<section class="section">
       ${
         pending.length === 0
-          ? emptyState("No wallet requests are waiting.")
+          ? emptyState(t("portfolio.requests.empty"))
           : `<ul class="request-list">${pending.map((approval) => approvalCard(approval, status, preferences, picker)).join("")}</ul>`
       }
       <p id="approval-result" role="status"></p>

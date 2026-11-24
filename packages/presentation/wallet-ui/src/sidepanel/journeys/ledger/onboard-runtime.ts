@@ -215,7 +215,7 @@ export const createLedgerOnboardRuntime = (
         view.loadingMore,
       );
     }
-    return ledgerOnboardError(view.message);
+    return ledgerOnboardError(view.message, view.supportCode);
   };
 
   const render = (view: LedgerOnboardView | null): void => {

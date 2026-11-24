@@ -275,6 +275,7 @@ enum class BrambleIconName(@DrawableRes val drawable: Int) {
     INFO(R.drawable.ic_info),
     KEY_ROUND(R.drawable.ic_key_round),
     LANDMARK(R.drawable.ic_landmark),
+    LANGUAGES(R.drawable.ic_languages),
     LAYOUT_GRID(R.drawable.ic_layout_grid),
     LEAF(R.drawable.ic_leaf),
     MASKED_FACE(R.drawable.ic_masked_face),

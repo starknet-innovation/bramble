@@ -158,7 +158,7 @@ describe("onChainActivityEntry", () => {
     expect(entry.submittedAt).toBe(1_700_000_000_000);
     expect(entry.amount).toBe("1.5");
     expect(entry.token).toBe("ETH");
-    expect(entry.summary).toBe("Sent 1.5 ETH to 0x7770…0abc");
+    expect(entry.summary).toBe("Sent 1.5 ETH to 0x0777…0abc");
   });
 
   test("names the counterparty as the sender for an incoming transfer", () => {
@@ -173,7 +173,7 @@ describe("onChainActivityEntry", () => {
       timestampMs: 1_700_000_000_000,
       token: eth,
     });
-    expect(entry.summary).toBe("Received 2 ETH from 0x7770…0abc");
+    expect(entry.summary).toBe("Received 2 ETH from 0x0777…0abc");
   });
 });
 
@@ -200,7 +200,7 @@ const chainEntry = (hash: string, submittedAt: number): ActivityEntry => ({
   networkId: "SN_MAIN",
   status: "accepted",
   submittedAt,
-  summary: `Received 1 ETH from 0x7770…0abc`,
+  summary: `Received 1 ETH from 0x0777…0abc`,
   token: "ETH",
 });
 
@@ -271,8 +271,8 @@ describe("mergeActivity", () => {
     const merged = mergeActivity(
       [],
       [
-        swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x7770…0abc", "0xswap", 9000),
-        swapLeg("USDC", "3000", "Received 3000 USDC from 0x7770…0abc", "0xswap", 9000),
+        swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x0777…0abc", "0xswap", 9000),
+        swapLeg("USDC", "3000", "Received 3000 USDC from 0x0777…0abc", "0xswap", 9000),
       ],
     );
     expect(merged).toHaveLength(2);
@@ -285,8 +285,8 @@ describe("mergeActivity", () => {
     const merged = mergeActivity(
       [localEntry("0xswap", 9000, "accepted")],
       [
-        swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x7770…0abc", "0xswap", 9000),
-        swapLeg("USDC", "3000", "Received 3000 USDC from 0x7770…0abc", "0xswap", 9000),
+        swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x0777…0abc", "0xswap", 9000),
+        swapLeg("USDC", "3000", "Received 3000 USDC from 0x0777…0abc", "0xswap", 9000),
       ],
     );
     expect(merged).toHaveLength(1);

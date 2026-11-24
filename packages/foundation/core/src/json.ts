@@ -109,6 +109,21 @@ export const isOwnDataProperty = (
 ): descriptor is PropertyDescriptor => descriptor?.enumerable === true && "value" in descriptor;
 
 /**
+ * Returns `value[key]` when it is an own enumerable data property of an object,
+ * otherwise undefined. An accessor is never invoked, so an ordinary hostile
+ * object cannot run code through the read. A Proxy can still run its
+ * `getOwnPropertyDescriptor` trap; callers that must exclude that reject
+ * Proxies first. A stored `undefined` reads the same as a missing key.
+ */
+export const ownField = (value: unknown, key: string): unknown => {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return isOwnDataProperty(descriptor) ? descriptor.value : undefined;
+};
+
+/**
  * Checks that a parsed object contains only keys its boundary understands.
  */
 export const hasOnlyKnownKeys = (

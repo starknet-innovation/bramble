@@ -48,6 +48,9 @@ extension WalletStore {
 
     var privacyHeaderStatus: PrivacyStatus { privacyStatus(network: network, reading: privacy.reading) }
 
+    /// Home's private-balances row under the token list: the retry, the no-pool answer, or none.
+    var privacyHomeRow: HomePrivateRow { homePrivateRow(network: network, reading: privacy.reading) }
+
     func tokenDetailPrivacyFor(_ token: String) -> TokenDetailPrivacy {
         tokenDetailPrivacy(
             network: network,

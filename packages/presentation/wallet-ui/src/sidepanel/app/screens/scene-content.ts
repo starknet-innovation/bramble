@@ -92,5 +92,6 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     state.privateTotalWaitOver,
     cache.staking,
     cache.nftCoverage,
+    cache.experimentalFeatures,
   );
 };

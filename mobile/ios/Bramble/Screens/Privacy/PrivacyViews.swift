@@ -37,31 +37,43 @@ struct ShieldedHeroLabel: View {
     }
 }
 
-/// `data-privacy-retry`: "Private balances · Try again" under the list after a failed read.
+/// `data-privacy-retry`: "Private balances · Try again" under the list after a failed read, or
+/// "Not available on this network" in its place, without a retry, where no pool is configured.
 struct PrivacyRetryRow: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
 
     var body: some View {
-        if store.privacyHeaderStatus == .unavailable {
+        switch store.privacyHomeRow {
+        case .none:
+            EmptyView()
+
+        case .retry:
             Button { Task { await store.refreshPrivacy() } } label: {
-                HStack {
-                    HStack(spacing: BrambleSpace.xs) {
-                        BrambleIcon(.lock, size: privacyLockIconSize)
-                        Text(PrivacyCopy.privateBalances)
-                    }
-                    Spacer()
-                    Text(PrivacyCopy.retry)
-                }
-                .brambleText(BrambleTypeScale.label)
-                .foregroundStyle(skin.muted)
-                .padding(BrambleMetrics.TokenRow.padding)
-                .frame(minHeight: BrambleControl.hit)
-                .contentShape(Rectangle())
+                row(PrivacyCopy.retry).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(PrivacyCopy.privateBalances), \(PrivacyCopy.retry)")
+
+        case .notOnThisNetwork:
+            row(PrivacyCopy.blockedNetworkTitle)
+                .accessibilityElement(children: .combine)
         }
+    }
+
+    private func row(_ value: String) -> some View {
+        HStack {
+            HStack(spacing: BrambleSpace.xs) {
+                BrambleIcon(.lock, size: privacyLockIconSize)
+                Text(PrivacyCopy.privateBalances)
+            }
+            Spacer()
+            Text(value)
+        }
+        .brambleText(BrambleTypeScale.label)
+        .foregroundStyle(skin.muted)
+        .padding(BrambleMetrics.TokenRow.padding)
+        .frame(minHeight: BrambleControl.hit)
     }
 }
 

@@ -19,6 +19,11 @@
  * no key outside the published phrase enters a fixture, and nothing at those indexes holds funds.
  * The imported accounts sit at their family's default class with no salt; an address-picked
  * (`address`) or multi-release (`classHashes`) import is left out (mobile imports neither).
+ *
+ * Both stay at schema 13, which wallet-core still reads. The service now writes schema 14, which is
+ * v13 plus an optional `accountProvenance` map (the 13→14 migration adds nothing else), so the v13
+ * payload is the service's v14 without that map and at version 13. `isVaultV13` must accept it and
+ * the extension's own encrypted store seals it.
  */
 
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
@@ -27,8 +32,10 @@ import { deriveAccount } from "@bramble/vault/accounts";
 import {
   createEncryptedStore,
   decryptJson,
+  type EncryptedStore,
   isEncryptedEnvelope,
 } from "@bramble/vault/encrypted-store";
+import { isVaultV13 } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
 import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
@@ -142,31 +149,59 @@ export type VaultParity = {
   readonly sealed: unknown;
 };
 
-const parityOf = async (
-  written: Promise<KeyValueStore>,
-  committedSealed: unknown,
-): Promise<VaultParity> => {
-  const sealed = await (await written).get(VAULT_STORE_KEY);
+/** The schema-13 vault a v14 payload came from: no `accountProvenance`, key order kept. */
+const asV13 = (payload: unknown): unknown => {
+  const v13 = Object.fromEntries(
+    Object.entries(payload as Record<string, unknown>)
+      .filter(([key]) => key !== "accountProvenance")
+      .map(([key, value]) => [key, key === "schemaVersion" ? 13 : value]),
+  );
+  if (!isVaultV13(v13)) throw new Error("the v14 vault does not reduce to a valid v13 vault");
+  return v13;
+};
+
+/** Seals `payload` with the extension's own encrypted store, as the service does. */
+const sealPayload = async (payload: unknown): Promise<unknown> => {
+  const store = createMemoryStore();
+  await createEncryptedStore(store, VAULT_STORE_KEY).write(
+    payload as Parameters<EncryptedStore["write"]>[0],
+    vaultPassphrase,
+  );
+  return store.get(VAULT_STORE_KEY);
+};
+
+/** The decrypted payload the service sealed into `store`. */
+const writtenPayload = async (store: KeyValueStore): Promise<unknown> => {
+  const sealed = await store.get(VAULT_STORE_KEY);
   if (!isEncryptedEnvelope(sealed)) throw new Error("the vault service wrote no envelope");
-  const payload = await decryptJson(sealed, vaultPassphrase, VAULT_PARITY_SCOPE);
+  return decryptJson(sealed, vaultPassphrase, VAULT_PARITY_SCOPE);
+};
+
+/**
+ * The fixture for `payload`, keeping `committedSealed` when the extension still opens it to that
+ * same payload (a fresh seal draws a new salt, IV, lineage and commit, so re-sealing every run
+ * would churn the fixture with no change in meaning).
+ */
+const parityFor = async (payload: unknown, committedSealed: unknown): Promise<VaultParity> => {
   const keep = await sealedIsCurrent(committedSealed, payload, vaultPassphrase, VAULT_PARITY_SCOPE);
   return {
     mnemonic,
     password: vaultPassphrase,
     payload,
     scope: VAULT_PARITY_SCOPE,
-    sealed: keep ? committedSealed : sealed,
+    sealed: keep ? committedSealed : await sealPayload(payload),
   };
 };
 
-/**
- * Writes the vault afresh and returns its payload, keeping `committedSealed` when the extension
- * still opens it to that same payload (a fresh seal draws a new salt, IV, lineage and commit, so
- * re-sealing every run would churn the fixture with no change in meaning).
- */
+const v13ParityOf = async (
+  written: Promise<KeyValueStore>,
+  committedSealed: unknown,
+): Promise<VaultParity> => parityFor(asV13(await writtenPayload(await written)), committedSealed);
+
+/** Writes the vault afresh and returns it at schema 13 (see {@link parityFor} for the seal). */
 export const computeVaultParity = (committedSealed?: unknown): Promise<VaultParity> =>
-  parityOf(writeParityVault(), committedSealed);
+  v13ParityOf(writeParityVault(), committedSealed);
 
 /** {@link computeVaultParity} for the imported-key vault (`vault-v13-imported.json`). */
 export const computeImportedVaultParity = (committedSealed?: unknown): Promise<VaultParity> =>
-  parityOf(writeImportedVault(), committedSealed);
+  v13ParityOf(writeImportedVault(), committedSealed);

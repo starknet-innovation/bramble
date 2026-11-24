@@ -52,10 +52,10 @@ private const val DESELECTED_CHECK_SCALE = 0.92f
 
 /**
  * `#account-preview`, port of the iOS `ReviewAccountStep`: confirm the derived public address (the
- * new vault's active record, OpenZeppelin index 0 on this network, shown with the core's 10…8
- * `accountPreviewLabel`), then add it. Create path only; an import goes to "Find your accounts".
- * The card starts selected. No Mainnet tick: the extension deleted `mainnet-ack.ts`, so the
- * selected card alone enables the action.
+ * new vault's active record, OpenZeppelin index 0 on this network, shown with the core's 6…4
+ * `accountPreviewLabel`, the onboarding `addressLabel`), then add it. Create path only; an import
+ * goes to "Find your accounts". The card starts selected. No Mainnet tick: the extension deleted
+ * `mainnet-ack.ts`, so the selected card alone enables the action.
  */
 @Composable
 fun ReviewAccountStep(

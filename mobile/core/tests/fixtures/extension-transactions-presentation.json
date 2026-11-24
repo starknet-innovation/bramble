@@ -152,27 +152,27 @@
     "shortAddresses": [
       {
         "input": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
-        "short": "0x3fa7…41a3"
+        "short": "0x03fa…41a3"
       },
       {
         "input": "0x1",
-        "short": "0x1…0x1"
+        "short": "0x0000…0001"
       },
       {
         "input": "0x12345",
-        "short": "0x1234…2345"
+        "short": "0x0000…2345"
       },
       {
         "input": "0x123456789a",
-        "short": "0x1234…789a"
+        "short": "0x0000…789a"
       },
       {
         "input": "not an address",
-        "short": "not an…ress"
+        "short": "not an address"
       },
       {
         "input": "",
-        "short": "…"
+        "short": ""
       }
     ],
     "tokenAmounts": [

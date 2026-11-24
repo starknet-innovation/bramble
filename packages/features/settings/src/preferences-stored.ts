@@ -37,6 +37,8 @@ import {
   isExplorerFallback,
   isHiddenAccountIds,
   isHiddenTokens,
+  isLanguagePreference,
+  isReadyKeyNoticeDismissals,
   isRpcOverrides,
   isThemeChoice,
   isTokenConfig,
@@ -65,10 +67,12 @@ const PREFERENCE_KEYS: readonly string[] = [
   "groups",
   "hiddenAccountIds",
   "hiddenTokens",
+  "language",
   "nftIndexerUrl",
   "nfts",
   "nostrRelayUrl",
   "productAnalytics",
+  "readyKeyNoticeDismissedIds",
   "removedTokens",
   "selectedMultisigId",
   "rpcOverrides",
@@ -105,9 +109,12 @@ const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
   (value["explorerApiUrls"] === undefined || isRpcOverrides(value["explorerApiUrls"])) &&
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
+  (value["language"] === undefined || isLanguagePreference(value["language"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["vipNotice"] === undefined || typeof value["vipNotice"] === "boolean") &&
+  (value["readyKeyNoticeDismissedIds"] === undefined ||
+    isReadyKeyNoticeDismissals(value["readyKeyNoticeDismissedIds"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);
@@ -367,7 +374,9 @@ export const normalizeStoredPreferences = (value: unknown): unknown =>
  * `approvalSurface`. `explorerFallback` is excluded for the same reason: a
  * file that flipped it to `true` would re-arm a third-party address disclosure
  * the user had switched off, and one that flipped it to `false` would turn an
- * RPC outage into an unexplained failure.
+ * RPC outage into an unexplained failure. `language` is excluded because it is
+ * the language every approval and review sentence renders in: a file must not
+ * be able to switch the text a user signs against to one they cannot read.
  *
  * `addressBook` is excluded too, in both directions. The saved contacts are
  * the reference set behind the address-poisoning guard, so a file that

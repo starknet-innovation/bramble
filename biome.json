@@ -5,6 +5,7 @@
       "**",
       "!.claude",
       "!.dev-profile",
+      "!.mainnet-multisig-e2e",
       "!.impeccable",
       "!.playwright-cli",
       "!apps/terminal",

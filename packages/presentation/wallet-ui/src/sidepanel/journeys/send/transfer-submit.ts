@@ -8,9 +8,12 @@
  * route rather than once per privacy feature.
  */
 
+import { networkRejectionMessage, nodeRejectionReason } from "@bramble/starknet/node-rejection";
 import { shieldStrkNeed } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
+import { t } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -138,6 +141,7 @@ export const preparedReview = (
           },
         }),
     summaries: [...preparation.summaries],
+    ...(preparation.summaryTexts === undefined ? {} : { summaryTexts: preparation.summaryTexts }),
   } as TransferReview;
 };
 
@@ -166,8 +170,6 @@ export const shieldStrkBlocked = (review: ReviewFeeState): boolean =>
 export const confirmBlocked = (review: ReviewFeeState): boolean =>
   reviewFeeBlocked(review) || shieldStrkBlocked(review);
 
-const FEE_UNAVAILABLE = "Fee estimate unavailable. Retry before authorizing this transaction.";
-
 /**
  * The review state a public transfer lands in. The reviewed key — what the
  * submit handler reads to tell "show me the review" from "I have read it, send
@@ -184,11 +186,7 @@ export const reviewedState = (
   const feeFailed = reviewFeeBlocked(review);
   const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
   return {
-    error: blocked
-      ? "This recipient closely mimics a saved address. Change it and review again."
-      : feeFailed
-        ? FEE_UNAVAILABLE
-        : "",
+    error: blocked ? t("review.send.poisoned") : feeFailed ? t("review.send.fee.unavailable") : "",
     fields,
     privatePreparation: null,
     progress: null,
@@ -223,7 +221,7 @@ export const preparedState = (
     options.blockShieldStrkShort,
   );
   return {
-    error: review.feeEstimateFailed ? FEE_UNAVAILABLE : "",
+    error: review.feeEstimateFailed ? t("review.send.fee.unavailable") : "",
     fields,
     privatePreparation: preparation,
     progress: null,
@@ -271,8 +269,6 @@ export const confirmedState = <Review>(
         stage: "failed",
         submissionUnknown: false,
       };
-
-const NOT_SENT_TOAST = "Transaction was not sent";
 
 /**
  * Settles a rejected submit (public) or execute (pool route).
@@ -325,7 +321,7 @@ export const submitRejection = (
       follow: false,
       state: {
         ...cleared,
-        error: friendlyError(details).message,
+        error: localizeErrorCopy(friendlyError(details).message),
         priorWrite,
         stage: "failed",
         submissionUnknown: false,
@@ -333,16 +329,35 @@ export const submitRejection = (
       toast: null,
     };
   }
+  const nodeReason = nodeRejectionReason(error);
+  if (nodeReason) {
+    const sentence = networkRejectionMessage(nodeReason);
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: t("send.failure.notSentReason", { reason: localizeErrorCopy(sentence) }),
+        stage: "failed",
+        submissionUnknown: false,
+      },
+      toast: { details, message: sentence },
+    };
+  }
   if (knownNotSent(error)) {
     return {
       follow: false,
       state: {
         ...cleared,
-        error: `The transaction was not sent. ${friendlyError(details).message}`,
+        error: t("review.send.notSent", {
+          reason: localizeErrorCopy(friendlyError(details).message),
+        }),
         stage: "failed",
         submissionUnknown: false,
       },
-      toast: { details: details || NOT_SENT_TOAST, message: NOT_SENT_TOAST },
+      toast: {
+        details: details || t("review.send.notSentToast"),
+        message: t("review.send.notSentToast"),
+      },
     };
   }
   const pooled = state.fields !== null && transferRoute(state.fields).id !== "public-public";
