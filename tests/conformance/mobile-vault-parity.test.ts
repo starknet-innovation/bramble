@@ -1,6 +1,6 @@
 /**
  * The mobile core adopts the extension's vault schema (v13), pinned by `vault-v13.json`: a vault
- * the extension's own service wrote. This fails when the committed payload is no longer what the
+ * the extension's own service wrote, at schema 13 (see `scripts/mobile-parity-vault.ts`). This fails when the committed payload is no longer what the
  * extension writes for the same phrase and accounts, or when the committed envelope no longer
  * opens to it: re-run `bun run mobile:parity`. `vault-v13-imported.json` is held to the same rule
  * for the vault with two raw-key imports (wallet-core P3).
@@ -23,7 +23,8 @@ describe("mobile vault parity", () => {
       JSON.stringify(await computeVaultParity(fixture.sealed)),
     ) as VaultParity;
     expect(fixture).toEqual(expected);
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+    // The extension writes v14; wallet-core still reads v13, so this fixture stays at 13.
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
     expect(isVaultV13(fixture.payload)).toBe(true);
   });
 

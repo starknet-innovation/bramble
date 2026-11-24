@@ -2,8 +2,19 @@
  * Local loopback dapp used by extension E2E tests to exercise the injected
  * provider from a real page origin.
  */
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { Socket } from "node:net";
+
+const manifest = JSON.parse(
+  readFileSync(new URL("../../apps/extension/public/manifest.json", import.meta.url), "utf8"),
+) as { readonly version: string };
+
+/**
+ * What a test dapp's `provider-status` reads once Bramble injects: id, name,
+ * and the release version from the extension manifest (#914).
+ */
+export const BRAMBLE_PROVIDER_STATUS = `bramble|Bramble|${manifest.version}`;
 
 /**
  * Running test dapp server metadata.

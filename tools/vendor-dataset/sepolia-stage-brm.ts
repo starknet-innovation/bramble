@@ -20,9 +20,7 @@ import { type SepoliaSecret, sepoliaSecret, sepoliaVar } from "./sepolia-seeds";
 
 const { getStarkKey, poseidonHashMany } = ec.starkCurve;
 
-// What `sncast account create --type oz` (0.59.0) picked for TA-07: the older
-// OpenZeppelin class starknet-devnet also predeploys, and a random salt.
-const SNCAST_OZ = "0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564";
+// The random salt `sncast account create --type oz` picked for TA-07 (class: CLASSES.ozSncast).
 const SNCAST_SALT = "0xfd6d011db255712d";
 
 const ozAddress = (pub: string, salt = "0x0", classHash: string = CLASSES.oz300): string =>
@@ -208,16 +206,16 @@ export const BRM_FIXTURES: readonly SepoliaFixture[] = [
     seed: sepoliaVar("K-SNC"),
     vendorDerivation: "key",
     index: 0,
-    address: ozAddress(kSnc.pub, SNCAST_SALT, SNCAST_OZ),
+    address: ozAddress(kSnc.pub, SNCAST_SALT, CLASSES.ozSncast),
     pubkey: kSnc.pub,
-    classAtDeploy: SNCAST_OZ,
+    classAtDeploy: CLASSES.ozSncast,
     expected: "made by sncast: another OZ class and a random salt; key import alone cannot find it",
     detectability: "D5",
     backedBy: "none",
     step: async (e) => {
       const liveClass = await selfDeploy(e, {
         signer: kSnc.priv,
-        classHash: SNCAST_OZ,
+        classHash: CLASSES.ozSncast,
         calldata: [kSnc.pub],
         salt: SNCAST_SALT,
       });

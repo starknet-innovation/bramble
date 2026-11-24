@@ -109,7 +109,7 @@ test("finds a Ready account by its address and restores it", async ({ extension 
   await page.getByRole("button", { name: "Find account" }).click();
   await expect(page.locator("#recovery-address-result")).toHaveText("Found Account 0.");
   const ready = page.locator('[data-recovery-group="argent"]');
-  await expect(ready.locator("code[title]").filter({ hasText: /7e57/ })).toHaveCount(1);
+  await expect(ready.locator("code[title]").filter({ hasText: "0x0000…0e55" })).toHaveCount(1);
   await expect(ready.locator("input.select-check:checked")).toHaveCount(1);
   await page.getByRole("button", { name: "Restore selected accounts" }).click();
   await expect

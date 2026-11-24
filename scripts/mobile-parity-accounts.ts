@@ -18,6 +18,7 @@ import {
   type AccountRef,
   recoveryLadderIndex,
 } from "@bramble/wallet-model/accounts";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { isLabel } from "@bramble/wallet-model/preferences";
 import {
   type RecoveryAccountCandidate,
@@ -31,10 +32,7 @@ import {
   privacyPoolCopy,
   selectable,
 } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-copy";
-import {
-  accountDisplayName,
-  accountLabel,
-} from "../packages/presentation/wallet-ui/src/sidepanel/shared/parts";
+import { accountDisplayName } from "../packages/presentation/wallet-ui/src/sidepanel/shared/parts";
 import { PARITY_MNEMONIC } from "./mobile-parity";
 
 /**
@@ -299,7 +297,7 @@ export const computeAccountParity = async () => {
     names: named.map((address) => ({
       address,
       name: accountDisplayName({ address, id: `SN_MAIN:${address}` } as AccountRef, null),
-      short: accountLabel(address),
+      short: addressLabel(address),
     })),
   };
   return {

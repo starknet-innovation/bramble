@@ -370,9 +370,21 @@ export const HomeIntents: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector(".multisig-intent-list [data-ms-open-intent]")).toBeVisible();
     await expect(body?.querySelector(".multisig-intent-assets .token-logo")).toBeVisible();
-    await expect(body?.querySelector("[data-ms-sync-intents]")).toHaveTextContent(
-      "Check for updates",
+    const sync = body?.querySelector<HTMLButtonElement>("[data-ms-sync-intents]");
+    await expect(sync).toHaveAccessibleName("Check for co-signer updates");
+    await expect(sync).toHaveAccessibleDescription(
+      "Check securely for transactions and signatures shared by known contacts.",
     );
+    await expect(body?.querySelector(".multisig-sync-hint")).not.toBeVisible();
+    sync?.focus();
+    await expect(body?.querySelector(".multisig-sync-hint")).toBeVisible();
+    // Escape hides the hint without moving focus; it returns once focus moves on.
+    sync?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+    await expect(body?.querySelector(".multisig-sync-hint")).not.toBeVisible();
+    await expect(sync).toHaveFocus();
+    sync?.blur();
+    sync?.focus();
+    await expect(body?.querySelector(".multisig-sync-hint")).toBeVisible();
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };

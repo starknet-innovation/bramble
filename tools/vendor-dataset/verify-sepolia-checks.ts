@@ -41,7 +41,8 @@ for (const name of [
     // Absent from the seed file: its cards are skipped or error without it.
   }
 }
-const have = (name: SepoliaSecret): boolean => {
+/** Whether the optional secret `name` is in the seed file. */
+export const have = (name: SepoliaSecret): boolean => {
   try {
     sepoliaSecret(name);
     return true;
@@ -154,8 +155,17 @@ export async function runChecks(session: Session): Promise<void> {
         listed: true,
         hint: /unsupported release · view only/,
       }),
+      row("s-scr/TA-64", "P2", "deployed and empty: listed by the class probe", {
+        listed: true,
+        hint: /^Deployed on Starknet$/,
+      }),
+      row("s-scr/TA-65", "P2", "not listed (ERC-721 only, no balance probe sees it)", {
+        listed: false,
+      }),
     ],
     [
+      row("s-scr/TA-64", "P4", "found, deployed", { message: FOUND }),
+      row("s-scr/TA-65", "P4", "nothing deployed", { message: /No account found/ }),
       row("s-scr/TA-15", "P4", "owner matched → guardian, view only (UNVERIFIED)", {
         message: FOUND,
       }),

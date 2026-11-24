@@ -73,8 +73,9 @@ const run = async (cmd: string[]): Promise<void> => {
 };
 
 // Stamp extension bundles with the manifest version and source branch so the
-// settings screen and gateway analytics can identify the exact build. Released
-// builds (main, or a detached tag checkout reporting HEAD) carry no branch.
+// settings screen, gateway analytics, and dapps (the in-page provider's
+// `version`) can identify the exact build. Released builds (main, or a detached
+// tag checkout reporting HEAD) carry no branch.
 const gitBranch = async (): Promise<string> => {
   try {
     const child = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
@@ -162,6 +163,7 @@ const emit = async (target: BuildTarget): Promise<void> => {
 
   requireBuild(
     await Bun.build({
+      define: buildStamp,
       entrypoints: [join(extensionRoot, "src/provider/inpage.ts")],
       format: "iife",
       minify: true,
@@ -218,6 +220,7 @@ const emit = async (target: BuildTarget): Promise<void> => {
   await cp(join(publicRoot, "popup.html"), join(outdir, "popup.html"));
   await cp(join(publicRoot, "sidepanel.html"), join(outdir, "sidepanel.html"));
   await cp(join(publicRoot, "ledger-grant.html"), join(outdir, "ledger-grant.html"));
+  await cp(join(publicRoot, "_locales"), join(outdir, "_locales"), { recursive: true });
   await cp(join(publicRoot, "icons"), join(outdir, "icons"), { recursive: true });
   await cp(join(publicRoot, "brand"), join(outdir, "brand"), { recursive: true });
   if (shipsSandboxedRenderer(target)) {

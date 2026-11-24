@@ -8,9 +8,9 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
-import { shortAddress } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import { formatUtcDate } from "../../shared/timestamp";
 import {
   type ActivityPricing,
@@ -126,7 +126,7 @@ export const activityFilterOptions = (
   for (const label of tokens.values()) labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
   const optionLabel = (key: string, label: string): string => {
     if ((labelCounts.get(label) ?? 0) < 2 || key.startsWith("symbol:")) return label;
-    return `${label} · ${shortAddress(canonicalAddress(key) ?? key)}`;
+    return `${label} · ${addressLabel(key)}`;
   };
   return {
     actions: [...actions].sort(byText),
@@ -472,13 +472,23 @@ export const activitySummaryRow = (
 export const activityPartySummaryParts = (
   summary: ActivityPartySummary,
 ): { readonly body: string; readonly label: string } => {
-  const lines = [`${summary.count} transaction${summary.count === 1 ? "" : "s"}`];
+  const count = String(summary.count);
+  const lines = [
+    summary.count === 1
+      ? t("portfolio.activity.summaryOne", { count })
+      : t("portfolio.activity.summaryMany", { count }),
+  ];
   for (const total of summary.totals) {
-    if (total.sent !== "0") lines.push(`Sent ${total.sent} ${total.symbol}`);
-    if (total.received !== "0") lines.push(`Received ${total.received} ${total.symbol}`);
+    const facts = { amount: total.sent, symbol: total.symbol };
+    if (total.sent !== "0") lines.push(t("portfolio.activity.summarySent", facts));
+    if (total.received !== "0") {
+      lines.push(
+        t("portfolio.activity.summaryReceived", { amount: total.received, symbol: total.symbol }),
+      );
+    }
   }
   const from = summary.firstAt === null ? null : formatUtcDate(summary.firstAt);
   const to = summary.lastAt === null ? null : formatUtcDate(summary.lastAt);
-  if (from && to) lines.push(from === to ? from : `${from} to ${to}`);
+  if (from && to) lines.push(from === to ? from : t("portfolio.activity.dateRange", { from, to }));
   return { body: lines.join(" · "), label: summary.label };
 };

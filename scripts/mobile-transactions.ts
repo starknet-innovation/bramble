@@ -22,8 +22,8 @@ import {
 import { type ActivityEntry, monotonicActivityStatus } from "@bramble/transactions/activity";
 import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 import { verifyCalls } from "@bramble/transactions/verify";
-import { shortAddress } from "@bramble/transactions/verify-decode";
 import {
+  addressLabel,
   DEFAULT_TOKENS,
   explorerTransactionUrl,
   isStarkFieldElement,
@@ -273,7 +273,7 @@ export const computePresentationVectors = () => ({
       valid: isStarkFieldElement(normalized) ? normalized : null,
     };
   }),
-  shortAddresses: SHORT_INPUTS.map((input) => ({ input, short: shortAddress(input) })),
+  shortAddresses: SHORT_INPUTS.map((input) => ({ input, short: addressLabel(input) })),
   tokenAmounts: [
     ["1500000000000000000", 18],
     ["1", 18],

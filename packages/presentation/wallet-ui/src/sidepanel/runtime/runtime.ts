@@ -36,6 +36,7 @@ import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
+import { createExperimentalFeaturesClient } from "../journeys/settings/experimental-features-runtime";
 import { createStakingRuntimeClient } from "../journeys/staking/staking-client";
 import { createStakingDirectoryRuntimeClient } from "../journeys/staking/staking-directory-client";
 import { createStakingPositionsRuntimeClient } from "../journeys/staking/staking-positions-client";
@@ -86,6 +87,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createUpdateClient(sendMessage),
     ...createSidePanelNoticeClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
+    ...createExperimentalFeaturesClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createDeployRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
@@ -147,8 +149,15 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       if (isConnectedSitesResponse(response)) return response.sites;
       throw responseError(response, "connected sites unavailable");
     },
-    async revokeOrigin(origin: string): Promise<ConnectedSitesResponse["sites"]> {
-      const response = await sendMessage({ origin, type: "wallet.revokeOrigin" });
+    async revokeOrigin(
+      origin: string,
+      accountId?: string,
+    ): Promise<ConnectedSitesResponse["sites"]> {
+      const response = await sendMessage({
+        ...(accountId === undefined ? {} : { accountId }),
+        origin,
+        type: "wallet.revokeOrigin",
+      });
       if (isConnectedSitesResponse(response)) {
         return response.sites;
       }

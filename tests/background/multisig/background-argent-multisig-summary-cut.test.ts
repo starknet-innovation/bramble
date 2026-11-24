@@ -45,13 +45,13 @@ describe("an unlimited approve on an untracked token", () => {
     const summary = (response as { readonly intent: ArgentMultisigSigningIntent }).intent.summary;
     expect(summary.length).toBeLessThanOrEqual(MULTISIG_LIMITS.summaryLength);
     expect(summary).toBe(summary.trim());
-    expect(summary).toStartWith("Authorize 0x4270");
+    expect(summary).toStartWith("Authorize 0x0427");
   });
 
   test("leaves a summary under the limit unchanged", async () => {
     const { response } = await propose("0x3e8", "0x0");
     expect((response as { readonly intent: ArgentMultisigSigningIntent }).intent.summary).toBe(
-      "Authorize 0x4270…3b0f for amount or NFT #1000 on unknown contract 0x6666…6666",
+      "Authorize 0x0427…3b0f for amount or NFT #1000 on unknown contract 0x0666…6666",
     );
   });
 });

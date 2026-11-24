@@ -196,6 +196,7 @@ const poolNotice = (reading: Reading, deployment: Deployment, strk: Strk): strin
       currency: "usd",
       deployment: DEPLOYMENTS[deployment],
       expandedGroupId: null,
+      experimentalFeatures: "loading",
       preferences,
       prices: {},
       privacy: disclosureFor(reading),

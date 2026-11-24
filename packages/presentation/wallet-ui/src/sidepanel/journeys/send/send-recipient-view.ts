@@ -19,14 +19,11 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import {
-  accountAvatar,
-  accountDisplayName,
-  accountLabel,
-  inlineCopyButton,
-} from "../../shared/parts";
+import { accountAvatar, accountDisplayName, inlineCopyButton } from "../../shared/parts";
 import {
   type FolderSection,
   folderSections,
@@ -47,8 +44,8 @@ const recipientAccountRow = (
     <span class="send-recipient-avatar">${accountAvatar(account.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
-      <code>${escapeHtml(accountLabel(account.address))}</code>
-      ${isSender ? "<small>Current</small>" : ""}
+      <code>${escapeHtml(addressLabel(account.address))}</code>
+      ${isSender ? `<small>${th("send.recipient.current")}</small>` : ""}
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -82,7 +79,7 @@ const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[num
     <span class="send-recipient-avatar">${accountAvatar(entry.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(entry.label)}</strong>
-      <code>${escapeHtml(accountLabel(entry.address))}</code>
+      <code>${escapeHtml(addressLabel(entry.address))}</code>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -97,7 +94,7 @@ const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
     <span class="send-recipient-avatar">${accountAvatar(record.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
-      <code>${escapeHtml(accountLabel(record.address))}</code>
+      <code>${escapeHtml(addressLabel(record.address))}</code>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -128,36 +125,36 @@ export const recipientStage = (
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
     <div class="send-origin-context">
-      <p class="send-section-title">Send from</p>
+      <p class="send-section-title">${th("send.recipient.from")}</p>
       <div class="send-origin-account">
         <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
         <span class="send-recipient-copy">
-          <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-          ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
+          <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : t("send.context.noAccount"))}</strong>
+          ${account ? `<span class="copy-line"><code title="${escapeHtml(addressText(account.address))}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(addressText(account.address), t("send.context.copySender"))}</span>` : "<code>—</code>"}
         </span>
       </div>
     </div>
     <label class="send-search">
-      <span>Send to</span>
+      <span>${th("send.recipient.to")}</span>
       <span class="send-search-control">${icon("search")}${inputControl({
-        ariaLabel: "Recipient address or saved name",
+        ariaLabel: t("send.recipient.searchLabel"),
         attributes: { id: "send-recipient-search" },
         autocomplete: "off",
         className: "mono",
-        placeholder: "Address or saved name",
+        placeholder: t("send.recipient.placeholder"),
         spellcheck: false,
         type: "search",
       })}</span>
     </label>
     <p class="send-recipient-note" id="send-recipient-note" aria-live="polite" hidden></p>
     <div class="send-recipient-list" data-send-recipient-panel="contacts">
-      <div class="send-list-heading">${icon("book")}<strong>Address book</strong></div>
+      <div class="send-list-heading">${icon("book")}<strong>${th("send.recipient.addressBook")}</strong></div>
       ${contacts.map(addressBookRow).join("")}
       <div id="send-recipient-save-row" hidden>
         ${button({
           attributes: { id: "send-recipient-save" },
           icon: "book",
-          label: "Save",
+          label: t("send.recipient.save"),
           variant: "secondary",
         })}
       </div>
@@ -182,18 +179,18 @@ export const recipientStage = (
               sharedAccounts.length === 0
                 ? ""
                 : `<div class="send-recipient-folder" data-send-folder="shared">
-                  <div class="send-list-heading">${icon("users")}<strong>Multisig accounts</strong></div>
+                  <div class="send-list-heading">${icon("users")}<strong>${th("send.recipient.multisigs")}</strong></div>
                   ${sharedAccounts.map(multisigRecipientRow).join("")}
                 </div>`
             )
-          : emptyState("No other accounts are available on this network.")
+          : emptyState(t("send.recipient.noOthers"))
       }
     </div>
-    <p class="send-recipient-empty" id="send-recipient-empty" hidden>No matching recipient.</p>
+    <p class="send-recipient-empty" id="send-recipient-empty" hidden>${th("send.recipient.noMatch")}</p>
     ${button({
       attributes: { id: "send-recipient-continue" },
       disabled: account === null,
-      label: "Continue with address",
+      label: t("send.recipient.continue"),
     })}
   </section>`;
 };

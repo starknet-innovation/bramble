@@ -85,6 +85,7 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "wallet.loadStakingValidator": "wallet.stakingOverview",
   "wallet.loadBalances": "wallet.getBalances",
   "wallet.loadClassHashVerification": "wallet.verifyClassHash",
+  "wallet.loadExperimentalFeatures": "wallet.featureFlags",
   "wallet.loadPrices": "wallet.prices",
   "wallet.loadTokenChart": "wallet.tokenChart",
   "wallet.loadWatchedNfts": "wallet.loadWatchedNfts",
@@ -103,15 +104,25 @@ const POLLED_OUTSIDE_HYDRATION: readonly string[] = [
   "wallet.strk20RecipientStatus",
 ];
 
+// Messages a hydrated loader sends beside its keyed one: `signability.load`
+// also asks for the Ready key verdict in the same probe.
+const HYDRATED_COMPANION_MESSAGES: readonly string[] = ["wallet.readyKeyStatus"];
+
 const AMBIENT_MESSAGES: readonly string[] = [
-  ...new Set([...Object.values(HYDRATED_CALL_MESSAGES), ...POLLED_OUTSIDE_HYDRATION]),
+  ...new Set([
+    ...Object.values(HYDRATED_CALL_MESSAGES),
+    ...HYDRATED_COMPANION_MESSAGES,
+    ...POLLED_OUTSIDE_HYDRATION,
+  ]),
 ];
 
 // Ambient reads that answer without ever consulting the session: prices and
 // charts are network data cached per network, not per account. Listing them
 // keeps the "this handler actually reached the session" assertion honest for
 // everything else.
-const SESSION_FREE = new Set(["wallet.prices", "wallet.tokenChart"]);
+// `wallet.featureFlags` answers from worker memory and local flag storage;
+// only the override writes, which panels never poll, check the session.
+const SESSION_FREE = new Set(["wallet.featureFlags", "wallet.prices", "wallet.tokenChart"]);
 
 // One user-initiated read per product line, to prove the narrowing did not
 // simply switch everything to peeking. Each is reached only by a click or a

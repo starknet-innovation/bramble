@@ -291,7 +291,7 @@ object is frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias).
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias), plus the 0.10.5 `register` action.
 Private-state requests additionally require a held approval bound to the account, network, and payload digest; connection alone is insufficient. A shadow-account approval is also bound to the anonymizer its card named, and its scope is recorded in the vault's `shadowAccountScopes` before it runs; extension-only `wallet.strk20ShadowAccounts`, `wallet.strk20ShadowAccountBalances`, and `wallet.strk20PrepareShadowSweep` list, read on request, and sweep them.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
@@ -307,7 +307,7 @@ reconnecting queues a fresh approval instead of silently handing back the previo
 account. A page is never handed two of the user's accounts, however many the stored grant has
 accumulated from repeated approvals, so a site cannot correlate them. The connected-sites manager
 still lists the site with its full granted-account count, because it reads the stored grants
-directly, and revoking there is what clears the grant.
+directly, and disconnecting there (one account or the whole site) is what clears the grant.
 
 The active-network consumers (invoke, declare, typed-data signing, STRK-20, deploy discovery) then
 filter that account by the active network and refuse with `origin not connected` if it does not
@@ -327,10 +327,9 @@ Close answers `true` (audit M1), so a page cannot list the tracked tokens.
 The wallet tracks which dapp origins hold account grants and surfaces phishing
 and reputation signals before a connection is approved:
 
-- Connected-sites manager: Settings → Connected sites lists every origin with a
-  persisted grant and how many accounts it can see. Revoking an origin removes
-  its grants from the encrypted vault and broadcasts `accountsChanged` so the
-  revoked page immediately sees an empty account list.
+- Connected-sites manager: Settings → Connected sites lists every origin with a persisted
+  grant, expandable to each vault account and multisig. Disconnecting one (`accountId`) or the
+  site removes those grants and broadcasts `accountsChanged`, so the page re-reads its accounts.
 - Phishing blocklist (seed + live feed): `packages/features/permissions/src/blocklist.ts` decides
   whether an origin is blocked from a bundled seed list (`BLOCKED_DOMAINS`) and
   an injected dynamic snapshot. `wallet.requestAccounts` — and every other dapp
@@ -379,7 +378,7 @@ and reputation signals before a connection is approved:
 
 ## STRK20 privacy
 
-Bramble implements Wallet API `0.10.4` STRK20 through the pinned official Privacy SDK. Viewing
+Bramble implements Wallet API `0.10.5` STRK20 through the pinned official Privacy SDK. Viewing
 keys stay inside the encrypted vault; actions, relay fees, account, network, pool, and payload digest
 are frozen before dedicated approval. No fallback prover or signer exists. Registration and
 deposit-only batches may use the public account; other private actions require a relayer. Writes are
@@ -487,7 +486,7 @@ share the in-flight request, account switches remain isolated, and the first vis
 images are fetched eagerly so the gallery is warm when opened.
 
 ## Reproducible Builds
-Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,
+Every build input is pinned: Bun `1.4.4` (`packageManager` + CI), a frozen lockfile,
 the exact published Krusty KMS package and both runtime-file digests, the exact Argent
 account-contract release and official artifact digests, and GitHub Actions by commit SHA. The
 Privacy SDK source and browser

@@ -4,7 +4,11 @@
  * the pure rule behind `getGrantedAccounts` without touching storage.
  */
 import { describe, expect, test } from "bun:test";
-import { connectedSitesFromVault, grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import {
+  connectedSitesFromVault,
+  grantedAccountIdsFor,
+  withoutOriginAccess,
+} from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 
@@ -35,7 +39,7 @@ const vaultWith = (
   importedSeeds: [],
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 13,
+  schemaVersion: 14,
   multisigStrk20KeyConflicts: [],
   multisigStrk20ViewingKeys: [],
   shadowAccountScopes: [],
@@ -86,8 +90,18 @@ describe("connectedSitesFromVault", () => {
     };
 
     expect(connectedSitesFromVault(vault)).toEqual([
-      { accountCount: 1, origin: "https://alpha.example" },
-      { accountCount: 2, origin: "https://zeta.example" },
+      {
+        accountCount: 1,
+        accountIds: [first.id],
+        multisigIds: [],
+        origin: "https://alpha.example",
+      },
+      {
+        accountCount: 2,
+        accountIds: [first.id, second.id],
+        multisigIds: [],
+        origin: "https://zeta.example",
+      },
     ]);
   });
 
@@ -110,5 +124,39 @@ describe("connectedSitesFromVault", () => {
       "https://alpha.example",
       "https://alpha.example",
     ]);
+  });
+});
+
+describe("withoutOriginAccess", () => {
+  const grants: Vault["originGrants"] = [
+    { accountIds: [first.id, second.id], origin: ORIGIN },
+    { accountIds: [first.id], origin: "https://other.example" },
+  ];
+
+  test("removes one id and keeps the site while another remains", () => {
+    expect(withoutOriginAccess(grants, ORIGIN, first.id)).toEqual([
+      { accountIds: [second.id], origin: ORIGIN },
+      { accountIds: [first.id], origin: "https://other.example" },
+    ]);
+  });
+
+  test("drops the site with its last id", () => {
+    expect(withoutOriginAccess(grants, "https://other.example", first.id)).toEqual([
+      { accountIds: [first.id, second.id], origin: ORIGIN },
+    ]);
+  });
+
+  test("drops the whole site without an id", () => {
+    expect(withoutOriginAccess(grants, ORIGIN)).toEqual([
+      { accountIds: [first.id], origin: "https://other.example" },
+    ]);
+  });
+
+  test("returns the same list for an id or origin that is not granted", () => {
+    // Identity, not just equality: the service skips the vault write on it.
+    expect(withoutOriginAccess(grants, ORIGIN, third.id)).toBe(grants);
+    expect(withoutOriginAccess(grants, "https://other.example", second.id)).toBe(grants);
+    expect(withoutOriginAccess(grants, "https://absent.example")).toBe(grants);
+    expect(withoutOriginAccess(grants, "https://absent.example", first.id)).toBe(grants);
   });
 });

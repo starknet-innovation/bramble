@@ -9,6 +9,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
+import { addressText } from "@bramble/wallet-model/networks";
 import { receiveAddressView } from "../../../src/sidepanel/journeys/send/receive-view";
 import type { SidepanelWallet } from "../../../src/sidepanel/runtime/runtime";
 import { bindReceiveWalletCard } from "../../../src/sidepanel/shell/dashboard-bindings";
@@ -83,7 +84,9 @@ describe("Receive address and wallet card", () => {
     expect(app.querySelector<HTMLElement>("[data-receive-qr]")?.dataset["qrPayload"]).toBe(
       "address",
     );
-    expect(app.querySelector("[data-receive-address-text]")?.textContent).toBe(account.address);
+    expect(app.querySelector("[data-receive-address-text]")?.textContent).toBe(
+      addressText(account.address),
+    );
     // The network is named once, by the header pill — not again under the address.
     expect(app.querySelector(".receive-network")).toBeNull();
     expect(option(app, "address").getAttribute("aria-pressed")).toBe("true");
@@ -157,7 +160,7 @@ describe("Receive address and wallet card", () => {
     });
     expect(html).toContain("QR code for your Starknet address");
     expect(html).not.toContain("data-receive-payload-switch");
-    expect(html).toContain(account.address);
+    expect(html).toContain(addressText(account.address));
   });
 
   test("the address itself is the copy control, marked as one", () => {
@@ -167,15 +170,17 @@ describe("Receive address and wallet card", () => {
     const app = render();
     const control = app.querySelector<HTMLButtonElement>("button.receive-address-copy");
 
-    expect(control?.dataset["copy"]).toBe(account.address);
+    expect(control?.dataset["copy"]).toBe(addressText(account.address));
     expect(control?.getAttribute("aria-label")).toBe("Copy account address");
     expect(control?.querySelector("[data-receive-address-text]")?.textContent).toBe(
-      account.address,
+      addressText(account.address),
     );
     // The label names the action; the address is the button's description, so
     // assistive tech hears what will be copied rather than only "Copy".
     expect(control?.getAttribute("aria-describedby")).toBe("receive-address-text");
-    expect(control?.querySelector("#receive-address-text")?.textContent).toBe(account.address);
+    expect(control?.querySelector("#receive-address-text")?.textContent).toBe(
+      addressText(account.address),
+    );
     expect(control?.querySelector(".receive-address-copy-mark")).not.toBeNull();
   });
 

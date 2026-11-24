@@ -15,6 +15,10 @@ import {
   isStarkNameResolutionResponse,
   type StarkNameResolutionResponse,
 } from "../../popup/responses/responses";
+import {
+  isReadyKeyStatusResponse,
+  type ReadyKeyStatusResponse,
+} from "../../popup/responses/responses-ready-key";
 
 /** Creates the lookup client over chrome.runtime messaging. */
 export const createLookupRuntimeClient = (sendMessage: (message: unknown) => Promise<unknown>) => ({
@@ -26,6 +30,11 @@ export const createLookupRuntimeClient = (sendMessage: (message: unknown) => Pro
   async loadAccountSignability(): Promise<AccountSignabilityResponse | null> {
     const response = await sendMessage({ type: "wallet.accountSignability" });
     return isAccountSignabilityResponse(response) ? response : null;
+  },
+  /** Whether the active Ready account's key predates Krusty 3.0; null on a malformed reply. */
+  async loadReadyKeyStatus(): Promise<ReadyKeyStatusResponse | null> {
+    const response = await sendMessage({ type: "wallet.readyKeyStatus" });
+    return isReadyKeyStatusResponse(response) ? response : null;
   },
   async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
     // Return the whole response (with its `accountId`), not just the verdict,

@@ -8,6 +8,7 @@ import {
   BIOME_COMPLEXITY_RULE_KEYS,
   DEPENDENCY_FIELDS,
   EXPECTED_ARCHITECTURE_SECTIONS,
+  EXPECTED_BIOME_INCLUDES,
   EXPECTED_CONTRIBUTING_RULES,
   EXPECTED_CONTRIBUTING_SECTIONS,
   EXPECTED_DEPENDENCIES,
@@ -143,30 +144,7 @@ const biomeFiles = isRecord(biomeJson["files"]) ? biomeJson["files"] : null;
 if (
   !biomeFiles ||
   !hasOnlyKeys(biomeFiles, ["includes"]) ||
-  !hasStringList(biomeFiles?.["includes"], [
-    "**",
-    "!.claude",
-    "!.dev-profile",
-    "!.impeccable",
-    "!.playwright-cli",
-    "!apps/terminal",
-    "!apps/ui-lab",
-    "!apps/website",
-    "!bun.lock",
-    "!dist",
-    "!dist-firefox",
-    "!mobile/.tools",
-    "!mobile/android/app/build",
-    "!mobile/core/target",
-    "!mobile/ios/Bramble.xcodeproj",
-    "!mobile/ios/Generated",
-    "!mobile/ios/build",
-    "!node_modules",
-    "!output",
-    "!playwright-report",
-    "!test-results",
-    "!vendor",
-  ])
+  !hasStringList(biomeFiles?.["includes"], EXPECTED_BIOME_INCLUDES)
 ) {
   failures.push("biome.json must check the repository while excluding generated files");
 }

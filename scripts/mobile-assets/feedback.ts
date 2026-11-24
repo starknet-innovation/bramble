@@ -6,6 +6,7 @@
  * and labels are literals, so this module reads that exact source text, as `colors.ts` reads the
  * stylesheet source, and a change in shape throws rather than falling back to a remembered number.
  */
+import { uiCatalogs } from "../../packages/presentation/wallet-ui/src/i18n/messages";
 import {
   COPY_CONFIRM_MS,
   ERROR_TOAST_MS,
@@ -26,8 +27,9 @@ const one = (source: string, pattern: RegExp, what: string): string => {
 
 /** The toast timings, thresholds and copy labels, in Swift. */
 export const renderSwiftToast = (source: string): string[] => {
-  const labels = [...source.matchAll(/copy\.setAttribute\("aria-label", "([^"]+)"\);/g)].map(
-    (match) => match[1],
+  // The labels are UI messages: the source names their keys, the English catalog holds the text.
+  const labels = [...source.matchAll(/copy\.setAttribute\("aria-label", t\("([^"]+)"\)\);/g)].map(
+    (match) => uiCatalogs.en[match[1] as keyof typeof uiCatalogs.en],
   );
   const [copy, copied, failed] = labels;
   if (labels.length !== 3 || !copy || !copied || !failed) {

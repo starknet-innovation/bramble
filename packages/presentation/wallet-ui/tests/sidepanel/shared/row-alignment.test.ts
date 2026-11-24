@@ -68,6 +68,16 @@ describe("row alignment", () => {
     expect(rule(".flow-title")).toContain("grid-template-columns: minmax(min-content, 1fr)");
   });
 
+  // Decline leads the approval decision row, so the flexible track belongs to
+  // the primary that follows it: a 1fr first track stretched "Cancel" across a
+  // wide panel beside a compact "Connect account" (#904).
+  test("the approval decline control hugs its label and the primary takes the slack", () => {
+    expect(rule(".approval-takeover .button-row")).toContain(
+      "grid-template-columns: minmax(min-content, auto) minmax(min-content, 1fr)",
+    );
+    expect(rule(".approval-takeover .button-row > :only-child")).toContain("grid-column: 1 / -1");
+  });
+
   test("the home tab bar cannot widen the token list past the panel", () => {
     expect(rule(".home-tabs")).toContain("grid-template-columns: minmax(0, 1fr)");
   });

@@ -1,7 +1,7 @@
 /** Argent multisig views expose exact frozen authority and fail closed without freshness. */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
-import { UINT128_LIMIT } from "@bramble/wallet-model/networks";
+import { addressText, UINT128_LIMIT } from "@bramble/wallet-model/networks";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
@@ -44,12 +44,12 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
     expect(html).toContain(fixture.intent.prepared.transactionHash);
     expect(html).toContain(`data-copy="${fixture.intent.prepared.transactionHash}"`);
-    expect(html).toContain(fixture.intent.prepared.senderAddress);
+    expect(html).toContain(addressText(fixture.intent.prepared.senderAddress));
     expect(html).toContain(fixture.intent.prepared.chainId);
     expect(html).toContain("Maximum network fee");
     expect(html).toContain("0 STRK");
     expect(html).toContain("transfer");
-    expect(html).toContain("0xdef");
+    expect(html).toContain(addressText("0xdef"));
     expect(html).toContain("What will happen");
     expect(html).toContain("Cost");
     expect(html).toContain("Technical details");
@@ -87,9 +87,9 @@ describe("Argent multisig list and exact-intent detail", () => {
 
     expect(html).toContain("<h2>Looks &lt;img src=x onerror=&quot;alert(1)&quot;&gt;</h2>");
     expect(html).toContain("effectively unlimited spending allowance");
-    expect(html).toContain("0x9876…cdef is not a token or contact this wallet knows");
-    expect(html).toContain("Allow 0x4567…cdef to spend");
-    expect(html).toContain("Call opaque_action on 0x9876…cdef");
+    expect(html).toContain("0x0000…cdef is not a token or contact this wallet knows");
+    expect(html).toContain("Allow 0x0000…cdef to spend");
+    expect(html).toContain("Call opaque_action on 0x0000…cdef");
     expect(html).toContain('class="review-call-assets"');
     expect(html).toContain('class="token-logo"');
 

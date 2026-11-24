@@ -8,7 +8,12 @@
 
 import { isRecord } from "@bramble/core/json";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { canonicalFelt, sameFelt, UINT128_LIMIT } from "@bramble/wallet-model/networks";
+import {
+  addressText,
+  canonicalFelt,
+  sameFelt,
+  UINT128_LIMIT,
+} from "@bramble/wallet-model/networks";
 import { type Call, hash, type TypedData, typedData } from "starknet";
 import { bindPaymasterTypedData } from "../paymaster/paymaster-typed-data";
 import {
@@ -97,7 +102,7 @@ export const reviewMultisigStrk20TypedData = (
     lines: [
       ...reviewScopeLines(scope),
       ...decoded.map((approval) => approval.line),
-      `Relayer ${canonicalFelt(bound.review.caller) ?? bound.review.caller}`,
+      `Relayer ${addressText(bound.review.caller)}`,
     ],
     title: "Token approval",
   };

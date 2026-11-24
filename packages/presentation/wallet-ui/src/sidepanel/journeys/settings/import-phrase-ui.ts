@@ -6,6 +6,7 @@
  * and is never logged, echoed, or stored in preferences. Reuses the first-run
  * scan binder so detection, grouping, and selection behave identically.
  */
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { bindRecoveryAccountUi } from "../onboarding/recovery-account-ui";
 import { bindRecoveryWordAssist } from "../onboarding/recovery-word-assist";
@@ -53,16 +54,16 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
     if (result) {
       result.textContent = incomplete
         ? words.some((word) => word.length > 0)
-          ? `Enter all ${wordCount} words to continue.`
+          ? t("onboarding.phrase.enterAll", { count: String(wordCount) })
           : ""
         : !wordAssist.wordsKnown(wordCount)
-          ? "Highlighted words are not in the BIP39 English list."
+          ? t("onboarding.phrase.unknownWords")
           : "";
     }
   };
   const syncToggleLabel = (): void => {
     lengthToggle?.lastChild?.replaceWith(
-      wordCount === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase",
+      wordCount === 12 ? t("onboarding.phrase.use24") : t("onboarding.phrase.use12"),
     );
   };
   const clear = form.querySelector<HTMLButtonElement>("#phrase-clear");
@@ -138,16 +139,16 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
         buttonBusy(search, false);
         if (!valid) {
           if (result) {
-            result.textContent = "This recovery phrase is not valid.";
+            result.textContent = t("onboarding.phrase.notValid");
           }
-          showToast("This recovery phrase is not valid.", "error", form);
+          showToast(t("onboarding.phrase.notValid"), "error", form);
           return;
         }
         mnemonic = phrase;
         if (result) {
           result.textContent = "";
         }
-        showToast("Valid recovery phrase", "success", form);
+        showToast(t("onboarding.phrase.valid"), "success", form);
         if (scanSection) {
           scanSection.hidden = false;
         }
@@ -159,9 +160,9 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
         }
         buttonBusy(search, false);
         if (result) {
-          result.textContent = errorLine(error, "Phrase validation is unavailable");
+          result.textContent = errorLine(error, t("settings.phrase.validationUnavailable"));
         }
-        showToast(errorDetails(error, "Phrase validation is unavailable"), "error", form);
+        showToast(errorDetails(error, t("settings.phrase.validationUnavailable")), "error", form);
       },
     );
   });

@@ -3,6 +3,7 @@ import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
 } from "@bramble/multisig/repository";
+import type { Strk20AccountContext } from "@bramble/privacy/service";
 import { verificationContext } from "@bramble/transactions/verify";
 import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
@@ -40,11 +41,12 @@ const recordSubmittedIntentActivity = (
  * hash either way.
  */
 export const recordBroadcastIntent = async (
-  deps: Pick<MultisigOpsDeps, "activity" | "allowanceStore" | "preferencesStore">,
+  deps: Pick<MultisigOpsDeps, "activity" | "allowanceStore" | "preferencesStore" | "runtimeRpc">,
   intent: ArgentMultisigSigningIntent,
   record: ArgentMultisigRecord,
   transactionHash: string,
 ): Promise<void> => {
+  await journalPoolWrite(deps, intent, record, transactionHash);
   await deps.preferencesStore
     .read()
     .then((preferences) =>
@@ -58,6 +60,51 @@ export const recordBroadcastIntent = async (
     )
     .catch(() => {});
   await recordSubmittedIntentActivity(deps, intent, record.networkId, transactionHash);
+};
+
+// Records `intent` in the multisig's maturity journal when it carries a proof.
+// A failed record is not a failed submission, so it never throws.
+const journalPoolWrite = async (
+  deps: Pick<MultisigOpsDeps, "preferencesStore" | "runtimeRpc">,
+  intent: ArgentMultisigSigningIntent,
+  record: ArgentMultisigRecord,
+  transactionHash: string,
+): Promise<void> => {
+  if (!intent.prepared.proofFacts || intent.prepared.proofFacts.length === 0) return;
+  try {
+    await recordPoolWrite(deps, record, transactionHash);
+  } catch {
+    // The write itself stands; a later proof still waits on the pool's own depth.
+  }
+};
+
+// A registration or deposit changes the multisig's pool state. The privacy
+// service proves against a block some depth behind the head, so the next proof
+// must wait until that block is past this write, or it would read the state
+// before it (a deposit would look like an empty balance). The single-signer
+// path journals its writes; this records the multisig's in the same journal.
+const recordPoolWrite = async (
+  deps: Pick<MultisigOpsDeps, "preferencesStore" | "runtimeRpc">,
+  record: ArgentMultisigRecord,
+  transactionHash: string,
+): Promise<void> => {
+  const recordSubmission = deps.runtimeRpc.strk20?.recordSubmission;
+  if (!recordSubmission) return;
+  const preferences = await deps.preferencesStore.read();
+  const config = preferences.strk20Networks?.[record.networkId] ?? null;
+  if (!config) return;
+  await recordSubmission(
+    {
+      account: {
+        address: record.address,
+        id: record.id,
+        networkId: record.networkId,
+      } as Strk20AccountContext["account"],
+      config,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+    },
+    transactionHash,
+  );
 };
 
 /**
@@ -128,6 +175,9 @@ const journalObservedSubmission = async (
   intent: ArgentMultisigSigningIntent,
   observed: Extract<ObservedSubmission, { readonly kind: "found" }>,
 ): Promise<void> => {
+  // Found on chain rather than broadcast here: a proof-carrying write still
+  // has to hold back the next proof, as a direct broadcast does.
+  await journalPoolWrite(deps, intent, observed.record, intent.prepared.transactionHash);
   await recordApproveAllowances({
     assets: verificationContext(observed.record, observed.preferences),
     calls: normalizedArgentMultisigCalls(intent.prepared.calls),
@@ -141,6 +191,40 @@ const journalObservedSubmission = async (
     observed.record.networkId,
     intent.prepared.transactionHash,
   );
+};
+
+/**
+ * Journals the proof-carrying writes of `accountId` that a co-owner sent. An
+ * imported intent carries no broadcast hash, so this wallet never journaled
+ * it; its signed hash is the same for every signer, so the chain is asked
+ * about each one still collecting or ready here. One that landed is journaled
+ * and marked submitted, so it is never journaled again over a newer write.
+ * Read failures leave it for the next call. Never throws.
+ */
+export const journalCoOwnerPoolWrites = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+): Promise<void> => {
+  try {
+    const open = (await deps.multisigStore.listIntents()).filter(
+      (intent) =>
+        intent.accountId === accountId &&
+        (intent.state === "collecting" || intent.state === "ready") &&
+        (intent.prepared.proofFacts?.length ?? 0) > 0,
+    );
+    for (const intent of open) {
+      const observed = await observeSignedHash(deps, intent);
+      if (observed.kind !== "found" || observed.fate === "rejected") continue;
+      await journalObservedSubmission(deps, intent, observed);
+      await deps.multisigStore.upsertIntent({
+        ...intent,
+        broadcastTransactionHash: intent.prepared.transactionHash,
+        state: "submitted",
+      });
+    }
+  } catch {
+    // A read or write that failed is retried on the next proof.
+  }
 };
 
 /**

@@ -180,6 +180,9 @@ describe("vault-service importRawKeyAccount", () => {
     });
 
     const account = await service.importRawKeyAccount(serviceImportInput);
+    expect((await service.readVault(vaultPassphrase)).accountProvenance?.[account.id]).toBe(
+      "imported",
+    );
     const raw = JSON.stringify(await store.get(vaultKey));
     const vault = await service.readVault(vaultPassphrase);
 
@@ -453,6 +456,9 @@ describe("createKeyVault service", () => {
   test("creates a phrase-less vault whose only secret is the imported key", async () => {
     const service = newService();
     const account = await service.createKeyVault(serviceImportInput);
+    expect((await service.readVault(vaultPassphrase)).accountProvenance?.[account.id]).toBe(
+      "imported",
+    );
     expect(account.derivation).toEqual({ kind: "imported-raw-key" });
 
     const vault = await service.readVault(vaultPassphrase);

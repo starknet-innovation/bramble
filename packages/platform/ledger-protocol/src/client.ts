@@ -18,7 +18,8 @@
  * therefore keys off that return code, not a message.
  */
 
-import { LedgerRejection, type LedgerRejectionCode } from "@bramble/ledger-protocol/errors";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerTransportRejection } from "@bramble/ledger-protocol/transport-error";
 import type { DeviceSignature } from "@bramble/wallet-model/signing";
 import { identifyTargetId } from "@ledgerhq/devices";
 
@@ -176,35 +177,13 @@ const classifySignStatus = (returnCode: number): LedgerRejection => {
   return new LedgerRejection("unexpected-device-error", returnCode);
 };
 
-// Maps a thrown transport error to a rejection by its class name/message
-// signature (DisconnectedDevice, LockedDeviceError, a claimed device, …). This
-// is reachable because `getAppVersion` lets transport throws propagate (unlike
-// `getPubKey`/`signHash`, which swallow them into ExecutionError), so the shared
-// pre-check's version read is where a locked/disconnected/busy device surfaces.
-// The default is unexpected-device-error.
-const THROWN_SIGNATURES: readonly (readonly [RegExp, LedgerRejectionCode])[] = [
-  [/\b(?:0x6d00|0x6e00|0x6e01|INS_NOT_SUPPORTED|CLA_NOT_SUPPORTED)\b/i, "no-app-open"],
-  [/locked/i, "device-locked"],
-  [/disconnect/i, "disconnected-mid-sign"],
-  [/already open|in use|claimed|busy/i, "device-busy"],
-];
+// `getAppVersion` lets transport throws propagate (unlike `getPubKey`/`signHash`,
+// which swallow them into ExecutionError), so the shared pre-check's version
+// read is where a locked, disconnected, or stale device surfaces. Classification
+// lives in `transport-error.ts`, shared with the browser open path.
+const mapThrown = (error: unknown): LedgerRejection => ledgerTransportRejection(error);
 
-const mapThrown = (error: unknown): LedgerRejection => {
-  if (error instanceof LedgerRejection) {
-    return error;
-  }
-  const text = error instanceof Error ? `${error.name} ${error.message}` : "";
-  const match = THROWN_SIGNATURES.find(([pattern]) => pattern.test(text));
-  return new LedgerRejection(match ? match[1] : "unexpected-device-error");
-};
-
-/**
- * Reduces an untrusted browser-transport throw to the fixed Ledger rejection
- * catalog. The retained hardware-tab broker uses this before an error crosses
- * its extension-origin channel, so raw device/library messages never leave the
- * transport-owning context.
- */
-export const ledgerTransportRejection = (error: unknown): LedgerRejection => mapThrown(error);
+export { ledgerTransportRejection };
 
 const runDevice = async <T>(op: () => Promise<T>): Promise<T> => {
   try {

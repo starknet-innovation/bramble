@@ -400,7 +400,7 @@ describe("the rendered Send receipt for each rejection", () => {
       "a wallet failure after the Ledger signed",
       () => new Error("unexpected-device-error"),
       "Status unknown",
-      `Something went wrong talking to your Ledger. Open the Starknet app, close other apps using it, then try again. ${UNKNOWN}`,
+      `Something went wrong talking to your Ledger. Unlock it, open the Starknet app, close other wallets and Bramble windows, then unplug it and try again. ${UNKNOWN}`,
     ],
     [
       "a fee ceiling refusal",
@@ -422,6 +422,12 @@ describe("the rendered Send receipt for each rejection", () => {
       () => new Error("rejected-on-device"),
       "Transaction not sent",
       "The transaction was not sent. You rejected the request on your Ledger. Nothing was submitted.",
+    ],
+    [
+      "this page's own stale Ledger handle, refused before the device signed",
+      () => new Error("replug"),
+      "Transaction not sent",
+      "The transaction was not sent. Reconnect your Ledger, then try again.",
     ],
     [
       "a locked wallet",

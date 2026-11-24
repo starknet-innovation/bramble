@@ -34,6 +34,7 @@ export const strkAvailableForFees = (balances: BalanceState): boolean | null => 
   return strk === undefined || strk.formatted === "" ? null : BigInt(strk.balance) > 0n;
 };
 
+import { t, th } from "../../../i18n/messages";
 import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
@@ -48,6 +49,7 @@ import type { StakingState } from "../staking/staking-directory-client";
 import { stakedLine } from "../staking/staking-home";
 import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
+import { readyKeyNotice } from "./ready-key-notice";
 import { readOnlyNotice } from "./recovery-view";
 import { vipEligible, vipNotice } from "./vip-notice";
 
@@ -159,16 +161,26 @@ export const homeScreen = (
     <section class="hero" data-live-group>
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${totalKnown ? heroChange(unified, prices, changes, currency, !showTotal) : ""}
-      ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
+      ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>${th("portfolio.home.includesShielded")}</span></p>` : ""}
       ${staking ? stakedLine(staking, preferences?.tokens ?? []) : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
+      ${
+        account
+          ? readyKeyNotice({
+              accountId: account.id,
+              affected: signability?.preFixReadyKey === true,
+              canMoveFunds: !readOnly,
+              dismissed: preferences?.readyKeyNoticeDismissedIds?.includes(account.id) === true,
+            })
+          : ""
+      }
       ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
-    <section class="home-actions" aria-label="Wallet actions">
+    <section class="home-actions" aria-label="${th("portfolio.home.actions")}">
       <div class="action-row">
-        ${actionTile("send", "Send", "send", account !== null && !readOnly)}
-        ${actionTile("swap", "Swap", "shuffle", account !== null && !readOnly)}
-        ${actionTile("receive", "Receive", "qrCode", account !== null)}
+        ${actionTile("send", t("portfolio.home.send"), "send", account !== null && !readOnly)}
+        ${actionTile("swap", t("portfolio.home.swap"), "shuffle", account !== null && !readOnly)}
+        ${actionTile("receive", t("portfolio.home.receive"), "qrCode", account !== null)}
         ${shieldTile(
           strkTokenId,
           privateReady,

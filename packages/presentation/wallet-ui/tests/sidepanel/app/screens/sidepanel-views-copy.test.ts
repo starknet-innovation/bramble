@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -32,14 +33,14 @@ describe("identity screens copy truncated addresses in full", () => {
     for (const stored of [account, secondAccount]) {
       // Truncated in the row, full on hover, copied whole by the control beside it.
       expect(rows).toContain(
-        `<code title="${stored.address}">0x${stored.address.slice(2, 6)}…${stored.address.slice(-4)}</code>`,
+        `<code title="${addressText(stored.address)}">${addressLabel(stored.address)}</code>`,
       );
       expect(rows).toMatch(
         new RegExp(
-          `<code title="${stored.address}">[^<]*</code>\\s*<button class="icon-button ghost copy-inline" data-copy="${stored.address}" type="button" aria-label="Copy [^"]+ address"`,
+          `<code title="${addressText(stored.address)}">[^<]*</code>\\s*<button class="icon-button ghost copy-inline" data-copy="${addressText(stored.address)}" type="button" aria-label="Copy [^"]+ address"`,
         ),
       );
-      expect(rows).not.toContain(`<code>${stored.address}</code>`);
+      expect(rows).not.toContain(`<code>${addressText(stored.address)}</code>`);
     }
   });
 
@@ -50,11 +51,9 @@ describe("identity screens copy truncated addresses in full", () => {
       html.indexOf('id="deploy-review"'),
     );
 
+    expect(review).toContain(`<code>${addressLabel(account.address)}</code>`);
     expect(review).toContain(
-      `<code>0x${account.address.slice(2, 6)}…${account.address.slice(-4)}</code>`,
-    );
-    expect(review).toContain(
-      `data-copy="${account.address}" type="button" aria-label="Copy address"`,
+      `data-copy="${addressText(account.address)}" type="button" aria-label="Copy address"`,
     );
   });
 });

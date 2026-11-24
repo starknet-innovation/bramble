@@ -126,18 +126,41 @@ describe("multisig STRK20 per-multisig capacity", () => {
     expect(await store.listAuthorizations(ACCOUNT_ID, SCALAR)).toHaveLength(25);
   });
 
-  test("a relay holding the only proof is never evicted; a submitted one is", async () => {
+  test("intent proofs and unsent relays share one wallet-wide cap", async () => {
+    const store = createMultisigStrk20Store(createMemoryStore());
+    const proof = relay(ACCOUNT_ID, "0x1", "ready").proof;
+    for (let index = 1; index <= 4; index += 1) {
+      const intentId = `${ACCOUNT_ID}:${num.toHex(0x100 + index)}`;
+      expect(
+        await store.putProof({ intentId, proof, request: { kind: "register" } }, [intentId]),
+      ).toBe("stored");
+    }
+    for (let index = 1; index <= 4; index += 1) {
+      expect(await store.upsertRelay(relay(OTHER_ID, num.toHex(index), "ready"))).toBe("stored");
+    }
+    expect(await store.upsertRelay(relay(OTHER_ID, "0x5", "ready"))).toBe("full");
+    expect(
+      await store.putProof(
+        { intentId: `${ACCOUNT_ID}:0x200`, proof, request: { kind: "register" } },
+        [`${ACCOUNT_ID}:0x200`],
+      ),
+    ).toBe("full");
+  });
+
+  test("a relay holding the only proof is never evicted; a sent one frees its slot", async () => {
+    // Eight unsent relay proofs at most, across every multisig together.
     const store = createMultisigStrk20Store(createMemoryStore());
     const keep = relay(OTHER_ID, "0x100", "ready");
     expect(await store.upsertRelay(keep)).toBe("stored");
-    for (let index = 1; index <= 8; index += 1) {
+    for (let index = 1; index <= 7; index += 1) {
       expect(await store.upsertRelay(relay(ACCOUNT_ID, num.toHex(index), "ready"))).toBe("stored");
     }
-    expect(await store.upsertRelay(relay(ACCOUNT_ID, "0x9", "ready"))).toBe("full");
+    expect(await store.upsertRelay(relay(ACCOUNT_ID, "0x8", "ready"))).toBe("full");
     expect(await store.getRelay(keep.id)).not.toBeNull();
+    // A sent relay keeps its row but no longer holds proof bytes.
     expect(await store.upsertRelay(relay(ACCOUNT_ID, "0x1", "submitted"))).toBe("stored");
-    expect(await store.upsertRelay(relay(ACCOUNT_ID, "0x9", "ready"))).toBe("stored");
-    expect(await store.getRelay(`${ACCOUNT_ID}:0x1`)).toBeNull();
+    expect(await store.upsertRelay(relay(ACCOUNT_ID, "0x8", "ready"))).toBe("stored");
+    expect((await store.getRelay(`${ACCOUNT_ID}:0x1`))?.state).toBe("submitted");
   });
 });
 

@@ -36,6 +36,8 @@ export { bindShadowAccounts } from "./sidepanel/journeys/privacy/shadow-accounts
 export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";
+/** Settings > Experimental features state, for the UI Lab checkpoint. */
+export type { ExperimentalFeaturesState } from "./sidepanel/journeys/settings/experimental-features-runtime";
 /** Staking screen state and bindings, for the UI Lab checkpoints. */
 export type { StakingState } from "./sidepanel/journeys/staking/staking-directory-client";
 /** Binds the staking list (paste, open, sort, more) against fixture state. */
@@ -59,5 +61,5 @@ export * from "./sidepanel/shared/token-dropdown";
 export * from "./sidepanel/shell/account-types";
 export * from "./sidepanel/shell/dashboard-bindings";
 /** The deployment receipt's copy, so lab checkpoints paint what the binder ships. */
-export { DEPLOY_RECEIPT_COPY } from "./sidepanel/shell/shell-bindings";
+export { deployReceiptCopy } from "./sidepanel/shell/shell-bindings";
 export * from "./sidepanel/styles/index";

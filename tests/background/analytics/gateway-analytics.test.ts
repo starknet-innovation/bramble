@@ -301,6 +301,33 @@ describe("gateway analytics build metadata", () => {
   });
 });
 
+test("with analytics off, STRK20 operations are not serialized", async () => {
+  const analytics = createGatewayAnalytics({
+    enabled: () => false,
+    http: captureHttp().http,
+    metadata,
+    randomUuid: () => FIRST_FLOW_ID,
+    store: createMemoryStore(),
+  });
+  const held = Promise.withResolvers<void>();
+  let secondStarted = false;
+  const first = analytics.withFlow(async () => {
+    await held.promise;
+    return "first";
+  });
+  const second = analytics.withFlow(async () => {
+    secondStarted = true;
+    return "second";
+  });
+  // A stalled operation must not hold up an unrelated one for an opted-out user:
+  // the second runs while the first is still held.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const startedWhileHeld = secondStarted;
+  held.resolve();
+  await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"]);
+  expect(startedWhileHeld).toBe(true);
+});
+
 test("analytics randomness failure does not block privacy operations or later flows", async () => {
   const analytics = createGatewayAnalytics({
     enabled: () => true,

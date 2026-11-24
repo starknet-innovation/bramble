@@ -48,6 +48,12 @@ export const mergeNftCandidates = (
   return [...merged.values()];
 };
 
+// Marks a watched NFT whose art the wallet could not find, unless it already
+// carries an image or an animation to show instead. A mark carried over from an
+// earlier read is dropped once art is found.
+const withoutArt = ({ artUnavailable: _stale, ...nft }: DiscoveredNft): DiscoveredNft =>
+  nft.image || nft.animationUrl ? nft : { ...nft, artUnavailable: true };
+
 const enrichWatchedNft = async (
   deps: WalletOpsDeps,
   nft: DiscoveredNft,
@@ -64,8 +70,8 @@ const enrichWatchedNft = async (
       tokenId: nft.tokenId,
     });
     return metadata === null
-      ? nft
-      : {
+      ? withoutArt(nft)
+      : withoutArt({
           ...nft,
           ...(metadata.animationUrl ? { animationUrl: metadata.animationUrl } : {}),
           attributes: metadata.attributes,
@@ -74,9 +80,9 @@ const enrichWatchedNft = async (
           externalUrl: metadata.externalUrl,
           image: metadata.image || nft.image,
           name: metadata.name || nft.name,
-        };
+        });
   } catch {
-    return nft;
+    return withoutArt(nft);
   }
 };
 

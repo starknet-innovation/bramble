@@ -1,6 +1,7 @@
 /** DOM bindings forward only exact Argent multisig intents, signatures, and calls. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { addressText } from "@bramble/wallet-model/networks";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
@@ -61,7 +62,7 @@ describe("bindMultisigs frozen-intent forms", () => {
       secondary.id,
     );
     const currentSigner = app.querySelector("[data-deployment-signer-current-copy]");
-    expect(currentSigner?.textContent).toContain("0x456");
+    expect(currentSigner?.textContent).toContain("0x0000…0456");
     const threshold = app.querySelector<HTMLInputElement>('input[name="threshold"]');
     if (!threshold) throw new Error("threshold field unavailable");
     threshold.value = "2";
@@ -131,7 +132,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(fundingStage?.querySelector(".qr-card")).not.toBeNull();
     expect(
       app.querySelector(".multisig-funding-stage [data-copy]")?.getAttribute("data-copy"),
-    ).toBe(fixture.deploymentReview.address);
+    ).toBe(addressText(fixture.deploymentReview.address));
     app.querySelector<HTMLButtonElement>("[data-multisig-fund-local]")?.click();
     await flush();
     expect(fundingIntent).toMatchObject({
@@ -169,7 +170,9 @@ describe("bindMultisigs frozen-intent forms", () => {
     if (!form || !key) throw new Error("guided participant form unavailable");
     key.value = "0x999";
     app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
-    expect(form.querySelector("[data-participant-selection]")?.textContent).toContain("0x999");
+    expect(form.querySelector("[data-participant-selection]")?.textContent).toContain(
+      "0x0000…0999",
+    );
     form.requestSubmit();
     await flush();
 
@@ -424,7 +427,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     await flush();
     const reviewPanel = app.querySelector<HTMLElement>("#multisig-deploy-review");
     const newest = reviewPanel?.innerHTML;
-    expect(newest).toContain("0x999");
+    expect(newest).toContain("0x0000…0999");
     expect(newest).toContain("0x2");
     expect(newest).toContain("What will happen");
     expect(newest).not.toContain("Risk and recovery");

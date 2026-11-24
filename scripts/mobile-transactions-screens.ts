@@ -4,8 +4,8 @@
  * The mobile screens show the same strings; a copy change in the extension fails the drift gate
  * until the fixture, and the Swift copy table asserted against it, follow.
  */
-import { readFileSync } from "node:fs";
 import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
+import { uiCatalogs } from "../packages/presentation/wallet-ui/src/i18n/messages";
 // Not package exports: side-panel renderers, read here only to pin the mobile port.
 import {
   sendFlow,
@@ -19,6 +19,7 @@ import {
 } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-review-markup";
 import { settingsScreen } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/settings/settings-views";
 import { reviewFeeSection } from "../packages/presentation/wallet-ui/src/sidepanel/shared/review-render";
+import { unescapeHtml } from "./mobile-parity-portfolio/shared";
 
 const ADDRESS = "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9";
 const SECTIONS = [
@@ -34,28 +35,16 @@ const SECTIONS = [
 const texts = (html: string): string[] =>
   html
     .split(/<[^>]+>/)
-    .map((part) => part.replace(/\s+/g, " ").trim())
+    .map((part) => unescapeHtml(part.replace(/\s+/g, " ").trim()))
     .filter((part) => part.length > 0);
 
 const attributes = (html: string, name: string): string[] =>
   [...html.matchAll(new RegExp(`${name}="([^"]+)"`, "g"))].map((match) => match[1] ?? "");
 
-// The deploy strings the binding writes (fee line, status lines, receipt titles) exist only inside
-// its literals; they are read from that source so a wording change there still fails the drift gate.
-const BINDING_SOURCE = "packages/presentation/wallet-ui/src/sidepanel/shell/deploy-bindings.ts";
-// The paid deploy's fee line moved beside the sponsorship choice that replaces it when sponsored.
-const DEPLOY_FEE_SOURCE =
-  "packages/presentation/wallet-ui/src/sidepanel/shell/deploy-sponsorship.ts";
-
-// The details step's zero-amount gate is likewise a literal inside the Send binding.
-const SEND_BINDING_SOURCE =
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts";
-
-const bindingPrefix = (pattern: RegExp, source = BINDING_SOURCE): string => {
-  const match = readFileSync(source, "utf8").match(pattern);
-  if (!match?.[1]) throw new Error(`${source} no longer contains ${pattern}`);
-  return match[1];
-};
+// The deploy and Send binding strings (fee line, status lines, receipt titles, zero-amount gate)
+// are UI messages; they are read from the English catalog the bindings render, so a wording change
+// there still fails the drift gate.
+const message = (key: keyof typeof uiCatalogs.en): string => uiCatalogs.en[key];
 
 /** Every Send section's visible text, placeholders and accessible names, in document order. */
 export const computeScreenCopy = () => {
@@ -140,6 +129,7 @@ export const computeScreenCopy = () => {
         currency: "usd",
         deployment,
         expandedGroupId: null,
+        experimentalFeatures: "loading",
         preferences: { addressBook: [], displayCurrency: "usd", groups: [], tokens } as never,
         prices: {},
         privacy: {} as never,
@@ -173,19 +163,16 @@ export const computeScreenCopy = () => {
         attributes(row(status), "aria-label")[0]?.split(". ").at(-1) ?? "",
       ]),
     ),
-    amountGate: bindingPrefix(/error: "(Enter an amount[^"]*)"/, SEND_BINDING_SOURCE),
+    amountGate: message("send.amount.positive"),
     deployAccount: {
-      confirmedDescription: bindingPrefix(/confirmedDescription: "([^"]+)"/),
-      confirmedTitle: bindingPrefix(/confirmedTitle: "([^"]+)"/),
+      confirmedDescription: message("cost.deploy.confirmedDescription"),
+      confirmedTitle: message("cost.deploy.confirmedTitle"),
       deployed: deployScreen(true),
-      estimateFailed: bindingPrefix(/failed\(error, "([^"]+)",/),
-      estimating: bindingPrefix(/scopedStatus\(target, "(Estimating[^"]+)"\)/),
-      maximumFeePrefix: bindingPrefix(
-        /`(Maximum network fee: )\$\{formatFeeEstimate\(estimate\)\}`/,
-        DEPLOY_FEE_SOURCE,
-      ),
-      submittedTitle: bindingPrefix(/submittedTitle: "([^"]+)"/),
-      submitting: bindingPrefix(/scopedStatus\(target, "(Submitting[^"]+)"\)/),
+      estimateFailed: message("cost.deploy.quoteFailed"),
+      estimating: message("cost.deploy.estimating"),
+      maximumFeePrefix: message("cost.deploy.maxFee").split("{fee}")[0] ?? "",
+      submittedTitle: message("cost.deploy.submittedTitle"),
+      submitting: message("cost.deploy.submitting"),
       undeployed: deployScreen(false),
     },
     review: {

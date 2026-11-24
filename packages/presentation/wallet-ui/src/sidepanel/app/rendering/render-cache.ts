@@ -9,6 +9,7 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
+import type { ExperimentalFeaturesState } from "../../journeys/settings/experimental-features-runtime";
 import {
   STAKING_LOADING,
   type StakingState,
@@ -51,6 +52,7 @@ export type RenderData = {
   chartTokenId: string | null;
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: ConnectedSitesState;
+  experimentalFeatures: ExperimentalFeaturesState;
   deployment: boolean | null;
   // NFT lanes: indexer candidates and explicit watches, each
   // re-proved on-chain, merged into the gallery snapshot.
@@ -155,6 +157,7 @@ export const emptyRenderCache = (): RenderData => ({
   chartTokenId: null,
   classHashVerification: null,
   connectedSites: "loading",
+  experimentalFeatures: "loading",
   deployment: null,
   signability: null,
   ...emptyActivityCache(),
