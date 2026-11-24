@@ -316,7 +316,7 @@ jobs:
       # Early warning (tests/e2e/chrome-beta.ts): last and capped, so no blocking gate waits on it.
       - name: Full E2E on next Chromium (early warning)
         id: e2e_next
-        if: hashFiles('tests/e2e/chrome-beta.ts') != ''
+        if: steps.build.outcome == 'success' && hashFiles('tests/e2e/chrome-beta.ts') != ''
         continue-on-error: true
         timeout-minutes: 60
         env: { BRAMBLE_E2E_CHANNEL: chrome-for-testing-beta }
@@ -430,7 +430,7 @@ jobs:
             const fixed = known.filter((key) => !failing.includes(key));
 
             // Shown, but never in `failing` or the state line: alone it never opens the issue.
-            const next = { success: "pass", skipped: "not run on this branch" }[env.E2E_NEXT];
+            const next = { success: "pass", skipped: "not run (no build, or the branch predates it)" }[env.E2E_NEXT];
             const runUrl = `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`;
             const section = (heading, lines) => (lines.length ? ["", `### ${heading}`, ...lines] : []);
             const report = [

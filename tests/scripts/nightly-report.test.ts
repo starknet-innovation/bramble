@@ -136,7 +136,9 @@ describe("nightly report", () => {
     expect(issues[0]?.state).toBe("closed");
 
     const old = await run({ E2E_NEXT: "skipped" }, []);
-    expect(old.summary).toContain("- Next Chromium E2E: not run on this branch");
+    expect(old.summary).toContain(
+      "- Next Chromium E2E: not run (no build, or the branch predates it)",
+    );
   });
 
   test("a hostile test title cannot break the state line or the markdown", async () => {
