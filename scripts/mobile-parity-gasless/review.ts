@@ -84,13 +84,18 @@ const effective = (item: ReviewCase) => {
 
 type Effective = ReturnType<typeof effective>;
 
+// The check needs a forwarder; a route without one (the shipped Sepolia route) is checked
+// against the made-up test forwarder, and the line says so.
+const checkForwarder = (input: Effective): string =>
+  input.route?.forwarder ?? SEPOLIA_TEST_ROUTE.forwarder;
+
 const check = (input: Effective): object => {
   const result = validateGaslessTypedData({
     accountAddress: input.account.address,
     calls: input.calls,
     ceiling: input.reference === null ? 0n : gaslessFeeCeiling(input.reference),
     chainId: input.chainId,
-    forwarder: input.route?.forwarder ?? SEPOLIA_TEST_ROUTE.forwarder,
+    forwarder: checkForwarder(input),
     gasToken: input.reviewed.tokenAddress,
     minimumRemainingSeconds: GASLESS_SIGN_WINDOW_SECONDS,
     nowSeconds: input.nowSeconds,
@@ -143,6 +148,11 @@ export const computeReviews = async (): Promise<readonly object[]> => {
     cases.push({
       ...input,
       check: check(input),
+      checkForwarder: checkForwarder(input),
+      ...(input.route?.forwarder
+        ? {}
+        : { checkForwarderNote: "the route has no forwarder; the check uses the test forwarder" }),
+      ...(item.knownExtensionBug ? { knownExtensionBug: item.knownExtensionBug } : {}),
       name: item.name,
       reference: input.reference?.toString() ?? null,
       signature: SIGNATURE,

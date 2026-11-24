@@ -113,9 +113,15 @@ const BUILD_PARAMS: readonly (readonly [string, Parameters<typeof gaslessBuildPa
   ],
 ];
 
+const KNOWN_BUGS: Readonly<Record<string, string>> = {
+  "a calldata felt above the field":
+    "The refusal is starknet.js's raw range error, not a GaslessRefusal; the port should refuse without matching this text.",
+};
+
 const buildParams = (): readonly object[] => [
   ...BUILD_PARAMS.map(([name, input]) => ({
     input,
+    ...(KNOWN_BUGS[name] ? { knownExtensionBug: KNOWN_BUGS[name] } : {}),
     name,
     ...attempt(() => gaslessBuildParams(input)),
   })),

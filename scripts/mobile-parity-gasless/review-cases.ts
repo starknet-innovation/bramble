@@ -54,6 +54,8 @@ export type ReviewCase = {
   readonly reviewedAmount?: string;
   readonly route?: "sepolia-default" | "sepolia-test";
   readonly typedData?: unknown;
+  /** Set when the recorded answer is an extension defect the port must not learn. */
+  readonly knownExtensionBug?: string;
 };
 
 const typed = (calls: readonly Call[], terms: Terms = {}) => outsideTypedData(calls, terms);
@@ -155,6 +157,8 @@ export const REVIEW_CASES: readonly ReviewCase[] = [
     // Pinned as the extension behaves: an honest body is refused because the rebuild
     // (`outsideExecution.getTypedData`) hashes a felt entrypoint's text as a name.
     calls: [{ ...usdcTransfer(), entrypoint: TRANSFER_SELECTOR }],
+    knownExtensionBug:
+      "starknet.js outsideExecution.getTypedData hashes a felt entrypoint's text as a name, so the extension's rebuild refuses this honest body; a fix will flip it to accepted.",
     name: "calls: the user's entrypoint is given as its selector felt (an honest body)",
   },
   // The fee transfer.
@@ -209,7 +213,7 @@ export const REVIEW_CASES: readonly ReviewCase[] = [
     typedData: typed([usdcTransfer(), feeTransfer()], { after: before(NOW) }),
   },
   {
-    name: "window: execute before above u64",
+    name: "window: execute before above u64 (refused as shape, not window)",
     typedData: typed([usdcTransfer(), feeTransfer()], { before: "0x10000000000000000" }),
   },
   {
@@ -278,7 +282,15 @@ export const REVIEW_CASES: readonly ReviewCase[] = [
   { name: "shape: no calls", typedData: typed([]) },
   { name: "shape: typed data is null", typedData: null },
   // Gates before the build.
-  { name: "gate: the Sepolia route is off", chainId: "SN_SEPOLIA", route: "sepolia-default" },
+  {
+    chainId: "SN_SEPOLIA",
+    name: "gate: the Sepolia route is off",
+    route: "sepolia-default",
+    typedData: typed([usdcTransfer(), feeTransfer("0x3e8", USDC, SEPOLIA_TEST_FORWARDER)], {
+      caller: SEPOLIA_TEST_FORWARDER,
+      chainId: "SN_SEPOLIA",
+    }),
+  },
   {
     account: {
       accountContractType: "braavos",

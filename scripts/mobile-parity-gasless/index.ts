@@ -12,9 +12,13 @@
  * - `buildParams`, `supportedTokens`, `available`, `quote`, `transactionHash`, `offerShape`,
  *   `account`, `ceiling`: the pure readers and builders over direct inputs.
  *
- * Left out: sponsored fee modes (the extension cannot express one), the background's account
- * re-read and price reference (`gasless-review.ts`, the host's), the pending-relay journal, and
- * activity rows. `bun run mobile:parity` writes it; the drift test fails when the extension's code
+ * Not covered (a follow-up with privacy, P15): sponsored fee modes, which the extension does use
+ * outside this gasless route (`privacy/src/paymaster/sponsored-deploy.ts` posts SNIP-29
+ * `fee_mode: sponsored`, `paymaster.ts` `sponsored_private`, `strk20-sponsored-shield.ts`), and
+ * the sponsored (`feePayer`) and gasless (`userFee`) activity rows. Also left out: the
+ * background's account re-read and price reference (`gasless-review.ts`, the host's) and the
+ * pending-relay journal. A line carrying `knownExtensionBug` pins an extension defect as it
+ * behaves today; the port must not copy it. `bun run mobile:parity` writes it; the drift test fails when the extension's code
  * changes it. Every address, amount and hash is made up but for the tracked tokens and the pinned
  * mainnet forwarder.
  */
