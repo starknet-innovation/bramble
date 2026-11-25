@@ -1,5 +1,6 @@
 package org.bramble.wallet.send
 
+import kotlinx.coroutines.CancellationException
 import org.bramble.core.FeeAffordability
 import org.bramble.core.GaslessBalance
 import org.bramble.core.GaslessOffer
@@ -34,14 +35,27 @@ internal suspend fun SendFlowModel.offerGasless() {
 
 /**
  * Pays the network fee in [offer]'s token instead of Confirm. The core takes the reviewed transfer
- * (closing the STRK plan), checks the gateway's build against it, and signs.
+ * (closing the STRK plan), checks the gateway's build against it, and signs. Launched on the app's
+ * scope: if the screen closes (left, or locked) meanwhile, the submission still finishes and its
+ * row is in Activity, but nothing is shown on the closed journey.
  */
 suspend fun SendFlowModel.payFee(offer: GaslessOffer) {
     val host = gasless
     val fee = gaslessFee
     if (host == null || fee == null || stage != Stage.REVIEW) return
     stage = Stage.AUTHORIZING
-    val outcome = host.submit(fee, offer, hooks.gaslessPrices(network.tokens.map { it.address }))
+    val prices =
+        try {
+            hooks.gaslessPrices(network.tokens.map { it.address })
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (ignored: Exception) {
+            // Nothing is signed yet; without a price `choose` refuses, so the journey says why.
+            null
+        }
+    val outcome = host.submit(fee, offer, prices)
+    // Closed while the execute was out (`dropPlan`): the core's row carries it from here.
+    if (gaslessFee !== fee) return
     // `choose` closed the STRK plan; the review stays for the receipt.
     driver?.plan?.cancel()
     driver = null

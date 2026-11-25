@@ -1,5 +1,6 @@
 package org.bramble.wallet.send
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.bramble.core.GaslessFeeException
 import org.bramble.core.GaslessFeeInterface
@@ -13,6 +14,7 @@ import org.bramble.core.HttpRequest
 import org.bramble.core.PriceView
 import org.bramble.wallet.portfolio.PortfolioTransport
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -138,6 +140,28 @@ class GaslessDriverTest {
             assertEquals(GaslessDriver.Outcome.Moved, outcome)
             assertTrue(transport.posted.isEmpty())
         }
+
+    @Test
+    fun strayErrorAfterPostIsUnknown() =
+        runBlocking {
+            val transport = Transport(reply)
+            val fee =
+                ScriptedFee(
+                    chosen = { GaslessSubmitStep.Post(post()) },
+                    submitSteps = listOf({ throw IllegalStateException("binding") }),
+                )
+            val outcome = GaslessDriver(transport).submit(fee, offer, null)
+            assertEquals(GaslessDriver.Outcome.Unknown(SendCopy.failureIndeterminate), outcome)
+            assertEquals("the execute went out before the failure", 1, transport.posted.size)
+        }
+
+    @Test
+    fun cancellationIsNotAnOutcome() {
+        val fee = ScriptedFee(chosen = { throw CancellationException("left") })
+        assertThrows(CancellationException::class.java) {
+            runBlocking { GaslessDriver(Transport(reply)).submit(fee, offer, null) }
+        }
+    }
 
     @Test
     fun choiceReadsAmountAndToken() {

@@ -133,8 +133,9 @@ private fun StageContent(
                     model,
                     review,
                     retry = { scope.launch { model.retryFee() } },
-                    confirm = { scope.launch { model.confirm() } },
-                    pay = { offer -> scope.launch { model.payFee(offer) } },
+                    // Signing and posting outlive the screen: a lock or back must not strand a journaled send.
+                    confirm = { store.appScope.launch { model.confirm() } },
+                    pay = { offer -> store.appScope.launch { model.payFee(offer) } },
                 )
             }
         }

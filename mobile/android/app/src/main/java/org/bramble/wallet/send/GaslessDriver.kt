@@ -1,5 +1,6 @@
 package org.bramble.wallet.send
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.bramble.core.GaslessFeeException
 import org.bramble.core.GaslessFeeInterface
@@ -83,7 +84,9 @@ class GaslessDriver(
 
     /**
      * The person's choice, run to its end. Once the core has signed, the execute is posted; the
-     * core filed its row first, so a lost answer stays guarded.
+     * core filed its row first, so a lost answer stays guarded. Callers run this on the app's scope
+     * so leaving Send does not stop it. Any failure that is not the core's refusal reads as
+     * [Outcome.Unknown], since the execute may already have gone out; cancellation propagates.
      */
     suspend fun submit(
         fee: GaslessFeeInterface,
@@ -114,6 +117,11 @@ class GaslessDriver(
             outcome
         } catch (error: GaslessFeeException) {
             outcome(error)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (ignored: Exception) {
+            // Not the core's refusal, so the execute may have gone out: say so, never "locked" (as iOS).
+            Outcome.Unknown(SendCopy.failureIndeterminate)
         }
 
     private fun now(): ULong = clock().toULong()
