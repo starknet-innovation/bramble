@@ -183,7 +183,7 @@ final class NostrMultisigFlowTests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         XCTAssertEqual(row.value as? String, "2 of 2 signers")
         tap(row, in: app)
-        tap(app.buttons["Intents"], in: app)
+        tap(app.buttons["Transactions"], in: app)
         tap(app.buttons["Check for updates"], in: app)
         expect("1 co-signer update received. Open them after the next Bramble update.", in: app, timeout: 30)
         snapshot(app, "co-signer-updates")

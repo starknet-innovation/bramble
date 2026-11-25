@@ -86,12 +86,16 @@ fun WalletShell(store: WalletStore) {
         sendToken = token
         push(Flow.SEND)
     }
+    val openSwap = { token: String? ->
+        sendToken = token
+        push(Flow.SWAP)
+    }
     BackHandler(enabled = flows.isNotEmpty()) { pop() }
 
     val flow = flows.lastOrNull()
     if (flow != null) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
-            FlowScreen(flow, store, FlowArguments(tokenId, sendToken, openSend, showActivity), pop, push)
+            FlowScreen(flow, store, FlowArguments(tokenId, sendToken, openSend, openSwap, showActivity), pop, push)
         }
         return
     }
@@ -108,7 +112,7 @@ fun WalletShell(store: WalletStore) {
         },
     ) {
         WalletHeader(store, openAccounts = { accountsOpen = true })
-        DockScreen(store, push, openSend = { openSend(null) }) { id ->
+        DockScreen(store, push, openSend = { openSend(null) }, openSwap = { openSwap(null) }) { id ->
             tokenId = id
             push(Flow.TOKEN_DETAIL)
         }
@@ -127,14 +131,17 @@ fun WalletShell(store: WalletStore) {
  * What a pushed flow needs beyond the store, since the flow stack holds screens only.
  *
  * @property tokenId the tracked token a [Flow.TOKEN_DETAIL] shows.
- * @property sendToken the token a [Flow.SEND] opens on, or null for STRK.
+ * @property sendToken the token a [Flow.SEND] opens on (its address), or a [Flow.SWAP] sells (its
+ *   tracked id); null opens Send on STRK and Swap on ETH → STRK.
  * @property openSend pushes [Flow.SEND] on a token (a token screen's Send).
+ * @property openSwap pushes [Flow.SWAP] selling a token (a token screen's Swap).
  * @property showActivity closes every flow onto the Activity tab (a receipt's "View in Activity tab").
  */
 private data class FlowArguments(
     val tokenId: String,
     val sendToken: String?,
     val openSend: (String?) -> Unit,
+    val openSwap: (String?) -> Unit,
     val showActivity: () -> Unit,
 )
 
@@ -166,28 +173,17 @@ private fun FlowScreen(
             )
         }
 
-        Flow.MANAGE_ACCOUNTS -> {
-            ManageAccountsScreen(store, back = pop)
+        Flow.SWAP -> {
+            org.bramble.wallet.swap.SwapScreen(
+                store,
+                back = pop,
+                viewActivity = arguments.showActivity,
+                startToken = arguments.sendToken,
+            )
         }
 
-        Flow.NETWORK -> {
-            NetworkScreen(store, back = pop)
-        }
-
-        Flow.APPEARANCE -> {
-            AppearanceScreen(store, back = pop)
-        }
-
-        Flow.SECURITY -> {
-            SecurityScreen(store, back = pop)
-        }
-
-        Flow.REVEAL -> {
-            RevealScreen(store, back = pop)
-        }
-
-        Flow.REMOVE -> {
-            RemoveWalletScreen(store, back = pop)
+        Flow.MANAGE_ACCOUNTS, Flow.NETWORK, Flow.APPEARANCE, Flow.SECURITY, Flow.REVEAL, Flow.REMOVE -> {
+            SettingsFlowScreen(flow, store, pop)
         }
 
         Flow.ADDRESS_BOOK -> {
@@ -205,6 +201,11 @@ private fun FlowScreen(
                 .ReadyMultisigScreen(store, back = pop)
         }
 
+        Flow.ALLOWANCES -> {
+            org.bramble.wallet.allowances
+                .AllowancesScreen(store, viewActivity = arguments.showActivity, back = pop)
+        }
+
         Flow.STAKING -> {
             org.bramble.wallet.staking
                 .StakingScreen(store, viewActivity = arguments.showActivity, back = pop)
@@ -213,6 +214,24 @@ private fun FlowScreen(
         Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL, Flow.TOKENS, Flow.ADD_TOKEN, Flow.DISCOVER_TOKENS -> {
             PortfolioFlowScreen(flow, store, arguments, pop, push)
         }
+    }
+}
+
+/** The Settings hub's own screens: accounts, network, appearance, security, reveal, remove. */
+@Composable
+private fun SettingsFlowScreen(
+    flow: Flow,
+    store: WalletStore,
+    pop: () -> Unit,
+) {
+    when (flow) {
+        Flow.MANAGE_ACCOUNTS -> ManageAccountsScreen(store, back = pop)
+        Flow.NETWORK -> NetworkScreen(store, back = pop)
+        Flow.APPEARANCE -> AppearanceScreen(store, back = pop)
+        Flow.SECURITY -> SecurityScreen(store, back = pop)
+        Flow.REVEAL -> RevealScreen(store, back = pop)
+        Flow.REMOVE -> RemoveWalletScreen(store, back = pop)
+        else -> Unit
     }
 }
 
@@ -237,6 +256,7 @@ private fun PortfolioFlowScreen(
                 arguments.tokenId,
                 back = pop,
                 send = arguments.openSend,
+                swap = arguments.openSwap,
                 journey = { push(Flow.PRIVACY) },
                 stake = { push(Flow.STAKING) },
             )
@@ -269,14 +289,15 @@ private fun PortfolioFlowScreen(
 }
 
 /**
- * The dock screen for the selected tab; [openSend] opens the Send journey on STRK, [openToken] a
- * tracked token's detail by id.
+ * The dock screen for the selected tab; [openSend] opens the Send journey on STRK, [openSwap] the
+ * Swap journey on ETH → STRK, [openToken] a tracked token's detail by id.
  */
 @Composable
 private fun DockScreen(
     store: WalletStore,
     push: (Flow) -> Unit,
     openSend: () -> Unit,
+    openSwap: () -> Unit,
     openToken: (String) -> Unit,
 ) {
     when (store.tab) {
@@ -286,6 +307,7 @@ private fun DockScreen(
                 HomeActions(
                     receive = { push(Flow.RECEIVE) },
                     send = openSend,
+                    swap = openSwap,
                     privacy = { push(Flow.PRIVACY) },
                     openToken = openToken,
                     manageTokens = { push(Flow.TOKENS) },

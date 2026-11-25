@@ -19,6 +19,7 @@ import org.bramble.core.RelayPolicy
 import org.bramble.core.WalletCore
 import org.bramble.wallet.BuildConfig
 import org.bramble.wallet.RpcClient
+import org.bramble.wallet.RpcPost
 
 /**
  * Public UI state for the wallet card, contacts, shared accounts, and Nostr coordination, as the
@@ -28,7 +29,7 @@ import org.bramble.wallet.RpcClient
  * for a sync). `reset()` runs on lock and cancels any sync (mobile/docs/nostr-multisig.md §10).
  */
 class CoordinationStore(
-    private val core: WalletCore,
+    internal val core: WalletCore,
     internal val network: () -> NetworkInfo,
 ) {
     /** This wallet's coordination (Nostr) public key once derived; null before, and after a lock. */
@@ -51,6 +52,10 @@ class CoordinationStore(
     var relayPolicy by mutableStateOf<RelayPolicy?>(null)
         private set
 
+    /** Open (collecting, ready or stale) signing intents by multisig id, for the list rows. */
+    var openIntents by mutableStateOf(emptyMap<String, Int>())
+        private set
+
     /**
      * A public, canonical address the Send recipient stage offered to save, for the address book
      * to prefill once (it clears this as it takes it); dropped on lock.
@@ -65,6 +70,17 @@ class CoordinationStore(
     internal var chainPost = ChainPost { url, body, maxBytes -> RpcClient.post(url, body, maxBytes = maxBytes) }
         set(value) {
             check(BuildConfig.DEBUG) { "the multisig chain transport is fixed in a release build" }
+            field = value
+        }
+
+    /**
+     * Moves the multisig plans' steps (`MultisigTransactions.kt`), a write among them: the app's one
+     * HTTP path, posting a write once and never following a redirect. Replaceable only in a debug
+     * build, for the offline fixture node; a release build refuses.
+     */
+    internal var txPost: RpcPost = RpcClient.https
+        set(value) {
+            check(BuildConfig.DEBUG) { "the multisig transaction transport is fixed in a release build" }
             field = value
         }
     private var syncJob: Job? = null
@@ -87,6 +103,7 @@ class CoordinationStore(
         contacts = emptyList()
         multisigs = emptyList()
         relayPolicy = null
+        openIntents = emptyMap()
         contactDraft = null
     }
 
@@ -110,10 +127,12 @@ class CoordinationStore(
         val nextContacts = runCatching { work { core.contacts(id) } }.getOrDefault(emptyList())
         val nextMultisigs = runCatching { work { core.multisigs(id) } }.getOrDefault(emptyList())
         val nextPolicy = runCatching { work { core.relayPolicy() } }.getOrNull()
+        val nextOpen = nextMultisigs.associate { record -> record.id to intents(record.id).count(::isOpen) }
         if (started != generation) return
         contacts = nextContacts
         multisigs = nextMultisigs
         relayPolicy = nextPolicy
+        openIntents = nextOpen
     }
 
     /** Saves a contact on this network (the core validates it and throws its refusal), then refreshes. */
@@ -216,7 +235,7 @@ class CoordinationStore(
 private const val MILLIS_PER_SECOND = 1000
 
 /** Runs a blocking core call off the main thread. */
-private suspend fun <T> work(body: () -> T): T = withContext(Dispatchers.Default) { body() }
+internal suspend fun <T> work(body: () -> T): T = withContext(Dispatchers.Default) { body() }
 
 /** `addMultisig`'s refusal for an authority read that cannot be added; null when it can. */
 private fun authorityRefusal(status: MultisigAuthorityStatus?): CoordinationStore.Refusal? =

@@ -50,6 +50,7 @@ import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.privacy.TokenPrivacySection
 import org.bramble.wallet.send.Receipt
 import org.bramble.wallet.staking.StakingCopy
+import org.bramble.wallet.swap.SwapCopy
 import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
@@ -63,7 +64,7 @@ private const val SPARKLINE_HEIGHT = 32.0
  * where the Send journey can carry it), the private half of this token ([TokenPrivacySection],
  * from the core's `tokenDetailPrivacy` over the real deployment state), and the contract receipt.
  * [stake] opens staking for STRK where the core's policy has it on (`canStakeToken`).
- * The extension's Swap is not offered: mobile has no swap flow. [tokenId] names a tracked token;
+ * Swap ([swap] with its id) is always offered, as the extension's. [tokenId] names a tracked token;
  * one no longer tracked (a lock, a network switch) returns to the shell.
  */
 @Composable
@@ -72,6 +73,7 @@ fun TokenDetailScreen(
     tokenId: String,
     back: () -> Unit,
     send: (String) -> Unit,
+    swap: (String) -> Unit = {},
     journey: () -> Unit,
     stake: () -> Unit = {},
 ) {
@@ -92,6 +94,7 @@ fun TokenDetailScreen(
             if (store.canSend(token.address)) {
                 PillButton("Send", icon = BrambleIconName.SEND) { send(token.address) }
             }
+            PillButton(SwapCopy.homeAction, kind = PillKind.SECONDARY, icon = BrambleIconName.SWAP) { swap(token.id) }
             // `canStakeToken`: STRK by address where the core's policy has staking on.
             if (store.canStake(token.address)) {
                 PillButton(
