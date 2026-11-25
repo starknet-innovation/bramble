@@ -1,5 +1,6 @@
 package org.bramble.wallet.staking
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -74,7 +75,7 @@ fun StakingScreen(
     LaunchedEffect(model) { model.load() }
     val current = action
     if (current != null) {
-        StakingActionScreen(store, current, viewActivity) {
+        val close: () -> Unit = {
             action = null
             // The pools and "Your stakes" are read again after an action.
             scope.launch {
@@ -82,8 +83,12 @@ fun StakingScreen(
                 model.loadPositions()
             }
         }
+        // System back leaves the action, not the whole staking flow, as the header's back does.
+        BackHandler(onBack = close)
+        StakingActionScreen(store, current, viewActivity, close)
         return
     }
+    BackHandler(enabled = model.validator != null) { model.closeValidator() }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
