@@ -46,6 +46,9 @@ object PublicWallet {
 
 typealias BrambleRule = AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>
 
+/** Steps that wait on a vault write (key derivation), which CI emulators run slowly. */
+private const val VAULT_WRITE_TIMEOUT_MS = 120_000L
+
 /**
  * Steps shared by the flow tests, named after the iOS XCUITest helpers. Compose finders drive
  * Compose UI; secret fields are platform `EditText`s inside `AndroidView`, so they are scrolled
@@ -203,7 +206,7 @@ class Robot(
     }
 
     fun reviewAndAdd(expectingShort: String?) {
-        waitForText("Review your account", 20_000)
+        waitForText("Review your account", VAULT_WRITE_TIMEOUT_MS)
         if (expectingShort != null) waitForText(expectingShort, 20_000)
         snapshot("review-account")
         tap("Add selected account")
@@ -235,7 +238,7 @@ class Robot(
     fun waitForHome(timeoutMs: Long = 20_000) = waitForText("Tokens", timeoutMs)
 
     fun finishAndCheckHome() {
-        waitForText("You’re all set", 20_000)
+        waitForText("You’re all set", VAULT_WRITE_TIMEOUT_MS)
         snapshot("complete")
         tap("Open Bramble")
         waitForHome()
