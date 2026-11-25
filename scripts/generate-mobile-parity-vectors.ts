@@ -31,6 +31,10 @@ import {
 import { ALLOWANCES_PARITY_FIXTURE_PATH, renderAllowancesParity } from "./mobile-parity-allowances";
 import { CALLS_PARITY_FIXTURE_PATH, renderCallsParity } from "./mobile-parity-calls";
 import { GASLESS_PARITY_FIXTURE_PATH, renderGaslessParity } from "./mobile-parity-gasless";
+import {
+  MULTISIG_IMPORT_FIXTURE_PATH,
+  renderMultisigImportParity,
+} from "./mobile-parity-multisig-import";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
@@ -43,6 +47,12 @@ import {
   VAULT_IMPORTED_FIXTURE_PATH,
   VAULT_PARITY_FIXTURE_PATH,
 } from "./mobile-parity-vault";
+import {
+  computeFullV13VaultParity,
+  computeV14VaultParity,
+  computeVaultMigrationParity,
+  VAULT_FULL_FIXTURE_PATHS,
+} from "./mobile-parity-vault-full";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -124,14 +134,31 @@ const readCommittedVaultSeal = async (path: string): Promise<unknown> => {
 };
 
 // The v13 vault keeps its committed seal when the extension still opens it to the same payload.
-// So does the imported-key vault (P3).
+// So do the imported-key vault (P3) and the full vault at 13 and 14 (G7b).
 for (const [path, compute] of [
   [VAULT_PARITY_FIXTURE_PATH, computeVaultParity],
   [VAULT_IMPORTED_FIXTURE_PATH, computeImportedVaultParity],
+  [VAULT_FULL_FIXTURE_PATHS.v13, computeFullV13VaultParity],
+  [VAULT_FULL_FIXTURE_PATHS.v14, computeV14VaultParity],
 ] as const) {
   const vault = await compute(await readCommittedVaultSeal(path));
   await writeFile(path, `${JSON.stringify(vault, null, 2)}\n`);
   console.log(`wrote ${path}`);
+}
+
+{
+  const path = VAULT_FULL_FIXTURE_PATHS.migration;
+  const committedMigration = await readFile(path, "utf8")
+    .then((text) => JSON.parse(text) as Parameters<typeof computeVaultMigrationParity>[0])
+    .catch(() => undefined);
+  const migration = await computeVaultMigrationParity(committedMigration);
+  await writeFile(path, `${JSON.stringify(migration, null, 2)}\n`);
+  console.log(`wrote ${path}`);
+}
+// The G7b vaults hold short arrays Biome collapses; format them as the scan fixtures are.
+const vaultPaths = Object.values(VAULT_FULL_FIXTURE_PATHS);
+if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...vaultPaths]).exitCode !== 0) {
+  throw new Error("biome could not format the G7b vault fixtures");
 }
 
 await writeFile(ACTIVITY_PARITY_FIXTURE_PATH, await renderActivityParity());
@@ -163,6 +190,9 @@ for (const [path, part] of multisig) {
 if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...multisig.keys()]).exitCode !== 0) {
   throw new Error("biome could not format the multisig transaction fixtures");
 }
+// And its import and call-summary cases (G7g).
+await writeFile(MULTISIG_IMPORT_FIXTURE_PATH, await renderMultisigImportParity());
+console.log(`wrote ${MULTISIG_IMPORT_FIXTURE_PATH}`);
 
 console.log(`wrote ${await writeNostrMultisigParity()}`);
 for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${path}`);
