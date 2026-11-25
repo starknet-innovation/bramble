@@ -169,9 +169,26 @@ internal fun SendOutcomeStage(
     viewActivity: () -> Unit,
 ) {
     when (model.stage) {
-        SendFlowModel.Stage.PENDING -> PendingOutcome(store, model, scope, viewActivity)
-        SendFlowModel.Stage.SUBMITTED -> SubmittedOutcome(store, model, back, viewActivity)
-        else -> FailedOutcome(store, model, scope)
+        SendFlowModel.Stage.PENDING -> {
+            PendingOutcome(store, model, scope, viewActivity)
+        }
+
+        SendFlowModel.Stage.SUBMITTED -> {
+            SubmittedOutcome(store, model, back, viewActivity)
+        }
+
+        else -> {
+            if (model.outcomeUnknown) {
+                UnknownOutcome(
+                    store,
+                    model,
+                    back,
+                    viewActivity,
+                )
+            } else {
+                FailedOutcome(store, model, scope)
+            }
+        }
     }
 }
 
@@ -219,6 +236,41 @@ private fun SubmittedOutcome(
         LocalSkin.current.positive,
         SendCopy.successTitle,
         detail = { ReceiptCard(store, sent, model.hash) },
+    ) {
+        PillButton(SendCopy.viewActivity, icon = BrambleIconName.ACTIVITY, onClick = viewActivity)
+        PillButton(SendCopy.back, kind = PillKind.SECONDARY, onClick = back)
+    }
+}
+
+/**
+ * A lost gasless execute: not a failure, so no re-send. The core's sentence with its copy control,
+ * then Activity, which settles it, or Back.
+ */
+@Composable
+private fun UnknownOutcome(
+    store: WalletStore,
+    model: SendFlowModel,
+    back: () -> Unit,
+    viewActivity: () -> Unit,
+) {
+    val skin = LocalSkin.current
+    val message = model.failureMessage ?: SendCopy.failureIndeterminate
+    Outcome(
+        BrambleIconName.ALERT,
+        skin.warning,
+        SendCopy.statusUnknownTitle,
+        detail = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    message,
+                    color = skin.muted,
+                    textAlign = TextAlign.Center,
+                    style = textStyle(BrambleTypeScale.body),
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                CopyButton(store, message, SendCopy.copyError)
+            }
+        },
     ) {
         PillButton(SendCopy.viewActivity, icon = BrambleIconName.ACTIVITY, onClick = viewActivity)
         PillButton(SendCopy.back, kind = PillKind.SECONDARY, onClick = back)

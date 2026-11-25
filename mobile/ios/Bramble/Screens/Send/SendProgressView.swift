@@ -165,6 +165,19 @@ struct SendOutcomeView: View {
                 PillButton(SendCopy.viewActivity, kind: .secondary, icon: .activity, action: viewActivity)
             }
 
+        case .failed where model.outcomeUnknown:
+            // A lost gasless execute: not a failure, so no re-send; Activity settles it.
+            SendOutcomeLayout(
+                icon: .alert,
+                tint: skin.warning,
+                title: SendCopy.statusUnknownTitle,
+                message: model.failureMessage,
+                copyMessageLabel: SendCopy.copyError
+            ) {
+                PillButton(SendCopy.viewActivity, icon: .activity, action: viewActivity)
+                PillButton(SendCopy.back, kind: .secondary, action: done)
+            }
+
         default:
             SendOutcomeLayout(
                 icon: .x,

@@ -3,6 +3,7 @@ package org.bramble.wallet.send
 import org.bramble.core.FeeAffordability
 import org.bramble.core.FeeAmount
 import org.bramble.core.FeeUnit
+import org.bramble.core.GaslessOffer
 import org.bramble.core.ReviewFlag
 import org.bramble.core.TransferReview
 import org.bramble.core.formatTokenAmount
@@ -38,6 +39,15 @@ private fun flagMessage(flag: ReviewFlag): String =
         ReviewFlag.TOKEN_CONTRACT_RECIPIENT -> SendCopy.tokenContractRecipient
         ReviewFlag.ADDRESS_POISONING -> SendCopy.poisonedRecipient
     }
+
+/**
+ * A gasless offer's control (`cost.fee.payUpTo`): "Pay up to 1.25 USDC". The amount is the core's
+ * own formatting of the most the execution may take (`display`, "<amount> <label>").
+ */
+fun payUpTo(offer: GaslessOffer): String {
+    val amount = offer.display.removeSuffix(" ${offer.label}")
+    return SendCopy.payUpTo.replace("{amount}", amount).replace("{token}", offer.label)
+}
 
 /** The Cost box's content (`reviewFeeSection`), first matching state wins. */
 sealed interface ReviewCost {

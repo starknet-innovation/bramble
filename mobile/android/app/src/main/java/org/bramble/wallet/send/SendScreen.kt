@@ -134,6 +134,7 @@ private fun StageContent(
                     review,
                     retry = { scope.launch { model.retryFee() } },
                     confirm = { scope.launch { model.confirm() } },
+                    pay = { offer -> scope.launch { model.payFee(offer) } },
                 )
             }
         }

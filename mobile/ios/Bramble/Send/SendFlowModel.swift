@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// Fixed numbers of the Send journey's arithmetic and formatting.
-private enum SendFlowNumbers {
+enum SendFlowNumbers {
     /// Fraction digits the balance line shows.
     static let balanceFractionDigits: UInt8 = 4
     /// The base of the decimal strings `halve` works on.
@@ -56,6 +56,11 @@ final class SendFlowModel {
     private(set) var hash: String?
     private(set) var explorerURL: URL?
     private(set) var failureMessage: String?
+    /// The tokens the core offers to pay the network fee in, when the review found STRK short.
+    private(set) var gaslessOffers: [GaslessOffer] = []
+    /// The failure is an unknown outcome (a gasless execute whose answer was lost): "Status
+    /// unknown", and Activity rather than a re-send.
+    private(set) var outcomeUnknown = false
     /// The outcome toast: a confirmation goes through `WalletStore.notify` (success tone), a
     /// transaction that was not confirmed stays an error.
     private(set) var toast: Toast?
@@ -81,6 +86,18 @@ final class SendFlowModel {
     /// is written (`withSubmittedPrice`); nil records it without a price.
     private let pricing: (prices: PriceBook, currency: DisplayCurrency)?
     private var driver: SendDriver?
+    /// The gasless path's host half and the wallet's USD prices; nil turns it off.
+    private let gasless: Gasless?
+    private var gaslessFee: GaslessFee?
+    /// The relay's hash once a gasless send went out; its status is read through the core.
+    private var relayedHash: String?
+
+    /// What the gasless path needs from the wallet (mobile/docs/gasless.md).
+    struct Gasless {
+        let driver: GaslessDriver
+        /// The wallet's own fresh USD prices for STRK and these token addresses.
+        let prices: ([String]) async -> PriceView?
+    }
 
     init(
         core: WalletCore,
@@ -92,6 +109,7 @@ final class SendFlowModel {
         trackedTokens: [String] = [],
         openingToken: String? = nil,
         pricing: (prices: PriceBook, currency: DisplayCurrency)? = nil,
+        gasless: Gasless? = nil,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
     ) {
         self.core = core
@@ -103,6 +121,7 @@ final class SendFlowModel {
         self.transport = transport
         self.track = track
         self.pricing = pricing
+        self.gasless = gasless
         token = Self.token(openingToken, in: network) ?? network.tokens.first { $0.symbol == "STRK" }
             ?? network.tokens[0]
     }
@@ -114,40 +133,8 @@ final class SendFlowModel {
         return network.tokens.first { validateRecipient(input: $0.address) == wanted }
     }
 
-    var title: String { Self.title(stage) }
-
-    /// The flow header's title for each stage (`transferStageTitle`): authorizing, broadcasting
-    /// and confirming all read "Sending".
-    nonisolated static func title(_ stage: Stage) -> String {
-        switch stage {
-        case .recipient:
-            SendCopy.titleRecipient
-
-        case .details, .reviewing:
-            SendCopy.titleDetails
-
-        case .review:
-            SendCopy.titleReview
-
-        case .authorizing:
-            SendCopy.titleAuthorizing
-
-        case .broadcasting:
-            SendCopy.titleBroadcasting
-
-        case .confirming:
-            SendCopy.titleConfirming
-
-        case .pending:
-            SendCopy.titlePending
-
-        case .submitted:
-            SendCopy.titleSubmitted
-
-        case .failed:
-            SendCopy.titleFailed
-        }
-    }
+    /// An unknown outcome did not fail, so the header names the operation only (the extension's).
+    var title: String { outcomeUnknown ? SendCopy.titleRecipient : Self.title(stage) }
 
     /// Base-unit balance of the selected token, or nil while unread.
     var rawBalance: String? { balances[token.symbol] }
@@ -230,20 +217,6 @@ final class SendFlowModel {
         amount = text
     }
 
-    /// Integer halving of a base-10 string (floor), as `raw / 2n`.
-    nonisolated static func halve(_ decimal: String) -> String {
-        var remainder = 0
-        var digits = ""
-        for character in decimal {
-            guard let digit = character.wholeNumberValue else { return "0" }
-            let current = remainder * SendFlowNumbers.decimalBase + digit
-            digits.append(String(current / SendFlowNumbers.halvingDivisor))
-            remainder = current % SendFlowNumbers.halvingDivisor
-        }
-        let trimmed = digits.drop { $0 == "0" }
-        return trimmed.isEmpty ? "0" : String(trimmed)
-    }
-
     // MARK: Review and submit
 
     /// Builds the plan and runs it to its review.
@@ -295,13 +268,18 @@ final class SendFlowModel {
         driver = started
         stage = .reviewing
         await settle { try await started.run(from: .start) }
+        await offerGasless()
     }
 
     func retryFee() async {
         guard let driver, stage == .review else { return }
         await driver.releaseEndpoint()
+        // A new estimate voids the offers made for the old one.
+        gaslessFee = nil
+        gaslessOffers = []
         stage = .reviewing
         await settle { try await driver.run(from: .retryEstimate) }
+        await offerGasless()
     }
 
     /// Confirms the reviewed plan. The core re-reads chain state, re-checks the reviewed fee, and
@@ -317,6 +295,10 @@ final class SendFlowModel {
     }
 
     func checkAgain() async {
+        if let relayedHash, stage == .pending {
+            await watch(relayedHash)
+            return
+        }
         guard let driver, stage == .pending else { return }
         stage = .confirming
         await settle { try await driver.run(from: .checkAgain) }
@@ -339,6 +321,10 @@ final class SendFlowModel {
         driver = nil
         review = nil
         reviewBlock = nil
+        gaslessFee = nil
+        gaslessOffers = []
+        relayedHash = nil
+        outcomeUnknown = false
     }
 
     private func settle(_ outcome: () async throws -> SendStep) async {
@@ -414,5 +400,74 @@ final class SendFlowModel {
         if SendFailureText.mayHaveReachedChain(failure.code) { hash = failure.hash ?? hash }
         driver = nil
         stage = .failed
+    }
+}
+
+// MARK: Gasless (mobile/docs/gasless.md)
+
+extension SendFlowModel {
+    /// Runs the core's offer round for the open review, only when the review already shows the
+    /// STRK shortfall (the core decides whether anything is offered).
+    private func offerGasless() async {
+        guard stage == .review, review?.affordability == .insufficient, let gasless,
+              let plan = driver?.plan else { return }
+        let prices = await gasless.prices(network.tokens.map(\.address))
+        let held = network.tokens.map { GaslessBalance(tokenAddress: $0.address, balance: balances[$0.symbol]) }
+        guard stage == .review, driver?.plan === plan,
+              let round = plan.gaslessOffers(prices: prices, balances: held, nowMs: gasless.driver.clock())
+        else { return }
+        let offers = await gasless.driver.offers(round.fee, first: round.step)
+        guard stage == .review, driver?.plan === plan else { return }
+        gaslessFee = round.fee
+        gaslessOffers = offers
+    }
+
+    /// Pays the network fee in `offer`'s token instead of Confirm. The core takes the reviewed
+    /// transfer (closing the STRK plan), checks the gateway's build against it, and signs.
+    func payFee(with offer: GaslessOffer) async {
+        guard stage == .review, let gasless, let fee = gaslessFee else { return }
+        stage = .authorizing
+        let prices = await gasless.prices(network.tokens.map(\.address))
+        let outcome = await gasless.driver.submit(fee, offer: offer, prices: prices)
+        // `choose` closed the STRK plan; the review stays for the receipt.
+        driver?.plan.cancel()
+        driver = nil
+        gaslessFee = nil
+        gaslessOffers = []
+        switch outcome {
+        case let .submitted(hash, explorerUrl):
+            self.hash = hash
+            relayedHash = hash
+            explorerURL = explorerUrl.flatMap(URL.init(string:))
+            await watch(hash)
+
+        case let .refused(reason):
+            failureMessage = SendCopy.failurePrefix + reason
+            stage = .failed
+
+        case let .unknown(reason):
+            failureMessage = reason
+            outcomeUnknown = true
+            stage = .failed
+
+        case .moved:
+            failureMessage = SendCopy.failurePrefix + SendCopy.feeMoved
+            stage = .failed
+
+        case .locked:
+            fail(with: SendFailure(code: .locked, hash: nil))
+        }
+    }
+
+    /// Reads a relayed transaction's status through the core, which settles its activity row.
+    private func watch(_ hash: String) async {
+        stage = .confirming
+        guard let plan = try? core.refreshActivity(accountId: account.id, hash: hash) else {
+            stage = .pending
+            return
+        }
+        let started = SendDriver(plan: plan, network: network, transport: transport)
+        driver = started
+        await settle { try await started.run(from: .start) }
     }
 }

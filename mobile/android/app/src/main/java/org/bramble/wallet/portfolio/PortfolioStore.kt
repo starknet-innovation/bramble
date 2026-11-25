@@ -25,6 +25,7 @@ import org.bramble.core.PortfolioHero
 import org.bramble.core.PriceBook
 import org.bramble.core.PriceOutcome
 import org.bramble.core.PricePlan
+import org.bramble.core.PriceRequest
 import org.bramble.core.PriceView
 import org.bramble.core.PrivacyReading
 import org.bramble.core.PrivacyState
@@ -274,13 +275,7 @@ class PortfolioStore(
             }
 
             is PricePlan.Fetch -> {
-                val outcomes =
-                    coroutineScope {
-                        plan.requests
-                            .map { r ->
-                                async { PriceOutcome(r.address, transport.perform(r.request)) }
-                            }.awaitAll()
-                    }
+                val outcomes = transport.fetchPrices(plan.requests)
                 if (gen != generation) return
                 priceView = prices.apply(current.network.network, addresses, currency, outcomes, now)
                 persistDocuments(directory, preferences, prices, snapshots)
@@ -433,4 +428,35 @@ internal fun persistDocuments(
     preferences.persisted()?.let { write("preferences", it) }
     write("prices", prices.persisted())
     write("snapshots", snapshots.persisted())
+}
+
+/** One price request per address, posted together; the core judges each outcome. */
+private suspend fun PortfolioTransport.fetchPrices(requests: List<PriceRequest>): List<PriceOutcome> =
+    coroutineScope {
+        requests.map { r -> async { PriceOutcome(r.address, perform(r.request)) } }.awaitAll()
+    }
+
+/**
+ * The wallet's own USD prices for [addresses] on the active network, for the gasless fee reference
+ * (`GASLESS_POLICY` pins USD): served from cache when fresh, else fetched once into the cache. Null
+ * while locked or off mainnet (the book serves nothing there).
+ */
+suspend fun PortfolioStore.gaslessPrices(addresses: List<String>): PriceView? {
+    val net = scope?.network?.network ?: return null
+    val now = clock()
+    return when (val plan = priceBook.plan(net, addresses, DisplayCurrency.USD, now, false)) {
+        is PricePlan.Serve -> {
+            plan.view
+        }
+
+        is PricePlan.Fetch -> {
+            priceBook.apply(
+                net,
+                addresses,
+                DisplayCurrency.USD,
+                transport.fetchPrices(plan.requests),
+                now,
+            )
+        }
+    }
 }

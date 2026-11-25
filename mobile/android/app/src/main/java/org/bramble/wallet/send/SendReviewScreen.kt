@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import org.bramble.core.GaslessOffer
 import org.bramble.core.TransferReview
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleIcon
@@ -62,10 +63,11 @@ internal fun ReviewStage(
     review: TransferReview,
     retry: () -> Unit,
     confirm: () -> Unit,
+    pay: (GaslessOffer) -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         ReviewFactsList(store, model, review)
-        CostBox(reviewCost(review), retry)
+        CostBox(reviewCost(review), model.gaslessOffers, pay, retry)
         RisksPanel(reviewRisks(review, newResolvedRecipient = model.resolvedName?.isNew == true))
         StatusLine(model.reviewBlock, StatusTone.DANGER)
         PillButton(SendCopy.confirmLabel, icon = BrambleIconName.CHECK, enabled = review.canConfirm, onClick = confirm)
@@ -244,6 +246,8 @@ private fun Hairline() {
 @Composable
 private fun CostBox(
     cost: ReviewCost,
+    offers: List<GaslessOffer>,
+    pay: (GaslessOffer) -> Unit,
     retry: () -> Unit,
 ) {
     val skin = LocalSkin.current
@@ -265,6 +269,10 @@ private fun CostBox(
                 cost.share?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption)) }
                 if (cost.shortfall) {
                     Text(SendCopy.shortfall, color = skin.warning, style = textStyle(BrambleTypeScale.caption))
+                }
+                // `gaslessChoiceHtml`: one control per token the core offers; the wallet selects none.
+                offers.forEach { offer ->
+                    PillButton(payUpTo(offer), kind = PillKind.SECONDARY) { pay(offer) }
                 }
             }
 

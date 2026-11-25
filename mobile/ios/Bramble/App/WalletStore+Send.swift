@@ -21,7 +21,10 @@ extension WalletStore {
             transport: rpc.transport,
             trackedTokens: portfolio.preferences.trustedTokenAddresses(network: networkInfo.network),
             openingToken: token,
-            pricing: (portfolio.prices, portfolio.currency)
+            pricing: (portfolio.prices, portfolio.currency),
+            gasless: SendFlowModel.Gasless(
+                driver: GaslessDriver(transport: portfolio.transport)
+            ) { [weak self] addresses in await self?.portfolio.gaslessPrices(addresses) }
         ) { [weak self] plan in self?.plans.append(plan) }
     }
 

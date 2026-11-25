@@ -97,6 +97,16 @@ enum SendReviewCopy {
         ]
     }
 
+    /// A gasless offer's control (`cost.fee.payUpTo`): "Pay up to 1.25 USDC". The amount is the
+    /// core's own formatting of the most the execution may take (`display`, "<amount> <label>").
+    static func payUpTo(_ offer: GaslessOffer) -> String {
+        let suffix = " " + offer.label
+        let amount = offer.display.hasSuffix(suffix) ? String(offer.display.dropLast(suffix.count)) : offer.display
+        return SendCopy.payUpTo
+            .replacingOccurrences(of: "{amount}", with: amount)
+            .replacingOccurrences(of: "{token}", with: offer.label)
+    }
+
     /// The first matching fee state. A first send also deploys the account, and the user pays for
     /// both: one combined figure leads and the deployment's share is named under it. A total that
     /// cannot be formed (unlike units) fails closed, as the extension's does.
