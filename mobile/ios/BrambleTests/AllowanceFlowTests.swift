@@ -102,14 +102,17 @@ final class AllowanceFlowTests: XCTestCase {
         return list
     }
 
-    private func model(_ allowance: AllowanceView) throws -> RevokeFlowModel {
+    private func model(
+        _ allowance: AllowanceView,
+        feeBalance: @escaping () -> String? = { "100000000000000000000" }
+    ) throws -> RevokeFlowModel {
         try RevokeFlowModel(
             core: core,
             network: sepolia(),
             accountId: ozRecord(core, .sepolia).id,
             allowance: allowance,
             tokens: TokenPreferences(persisted: nil),
-            feeBalance: "100000000000000000000",
+            feeBalance: feeBalance,
             endpoints: PortfolioEndpoints(transport: chain),
             transport: node
         )
@@ -166,6 +169,31 @@ final class AllowanceFlowTests: XCTestCase {
         chain.allowance = "0x0"
         let settled = try await listing()
         XCTAssertEqual(settled.allowances, [], "a zero reading settles the revoke")
+    }
+
+    func testADisappearWithdrawsTheReviewAndReopeningPreparesAgainOnTheLiveFeeBalance() async throws {
+        let owner = try ozRecord(core, .sepolia).id
+        try seed([owner])
+        var reads = 0
+        let revoke = try model(view(amount: "1000", id: id(owner))) {
+            reads += 1
+            return "100000000000000000000"
+        }
+        await revoke.open()
+        XCTAssertEqual(revoke.stage, .review)
+        XCTAssertEqual(reads, 1)
+
+        revoke.close()
+        XCTAssertEqual(revoke.stage, .preparing, "no Revoke is left enabled without a plan")
+        XCTAssertNil(revoke.review)
+        await revoke.confirm()
+        XCTAssertFalse(node.posts.contains(where: \.write))
+
+        await revoke.open()
+        XCTAssertEqual(revoke.stage, .review)
+        XCTAssertEqual(reads, 2, "each prepare reads the balance afresh")
+        await revoke.confirm()
+        XCTAssertEqual(node.posts.filter(\.write).map(\.method), ["starknet_addInvokeTransaction"])
     }
 
     func testARefusalReadsInTheCoresWords() async throws {

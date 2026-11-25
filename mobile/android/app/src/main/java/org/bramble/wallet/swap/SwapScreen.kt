@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.bramble.core.DisplayCurrency
@@ -94,7 +95,7 @@ fun SwapScreen(
         FlowHeader(title(model), network = store.networkLabel, back = { stepBack() })
         when (model.stage) {
             SwapFlowModel.Stage.EDIT, SwapFlowModel.Stage.PREPARING -> EditFace(model)
-            SwapFlowModel.Stage.REVIEW, SwapFlowModel.Stage.SUBMITTING -> ReviewFace(model)
+            SwapFlowModel.Stage.REVIEW, SwapFlowModel.Stage.SUBMITTING -> ReviewFace(model, store.appScope)
             else -> OutcomeFace(store, model, viewActivity = { leave(viewActivity) }, back = { leave(back) })
         }
         Spacer(Modifier.height(BrambleSpace.lg))
@@ -184,11 +185,16 @@ private fun Meta(
 /**
  * `#swap-confirm`: what is sold and received with the enforced minimum the core decoded from the
  * frozen route, the core's line for each call it will sign, the Cost box, the risks, Confirm swap.
+ * Both actions run on [scope], the store's app scope: each changes the stage, which disposes this
+ * face, and a face's own scope would cancel the fee retry and the chain status with it. The
+ * model's driver guard drops a result for a plan the user left.
  */
 @Composable
-private fun ReviewFace(model: SwapFlowModel) {
+private fun ReviewFace(
+    model: SwapFlowModel,
+    scope: CoroutineScope,
+) {
     val skin = LocalSkin.current
-    val scope = rememberCoroutineScope()
     val review = model.review
     val judged = model.swapReview
     val quote = model.quote
