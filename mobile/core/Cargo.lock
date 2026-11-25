@@ -207,8 +207,8 @@ dependencies = [
 
 [[package]]
 name = "bramble-core"
-version = "0.7.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.7.0#267c3ec8829663e1b24dbf8eea1c64bcb45e5d9d"
+version = "0.8.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.8.0#511c0add977219fe792ef8fd0ccffa73e1f4a26f"
 dependencies = [
  "bip39",
  "serde",
@@ -1773,8 +1773,8 @@ dependencies = [
 
 [[package]]
 name = "starknet-wallet-core"
-version = "0.7.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.7.0#267c3ec8829663e1b24dbf8eea1c64bcb45e5d9d"
+version = "0.8.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.8.0#511c0add977219fe792ef8fd0ccffa73e1f4a26f"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
