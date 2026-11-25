@@ -1,0 +1,216 @@
+{
+  "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+  "password": "parity vault passphrase",
+  "payload": {
+    "accounts": [
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "accountIndex": 0,
+          "addressIndex": 0,
+          "kind": "starknet-bip44"
+        },
+        "id": "SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+        "publicKeyY": "0x42168e85622280f636c3a93e92f6d9daff6e49304b1e5676203feba109944d1"
+      },
+      {
+        "accountContractType": "braavos",
+        "deploymentSalt": "0x50ef5b0240983061faa3e6668d75cb118f06832d1c5969c4ff449b4be75037f",
+        "address": "0x75f87cf51f4f2b424621e20bf389f53f7de5001ec9da43f7ef458633a02500a",
+        "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+        "derivation": {
+          "accountIndex": 0,
+          "addressIndex": 1,
+          "kind": "starknet-bip44"
+        },
+        "id": "SN_MAIN:0x75f87cf51f4f2b424621e20bf389f53f7de5001ec9da43f7ef458633a02500a",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x50ef5b0240983061faa3e6668d75cb118f06832d1c5969c4ff449b4be75037f",
+        "publicKeyY": "0x1e74a1c8261cccd7b1cf881188c39b130e4e808be2de6a200797d7f228a91bc"
+      },
+      {
+        "accountContractType": "argent",
+        "deploymentSalt": "0x17f5e981239c0fdb714f27b79bfae0b96ae385e0806f1f938dd38b518a17840",
+        "address": "0x742ccb3791bbbf6bd471cb06c1136a4c45d12b3f75eab8e01939009d13f0e4a",
+        "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "derivation": {
+          "addressIndex": 0,
+          "kind": "argentx-bip44"
+        },
+        "id": "SN_MAIN:0x742ccb3791bbbf6bd471cb06c1136a4c45d12b3f75eab8e01939009d13f0e4a",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x17f5e981239c0fdb714f27b79bfae0b96ae385e0806f1f938dd38b518a17840"
+      },
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "accountIndex": 1,
+          "addressIndex": 0,
+          "kind": "starknet-bip44"
+        },
+        "id": "SN_MAIN:0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x7873b5322cbee02f90349e3dea6af8daa6e26dec9b13940b7ab7358617f32bd",
+        "publicKeyY": "0x36fa073772acf24db34409b0eb625722b049d2b6e0349d3f9c5c69a4eb27724"
+      },
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x6df2d05138d501f6aafe03c1d95b9ff824e2d96821934cd3d8148801865fefe",
+        "classHash": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+        "derivation": {
+          "accountIndex": 0,
+          "addressIndex": 0,
+          "kind": "starknet-bip44"
+        },
+        "id": "SN_DEVNET:0x6df2d05138d501f6aafe03c1d95b9ff824e2d96821934cd3d8148801865fefe",
+        "networkId": "SN_DEVNET",
+        "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+        "publicKeyY": "0x42168e85622280f636c3a93e92f6d9daff6e49304b1e5676203feba109944d1"
+      },
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x3098e4c64da6c76200f342fba2efb459b41de24a6d734f70c109232ed9fb1a7",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "kind": "imported-raw-key"
+        },
+        "id": "SN_MAIN:0x3098e4c64da6c76200f342fba2efb459b41de24a6d734f70c109232ed9fb1a7",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x6170371d3bd35fbe266e911cf223a794562204ec037459d057c82f9b6615108"
+      },
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x340cfbd6cf1d384e7029ccd7cdec84b22b53d2fcffdb005d499e580ec361069",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "accountIndex": 0,
+          "addressIndex": 0,
+          "kind": "starknet-bip44",
+          "seedId": "phrase-1"
+        },
+        "id": "SN_MAIN:0x340cfbd6cf1d384e7029ccd7cdec84b22b53d2fcffdb005d499e580ec361069",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0xb7ff7bf7404503b6df17fa28ea02dd529e58ddd0cfb3232db83ef27630f6aa",
+        "publicKeyY": "0x403f8f345048a2a3da2f834a14daab97f61e0c0dbb886a90674355f5b29c5d2"
+      },
+      {
+        "accountContractType": "openzeppelin",
+        "address": "0x74a5441b12c064a2e5bf795b5f17b9ea153d4ce83bdc881a0d712ee477b7d89",
+        "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+        "derivation": {
+          "accountIndex": 0,
+          "eip2645application": "LedgerW",
+          "kind": "ledger",
+          "path": "m/2645'/1195502025'/734980059'/0'/0'/0"
+        },
+        "id": "SN_MAIN:0x74a5441b12c064a2e5bf795b5f17b9ea153d4ce83bdc881a0d712ee477b7d89",
+        "networkId": "SN_MAIN",
+        "publicKeyX": "0x122b2bf2ff728bdda6fa438e90fc06565fc1804d2ec0941e4b073fe9c0ea407"
+      }
+    ],
+    "activeAccountId": "SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+    "originGrants": [
+      {
+        "accountIds": ["SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9"],
+        "origin": "https://app.example"
+      }
+    ],
+    "schemaVersion": 13,
+    "signingKeys": [
+      {
+        "accountId": "SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "privateKey": "0x78936b8dc426c649fccf3a9a8022b9795bdcd558dfb83956d66a25ae76992df"
+      },
+      {
+        "accountId": "SN_MAIN:0x75f87cf51f4f2b424621e20bf389f53f7de5001ec9da43f7ef458633a02500a",
+        "privateKey": "0x945930502a7ab15a3be57781cd02098e137e0120d5d1d63ef04b685468b24c"
+      },
+      {
+        "accountId": "SN_MAIN:0x742ccb3791bbbf6bd471cb06c1136a4c45d12b3f75eab8e01939009d13f0e4a",
+        "privateKey": "0x58b04965df26c28c2cc3ed4228ce76ed503f098ee6a773792b623f3a457a164"
+      },
+      {
+        "accountId": "SN_MAIN:0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "privateKey": "0x677245b98098108c724e9c42272d0ab6361c69d48aceeebdcf4a12ee71e5a6f"
+      },
+      {
+        "accountId": "SN_DEVNET:0x6df2d05138d501f6aafe03c1d95b9ff824e2d96821934cd3d8148801865fefe",
+        "privateKey": "0x78936b8dc426c649fccf3a9a8022b9795bdcd558dfb83956d66a25ae76992df"
+      },
+      {
+        "accountId": "SN_MAIN:0x3098e4c64da6c76200f342fba2efb459b41de24a6d734f70c109232ed9fb1a7",
+        "privateKey": "0x62ee99be480699c5db946e1a6cec1e9596daf984823ec045b758dbeb6902c3a"
+      },
+      {
+        "accountId": "SN_MAIN:0x340cfbd6cf1d384e7029ccd7cdec84b22b53d2fcffdb005d499e580ec361069",
+        "privateKey": "0x49ad2aeccec5cc04038494d378717b5ad1f42003d5507f840da0476eda6c3fc"
+      }
+    ],
+    "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+    "accountSecrets": [
+      {
+        "accountId": "SN_MAIN:0x74a5441b12c064a2e5bf795b5f17b9ea153d4ce83bdc881a0d712ee477b7d89",
+        "ledgerStrk20ViewingKeys": [
+          {
+            "chainId": "0x534e5f4d41494e",
+            "poolAddress": "0x40337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a",
+            "scheme": "ledger-strk20-typed-data-v1",
+            "viewingKey": "0x6d81cd2c64e6b702593f0a3acefc911e2830c7c8a71ba438eb5b5343f2650b9"
+          }
+        ]
+      }
+    ],
+    "importedSeeds": [
+      {
+        "id": "phrase-1",
+        "mnemonic": "legal winner thank year wave sausage worth useful legal winner thank yellow"
+      }
+    ],
+    "shadowAccountScopes": [
+      {
+        "accountId": "SN_MAIN:0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "anonymizer": "0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7",
+        "chainId": "0x534e5f4d41494e",
+        "label": "parity",
+        "nonces": ["0x1", "0x2"],
+        "origin": "https://app.example",
+        "poolAddress": "0x40337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a"
+      }
+    ],
+    "multisigStrk20KeyConflicts": [
+      {
+        "chainId": "0x534e5f4d41494e",
+        "multisigId": "SN_MAIN:0x28417e292e102205acc710013171cc42ff60afde90193b1c57977fdec5501c0",
+        "poolAddress": "0x40337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a"
+      }
+    ],
+    "multisigStrk20ViewingKeys": [
+      {
+        "chainId": "0x534e5f4d41494e",
+        "multisigId": "SN_MAIN:0x28417e292e102205acc710013171cc42ff60afde90193b1c57977fdec5501c0",
+        "poolAddress": "0x40337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a",
+        "scheme": "multisig-strk20-shared-v1",
+        "viewingKey": "0x2fd03f47a278a07b0db8dac18e3f33407a89417e9d280b60e8ee1ccfc61c9d7"
+      }
+    ]
+  },
+  "scope": "bramble:encrypted-store:bramble:vault",
+  "sealed": {
+    "cipher": "AES-256-GCM",
+    "commit": "itTK2HsV1hJrREwEsBvF2A==",
+    "data": "Ikt+buHRsmiBNaNxsInx092CLOTO75mRRNq3Td9x5nAVkc+6REt1+suprNGaAKBTdgSvQEJ+DHrKyyStcYkVVKVmnYWb9qCh65BRlduhhwLYL8HrWEpSl39nZdQ36/Po+bpPXHIYr7qM0PHKzCRS4cbnY+f9m+0aNRN3nJtrvU+hKYq1MbSoOnF1bNNS9K77VyBNwtExsd0lI3wCOEqYw2n88/lrwsIPwL6Cah4LM/KBBohoCJFsD3oPWZ0BIqvaqUll/tPjzmUVsU0jtg/xuHPEDA7Hu5hWAJeqb3sfTAoTEZ39sY81TmsmPJqu5ekSP/7+9NwwzL/bzJ0TkNCKnWkxf1w0jetufXAlKicP5E78SEs7L6JrOZ8X/d6JzwU0IygITsPz1p7rCgPL3OIaVk4gdxu9hyUVM10R9D8/Ic2CdAydUy4YO/8J6gMThepLEQgNlgFcw/01bdqfaVh6D3TG3A138a5wapHs/z55wzcaZXT2gcO3NjYulGgUZF30HSWXrexjEzr/aF8wuQlebqoMJgxQ5taDhPZ+PBh8/n/NHiFCdlxgBrSHwEkUaJceJST72V6Hh5TYil5r3zUkkdIVBLaqqdfwGf9pP1/Uhw0FBuDzgmVMFfLGkx6qV2SK+BhOeDUOcLeCMuVk5E4nKKw6vYDF5b9QRMeKf24jwXZrSfCG9xbNgudU7DUS4lH4vyeamOd4sp00l/5Vyh9up8a7Za/Tuh3Fmo3xYhal7gpZCedhl1Vr41JcEiNV2GmSIlLGMsfy4u4uSdcvNZPeiODTY3Z7MVQBG95oOgPDBOJLYlSop+/qCOwz25dUn8sU0NQaHpmW5KjxZeQNhHy+uetzyBsNyerJJjmXAo8B6tz2Zc5gbzDGyxShgXN4IwX0+CBjwTWDNS/TQIlnbG+Ly+lzyjnSxhG+yWVhVWusfxtsrU3qHdFWkqsu90MUkKvK/DMiyG9cIky1RUEep76zhbc0x8ntNH+04R50nOVrAMZEZk/HQdQgmie5L/djf9D4iv7f0BW6sAoRTA5hTIODNkuKHi/aa9ysddV1OfJAIJ7l9nElboUEdxPW0BUmmZd+/pDqXePZvZ05I4cBfStrLmNca/I5tSqupiKeVDn7MGpVr9tPI50GvXLrrmlZxe8goLRLUP8Z81u44AOzLeYYOIddB4g2YQSbJ8NWk1yO29qcoTWpTAJZjHLAf/UwSEqhalvinH1pguUeLg4g3fV2rdamJs5Lsbger2BAqoQ6p6SAeQ2ET+Qsuu5E73I2awbMDHw9RNWokLacF9MRCKdhcP8y/wtAmsR03Lq75SIjO0nL/4Lwjitnq6C2iZXR5q5Trqw9gIrjnxLuUm/1xcaWyxYQhfrnOoczF9hb5+UhmnlqDEV+pJUr8XbLkcG9ECxo3/bqCnA2tZ30mMuMqU0vvp3vUt4bfTcHiJ9/zUZrA0IutSH8wnrIrBD36zYwyziwH125T1V+WYgnTkuZWaCpsEzNLfcCkkCPbovEFOmTIN6fLUvE/exyC2p6wMKI9Nvg5N6tdB7mbas/sYDjiGVZ+bUrUhPZhAI9qXKeHo5steDOyc3bRHRgROlz9F9yK7o3BdnsL76XCenrMG3g8gwSaWris8/4iW1xzaNSS8bjdsVPu0Meh8F9mpqn41ViKjxRMRm7f7cJ6CBl5/GEuK27PuYFqgqZ1uz+2Hb4xtQi2kX4OkArlOIEfQa1E3EPAcmrQAfdK10/XlHk3p4CC3Ma8RGbEXuWx9Fo1iUymLcTwI874J61NwFBbl7LK/MvpndP4GFJT4ghgLyHi3XW65lUcAEv4Rl89ui8HMgpAQKY27fXVUjxFs2SlR7X/CNFckH64xJMlFFSlOunObt6EEnA3w36SDS1WTkv5Q18vlZbiq3LoRh+MVVZHkW1lA1ExBSBaC+gexjKJTG7j2atZahYdrkD0Q/6ovyr5vPGVZk8JfCO9xiyDyarG1fZJLXyrFm8EAg7gXn7YJHnLKo5drBVpIUGRIyfi48XlYj6UdN6H+uFWO3jlq40kcGskgRwTvIx7ylcDlCjKJ6w6rjVf5sbxdG+WpTUmiyN4VCQWwhQefzuDwmnB5+L57R2v5IFvKDssCxOoYz61Tq46MdkwAk3GBH4H2NzTIfXUNZFduBDeIj/Zc2DjLM8p74MB0yargqqpBfESRCWHIzmHEtvujT8pi5dsuAoNp5OH4zwcOW39AJIsR4wepGF0q4NYwEh5Ekox/ommoMZoHy0SdPU358//AqOVky+T9cdoo971gZiysCBrZYcuNnLMkB9yZf0m/FVT+9tl58T6TResJaWSktpzk8NJJnXbvv5b1Q1nuB7s88rQ8XGuKG/16NUmqFrjh8Wxy4+Dl/mSkXMCtzMSQS9QWWkHY6C9C0ZB3YuKBpTm/KkSgUVSEwLmn74twsbO8Tele7PNwhp4zl7F2A5+DFy4agmwpG8YOCtuFDoCCqouOLdXoFwjNewIFD2GfbiPm/feKhw8hWiwgWlHUe9vYA9igLiLhDLpDIrKZmhxRWeCTwQ2PWnuYK2VWLjCxabiEINv1f9Nnw8SKyRhvNEaQ5gNZ/bWd9kaFrl3nlYkSCMB/kpuzqUWtfPZaonuQ97BE0K3v4J4cJiCpmG8pXhlt8PZop4rTa9E6Am6NMMBm879073bVzxbPUwEG4IuXPvKuuqKDwzCXDYu8zfFYAvSnC8yWXlwAC68sq7FsA8cowXHgCL/LJ72USmp9jxI9p4zr5bXBme0pD5VVaLu9LnOUBPAE9V2La9dPs8/DgIdKYdOom+aKVjmdkLcYQD2qBK4QNwYLCXRSZPesuNnF7L7jtTpJDQlGZfUOdaYCi1JkSfO30eOXwB/pgK2+P61PElJZOeQdHQ+hV5GJ1rrFoRA4lS0jGK5+wnF63vR4Al8afhVWlP7qZmwPqj1twMs5ONArV/ma2F7tZqlifc4X0x2MRH8dOn3Y/UaRj6nW/QeWf6KmDDWWKE9bYSAsKMhz8L1dYYkST6cq5JU1Vqv/KlasPCLzuMESyEI0+aHlVH5So9b0OrM4PheHddddEKjleKpKD8vjVEVrAo/26y6jzzHY78R5CIxwQaEDF00pGibx1pl6pavBbzIvpilf7R7ip+z3FGjtTmoyS2feVFjENuZwFKkvAnxnPwdKWShRmWjEV+15Eh4UbMzjhIMqhucWwalbZ0pvlKmUY9RRQ/sYfeVOeORIWgv1ves9VpC6B/ZlDt4O/lSpkE1KOFK7f2SFGCQ4R26QC7L/wBmPlG/Ei3e7hl/st+kkKzzgA5SZpxjKqN0uY6/lc9NV26mlWkFP5cUYjDpryO1cViCSe5NjTFg7PZza87YWlp9gljSy9aYgQD+t+fF9oOTRIW6WwFmy2ymZluFGdjpRnB/I5TQkJvIpHY7K5oNSUl7dkwKC9BQlHosUK/xiZX4qfdNCm1HIYJ8j8wqT/DgtpsCuY3i8onRqN1BLYwB3l8FneFtr/FUVd3y22XPAQvdIpBcNu3oyp4DdcakjfYz9o1dMoe9HGp7jkF8PVjnApyzEfOYHPJ8MACY2DZ8gICgBPeyn+jWOawezfvpGOMkq/k0w08oD1P8DnUHCXzCYuzTt8AJzChJke6SVhKy98vLKTI5beq+wq5sDPya/txQIld3EcJu7esRrd8E3g1odre003GXI2R35x1s5XL3li50qUpHoj3mKylUNsLgjCgXsIPfcURddErkzgjsdA9ScDRL2SpleJiOm/g6pG3pyZyVYJzfW6Iv4WV5QMOHrl34MUVijCQQsIF4NbQTcOkq3wfsh02EA5pichWCJcpTnJuj059GijT05vYKZLB6x32VmZ4qFZ17e2W5NDaKycpyuByGHllqCKeLvkRfWXecmGvNuNKZwAQC/Kx/frBQUhKfIvrgIJ+zbsL7BuQ4+X8MrMZfQSJXxYSkcB8RQ6NzbqdaFAhf+VJOiKNOs9we35OW3sJQ54Ptq6eudu7UaVcREN5JiXoXF52UG4RUWT72B0DVPM5/hexk8ujQR9kS0Je0V+6M6sEuDTQrd6Ep4OBR8fwtgBLy821evJm52pzAbqM6WCFgmjQXjMW+k+6q1WLfndEyhmmWYbz1zen+KN0kHqbMDKlULw78aUp7/42YOiSDa5gJbEuxevr7/EBOQCt6xFfxw+Kr/9KGJG69hvAlkiZBQtvhg8hhM0vkVL/49p1mqtum7i0kaLkxo4fircQTNGIXMQiMzvOEDdw40mIixUz5EeLZ+BApAXxSkWsmdMZcDZWGV1Plg7Mk77jmJ2FRlAVxK5JMurmWXKWui+5kADYQt81lrO3GhBXQGL4/L67essgPUeen+3N98lf8b3yUCL9DSO+JIuYDMZWORl9IKzj8RiYCkv4EGIcpSHqvjYj18FCLwQPljg5KWwgjREWASsGpm1bLYmcvOjZ2PmD5YnrcwNvXfakde7N9svs6bM5mgki8KSvKhTZUURmZu+GOzp7but2agxivx/0MYCNNMyIoM6OvAv2iJKtgeK20RiJPYQXFXvowscjWHXbIjZ0runf+wfu0EOCI6DHALAcrNnNeCejDak3ZvY1ZbutqCS3uhTV23WA564O9NQxuaCdoKuoj2E/W2dRvox9QNZB9vLOgjC4EAM8yFFjyHTd0sJUaLAraIoF+TEP46ZC+ob4PraRXQo2GzTkn6k65Mo92Hs23NMaX1ytXk1cZ5paK++PuExelO/kpAUSCh8zkGtx9mQKFTa3HMQqtlACZ+63JvjWB91EeB0/eCT601UNinxfxS2Dqm3PheyGratWCzDOsaX5yNh8pQ1+iZsWkFxvSjCP47Q5zqXtW7qzXwGAuczPvgg9vqYDVfTr/kRalYB3ZIx6sa9r3wQtd2eBknagKszHqw+AQuQxRRJO+bALrx428E1Bc/uiWv4yv5Qs4QlL0h1fCeMI7b+q2agfN8prj7KjDYGa61V1UQS+XqbjBo3l8vtfESNr09VXxqwBRNGSABXRSBiyQ9YL361dC/nENa/ZQeXshaybXzXgupUgb5lAgD2gtKHBMnIIbLgf8QIDEWJhtCLPXzNhiY1IiWrTaBnBdLclYEZQX3Hz3nogccDpXXrMo/2xKW1iWo8SQFPgKOb1mFLKtWZauQdak3aDqAKV81dtCaYsjHx3T2UvhiyXfXZwDUv2H5UWUV5sTvF2RINlUGqulTXIsvklfCEJ3x8bdIrVzuECpkaEMKaW84TJO4EEqmoidrZzs1Bd+i0w06mCp6S314KIue6igLp8RgVzYLwGSwNm2WG7kGOmEvuqpip14mYbVhKFk6puog/WFDpG/EAFIyUSmn60b46bn3ndcMQS/NeBU834laNggC2XQ4YYdyQqc2emhDBRZw2Y8VgHV3DM3mkgOP9pfcJFxqJRohgSN+i6L/fpyExGjbjnMarJnRiGHDPS2JY7eKE1MrcK0gIu+3Y/yBM9XQ7mIW+djXZatKQg+7YsPm/EkgNDP4xC0bZILdhNrdRtPGGZoWQ4f4SgohbG9b46xdfpNpHlQGOzVXlcg7idUuluDGLsoiC+V+0nIT4/gle2YiwF5ZxrT7WyN7IELes0Y7NORw+uj6u55AplATC8eMGEo7RwBRiOnXf9hV46gX9uIcTmElivVT8uQKuJ3E6SplYK2Y9wj0YunLYQt+6KCrnDx+hhaPzU8gJ4hDfdHlf6fAKqy/sFhdUm4zWXE4TeLDZSEVU5tuRjxk6SMMZq1dl1ziua00S3YXaGZWfQuvAJSlJq6qZMxWZ9/sUgHdbXWE/AriJqTmiaLurvTVC6JH8pnw6xoiNMP8c/Us3ZL1YSDiEemLdkExf17lDASOth3hr5/mSu6TP4d6D6G1R2/tTWUIX8o89HO/qF9ogIKWk33QegvfE+Z2AjZfxSe4hHvYAUM+7N6XIQuiIxC3RjBXarP82D8Bsf+AlEWvzV6E8w05i3M7cwLEgKJGlnldQJqnqLWmjkWz1TQDj7JpJDVfzjcUMpuqfnJzlvJt4sPS8KtOOKm6hM3YhOw0euOKvC0bEBvQKo13SOQeAeCiEsUxs5kAYkIgw5THUypbDqvi4Ol+GBzRQKF3KfCnkC8KkHXPyO74ZzaNFYoW/4E4hOkvjH/zWwtv5qbyNkgm7keZIU4Lj9f0w/kbEUzlssjfB7yJFji2ZDcHpDROZT56LIx4t1Ntu/H5wQ24AOhe9t2IA77BDhboPrcqfSlYG7A/L76EF56s1wwm1I0IO8DK0mH+7m53DY1x/u5dYC+w5tt256Ot0w3kXml72J9isX/sGDxv0i8MT2F/TfsVYTLd3tGlrd9EuAboCup98xSJZj6qKJIaABSR456YdTY5lD/1jUfuNRFA4/pj0D5o7KK5naj4IKZJ1uZOi+ojJvMrWwNpNiVnkt/rfKuPNpzeDcLuF/R3qeFFxZYfNA8BhKHAP3ZMhIvSz6vVa28WwJtdeCMxddnMzCzSxNDiOx0b1Tb60F+WytRz/5nTqhaQBgRmVDdvbU1Gyk0J//G7MxQIuSnakP9EB0WlYGM+aDCTiPVKVwLToBgzF4dGhC+52eyU6z0Z66mnlbLa0WZ2zQp1UOTL9a6d7lQQZi1zjCdJKSJ0qZ0ApISGmABXNilmQeZofFg9D3hbfdyXU/kUfjZnFTkje81oZtDnFGSw1Nbk/9Ri2MvvY03vYRhzGDuUIsDlOt1NhXujb0CT5YtBk409CNT7k4Jp62CrBjvdllIQPRf9z3fel5xqShOv2RiqiVNz+lLGafbhrrzH3exklFIj9Wd0ztgkd2uaY86k49G1favbIWMBYm6JAtEc8HJybN9GZVJg7diekYRWbcxC2YT+OiW160ASlnkBUITyysGfLKFF6FbkypfiGOhXval6GhrEaC58W0IvoTkJj8Xckc6Kxl/S6KedgFYRMQW0KIXGgcSOpZt0fCP09UPJ4ystpeVWC/dKf2mMfdWmnJC3w+CPCRMyPZZK0K+85XrWV889h+3aYm6LmkoBdYvz+wEkcFGqiunwjYorOroTU90eC8fspNS5m9e2RI3961yuGLqRT1K0ZiIZCVCvpqEOz0vam1I0OggWw2CpL1/XAsVqtT/k1uAateh2OFHCa+fdadIuSjpisZxlAUghdilDilD0NCXHy9/SjhMYbPzCnothmBHqg1jjGI3uinYKRct3ANYPhXmSwddcUZVDmiTd+ASKyXBAW8GkLx6+fwPJybBEPBfyBTiOq4qT9cjCgrqVErL7YnuIABE1nafCCWkljhpFqWzN8yNMG2fej7TNp/kNG8qdFeSfyvgS+vqLrsWhcuASj0qbUNKPPgW6RTEBmtJglBw6eGVrJ0M+h/BAOe6z+oBLbf0KvlAXuAj3leKM6U6dm0m7azS8PsZCONbUoVjFNtuCsdyXZEGNNuAVjiPzKL402E9ffhl9joZyIeB2IW+46gJHwi5tP9L5u9WloG/RMolst9/1nUSSTZqXLTQ1EjR8/wiaeaW6BIPYUbabZ38R4wxuuyl+0oXAAZqhKMJUrTs1hvGQOb666PpI+kVZgFg5lJy5q0CGBGC5zK+aX3VF6vScjPlN+gBI4ml1c/tTFK9OnlLN3KSyqsHHLHJluAWFGfooh2tiR2HPr4Ly0uk4pPWBfb0/Hv5hoOrketHVv3UIra+W4gOfjEE5F26G5rVZ8SdJxJC/8rMxssVbRenXOevL4/BXaj6qBKTuLFh+GNgurGxQNsBBKZ3AB/+GF9cByB7GmM2RU783LIHjR/14CDAN0XP7X5g3QUjBTzHof6fyjAsS+wYyV8JGFJ3jsBUEiteHKP6MLdIsuHgGnXc3YDHOUIAkITM0u8r9iwoxaIxI8ofJWE/991VIsyDzsDaNjopnM/rn494pq2HiXG8dAy5Z2T6aT6YWZaAAvWuu2tASw8QAXsXJtC/jk+9mCPzCg/wpUXl78pUsZKK3PDNZnoMtN8GUMXkOt5NF2uFB1i+NaL76wnforb6cD0Uz5FMWg12TVp4bIE/XrqfbodNjZ5w8/hGk7Nd8oraWZCNPqBXA45w84jBlrZfeGe094GVNZBReHFqedtlrGDksoHQL37dod8vWCtSZhVqRNLOFswbgXLGmlIKDgEMxgEUZkqAxoGAzSh1jkeU0ybuLTOxFqN5Pj7I8NADeVuwFmObtI9x+nwMsHN5NejWAQ4ZWauKcYwPEoVlBXtvSGKztZ8DoZc0dLkjLiD77n6p2/SMih7+6AqFDnAl2Jtqrb3nwZ7elFxSKEHNu687F5fR9A3WK2cRlRHvs/9CTlwG+Cv0t4WTrSKSMCZ9zUmlB62UHYeEdSM1YE8EX7+5mxADISTElV2MXBump7IeFKAVvkoTGSITVO2QdopeTvn58tqv3G1rb83Re9k37Xyr2Vi+3k4bVr9KS1cDCF0cN0aZ15opW8LP6Bt3IKhZfAsshpKChCr8I8uQj4nQuATNSGFaTi0q3ko7huusLWufTXP9zeelb+qCZej0LxF4Rpw34FHonETYtpt+cm3eGSw2hhxIRfJV8MC//5jFQx13e3rGMA+30x2z8gEz0EuvMoMKtLXHT9ja26QmzwS1f59ejMDePiI83c27PWT8WAjrSUAmkHFSd/oSwaS2l6TlmmPlMKJTlbq/YquF8U1dR7ROGNasoMj3PwTi7D0w8ozxSFgoDBhNrYMm9FftYtICPsbgMt8+zprCE9/iDGv6Wiui3hS5hhQQ5BIc6v8XKttXMF/obDQO5ylE9Fp6R6OyCx9mQl2sUfxH/25D9yWdzLHwX647gZJUX7CscQICHvDAg1p9G8ducq5RrfVXiPWKiI8qfergDfOM0GMFa73APrO52tM09OLaoKb8T5K48yX/9iM2vyqm91gXmFvEzscQmAzPZQxt7oE8BLLwPS1fKVs55FUo9+oMlbaukKIwuva3L6vorCADeIc8YDJLomfHqhYcM/1dpklunILIGKdAFG73wbVRRwdVUb0b5NViV5TBqvHpec1RHBZHrKuLJeZTdUilPO8V+k0ohLua3409sICCUjyMplHYLkw1+jogRTa+J+eyLlxb8gXbfxOMasTGvXU/XDCE+IRWh9U4tT7Q8d37Q8MnEdJw9qQNEje2BwGfGEQENYHnAS3DfdOioHF1xraIZV+S3KXQjbGwSPN6p8fpHEQQyDk6yI7gkKb+iKZQehJg//xWRpCUQW4aTCa2AyFOawlknBhneMjyoKHc2mKx5mrL6ZnQpk7ypadHzfi4svtjb8wXU9FG4xuZN2kgYeiEMP1vv6Ads73akslg1zhh6TIeOsMKSo2SSJWDTremgFNFwJiPqUyXYw04lBKgtdCHF0U4LZXPdqM6KvhgKMp9/C86FcKgbptMYqplf/nZw8NWNvuOaJIxj9RearpZqUqmSl60Q2MBVeNZO1CkL+9MnB6N9j611t65tSgf1fY5wiLzlNHeRbRkhhN+DSFPLiP2PQLiJ2ArclAhEnNbum+1YKvVYuxtXXe6StQCDCcCouS4R+A5WHrSuqhveX8I/l2VO7a3FkWpea5duy8ITPaSZZthAT/fHhz6MbtT5UZPQnSAqUdqAeSInV8tbM5EzumDW6KKyK+kSBjEa8KWCfmWskYyMzWApGDKxcm/BxlUuxDr63EEObPyN+cEecOpMYZMCbgqR4sPKuKta5MZkq5FzdD889G+Mj2ziMv8PNs",
+    "iterations": 600000,
+    "iv": "C+tNr/pGTACpVj89",
+    "kdf": "PBKDF2-SHA-256",
+    "lineage": "ac9192005f798b28e497571953cd3dfd",
+    "salt": "SP/oEQZHWaQMwYYbeACbKg==",
+    "scope": "bramble:encrypted-store:bramble:vault",
+    "version": 3
+  }
+}
