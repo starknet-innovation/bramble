@@ -79,7 +79,7 @@ final class StakingModelTests: XCTestCase {
         )
         let row = try XCTUnwrap(view.rows.first)
         XCTAssertEqual(row.figures?.state, .exitPending)
-        XCTAssertEqual(StakingText.positionLines(row), ["Unstaking 3 STRK · withdraw from 15 Jan 2027, 08:01"])
+        XCTAssertEqual(StakingText.positionLines(row), ["Unstaking 3 STRK · withdraw from 15 Jan 2027, 08:01 UTC"])
         XCTAssertEqual(StakingText.buttons(row.figures), [.cancelUnstake])
     }
 

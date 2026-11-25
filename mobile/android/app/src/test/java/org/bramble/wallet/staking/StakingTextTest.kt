@@ -56,7 +56,7 @@ class StakingTextTest {
 
     @Test
     fun unlockTimeIsFixedUtc() {
-        assertEquals("15 Jan 2027, 08:01", unlockText(1_800_000_060uL))
+        assertEquals("15 Jan 2027, 08:01 UTC", unlockText(1_800_000_060uL))
     }
 
     @Test
@@ -66,7 +66,7 @@ class StakingTextTest {
             lines(row(PositionState.STAKED, staked = "5", unclaimed = "0.25", rewardsTo = "0x777")),
         )
         assertEquals(
-            listOf("Unstaking 3 STRK · withdraw from 15 Jan 2027, 08:01"),
+            listOf("Unstaking 3 STRK · withdraw from 15 Jan 2027, 08:01 UTC"),
             lines(row(PositionState.EXIT_PENDING, unpool = "3", unpoolTime = 1_800_000_060uL)),
         )
         assertEquals(listOf("3 STRK ready to withdraw"), lines(row(PositionState.WITHDRAWABLE, unpool = "3")))
