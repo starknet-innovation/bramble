@@ -1,5 +1,5 @@
 /**
- * strkd keeps its agent accounts on hardened account index 0x41474E54
+ * Bramble Companion keeps its agent accounts on hardened account index 0x41474E54
  * ("AGNT") of the same phrase, deliberately out of reach of a mainstream
  * wallet (#336). Bramble refuses that index at every boundary where one is
  * chosen: the shared index validator, restore selections, manual discovery
@@ -23,8 +23,8 @@ const mnemonic = "habit hope tip crystal because grunt nation idea electric witn
 const RESERVED = RESERVED_AGENT_ACCOUNT_INDEX;
 const NEIGHBOURS = [RESERVED - 1, RESERVED + 1];
 
-describe("strkd agent account index (#336)", () => {
-  test("is the ASCII 'AGNT' hardened index strkd specified", () => {
+describe("Bramble Companion agent account index (#336)", () => {
+  test("is the ASCII 'AGNT' hardened index Bramble Companion specified", () => {
     expect(RESERVED).toBe(0x41474e54);
     expect(RESERVED).toBe(1_095_192_148);
     expect(RESERVED).toBeLessThanOrEqual(RECOVERY_SCAN_LIMITS.maxIndex);
