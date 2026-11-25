@@ -9,13 +9,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// Absolute path of the seed file the scripts read at run time.
-const ENV_PATH =
-  process.env["BRAMBLE_DATASET_ENV_FILE"] ??
-  resolve(import.meta.dir, "../../.env.vendor-seeds.local");
+const DEFAULT_ENV_PATH = resolve(import.meta.dir, "../../.env.vendor-seeds.local");
 
 /** The seed file's lines. Throws if the file is missing. */
-export const envLines = (): string[] => readFileSync(ENV_PATH, "utf8").split("\n");
+export const envLines = (): string[] =>
+  readFileSync(process.env["BRAMBLE_DATASET_ENV_FILE"] ?? DEFAULT_ENV_PATH, "utf8").split("\n");
 
 /** One variable's value from the seed file; throws if it is absent or empty. */
 export function envSeed(name: string): string {

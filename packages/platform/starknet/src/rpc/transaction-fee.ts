@@ -4,7 +4,7 @@
  * reviewed. Read once per transaction, after reconciliation has seen it reach
  * an outcome that has a receipt; a missing or malformed fee stays missing.
  */
-import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord, ownField } from "@bramble/core/json";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { isTransportRpcError, withRpcFallback } from "./provider";
@@ -30,17 +30,18 @@ export const isTransactionFee = (value: unknown): value is TransactionFee =>
   canonicalFelt(value["amount"]) === value["amount"];
 
 /**
- * Reads the fee from one untrusted receipt. Only the RPC 0.7+ shape
- * (`{ amount, unit }`) is accepted; a bare felt carries no unit and is dropped
- * rather than guessed.
+ * Reads the fee from one untrusted receipt. A plain JSON-RPC body and
+ * starknet.js's `ReceiptTx` both work, and only own data fields are read, so no
+ * getter runs ({@link ownField}). `ReceiptTx` needs no unwrapping: starknet.js
+ * copies the body onto it as own fields (and drops it for an unknown
+ * `execution_status`, which reads as no fee). Only the RPC 0.7+ shape (`{ amount, unit }`) is accepted; a bare felt carries no unit and
+ * is dropped rather than guessed. A missing or malformed fee is undefined.
  */
 export const readReceiptFee = (receipt: unknown): TransactionFee | undefined => {
-  const fee = isRecord(receipt) ? receipt["actual_fee"] : undefined;
-  if (!isRecord(fee)) {
-    return undefined;
-  }
-  const unit = fee["unit"];
-  const canonical = typeof fee["amount"] === "string" ? canonicalFelt(fee["amount"]) : null;
+  const fee = ownField(receipt, "actual_fee");
+  const unit = ownField(fee, "unit");
+  const amount = ownField(fee, "amount");
+  const canonical = typeof amount === "string" ? canonicalFelt(amount) : null;
   if (canonical === null || !isStarkFieldElement(canonical) || (unit !== "FRI" && unit !== "WEI")) {
     return undefined;
   }

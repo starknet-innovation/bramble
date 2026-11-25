@@ -11,17 +11,18 @@
  * proof) and is executed through the shared one-time preparation path.
  */
 import { WalletError } from "@bramble/core/errors";
+import { strk20Lines } from "@bramble/privacy/review-messages";
 import {
   quoteStrk20Actions,
   readStrk20RegistrationStatus,
   type Strk20SubmissionResult,
+  strk20PlanText,
   submitStrk20Actions,
-  summarizeStrk20Plan,
 } from "@bramble/privacy/service";
 import {
-  SHADOW_INVOKE_ANONYMIZER,
-  SHADOW_INVOKE_SETTLES,
-  SHADOW_SWEEP_SUMMARY,
+  shadowInvokeAnonymizerText,
+  shadowInvokeSettlesText,
+  shadowSweepSummaryText,
 } from "@bramble/privacy/shadow-account-copy";
 import {
   SHADOW_ACCOUNT_HOLDS_NO_TRACKED_TOKEN,
@@ -124,12 +125,12 @@ export const prepareShadowSweep = async (
     plan,
     poolAddress: config.poolAddress,
     recipient: owner,
-    summaries: [
-      SHADOW_SWEEP_SUMMARY(displayNonce(target.nonce), activityOrigin(target.origin)),
-      SHADOW_INVOKE_ANONYMIZER(listed.anonymizer),
-      SHADOW_INVOKE_SETTLES(held.map((token) => token.symbol).join(", ")),
-      summarizeStrk20Plan(plan, strk20FeeAssetFor(context.accountContext.account.networkId, plan)),
-    ],
+    ...strk20Lines([
+      shadowSweepSummaryText(displayNonce(target.nonce), activityOrigin(target.origin)),
+      shadowInvokeAnonymizerText(listed.anonymizer),
+      shadowInvokeSettlesText(held.map((token) => token.symbol).join(", ")),
+      strk20PlanText(plan, strk20FeeAssetFor(context.accountContext.account.networkId, plan)),
+    ]),
     token: first,
   };
   const approvalContext = await createApprovalContext(

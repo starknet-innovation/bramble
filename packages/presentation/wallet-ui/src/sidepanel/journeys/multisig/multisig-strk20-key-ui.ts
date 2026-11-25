@@ -3,6 +3,7 @@
  * background; this surface only shows whether the wallet holds it.
  */
 
+import { t } from "../../../i18n/messages";
 import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorLine, showToast } from "../../shared/dom";
 import { sendBalanceLabel } from "../send/send-model";
@@ -56,20 +57,50 @@ export const showMultisigStrk20Authorizations = (
     card.append(title);
     for (const text of review.lines) card.append(line(owner, text));
     if (review.offer === "sign") {
-      card.append(control(owner, "Sign", review.id, "msStrk20Sign", handlers.onSign));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.sign"),
+          review.id,
+          "msStrk20Sign",
+          handlers.onSign,
+        ),
+      );
     } else if (review.offer === "share") {
-      card.append(control(owner, "Share", review.id, "msStrk20Share", handlers.onShare));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.share"),
+          review.id,
+          "msStrk20Share",
+          handlers.onShare,
+        ),
+      );
     } else {
-      card.append(control(owner, "Send", review.id, "msStrk20Send", handlers.onSend));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.send"),
+          review.id,
+          "msStrk20Send",
+          handlers.onSend,
+        ),
+      );
     }
     if (review.refresh) {
-      card.append(control(owner, "Refresh", review.id, "msStrk20Refresh", handlers.onRefresh));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.refresh"),
+          review.id,
+          "msStrk20Refresh",
+          handlers.onRefresh,
+        ),
+      );
     }
     list.append(card);
   }
 };
-const DROP_PROMPT =
-  "This wallet forgets the viewing key. Co-owners who have it still can. Press again to drop it.";
 
 const setStatus = (root: ParentNode, value: string): void => {
   const target = root.querySelector<HTMLElement>(`#${STATUS_ID}`);
@@ -105,9 +136,9 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       setStatus(
         panel,
         state === "conflict"
-          ? "A co-owner sent a different viewing key. This wallet kept its own."
+          ? t("multisig.sync.keyConflict")
           : state === "held"
-            ? "This wallet holds the viewing key."
+            ? t("multisig.strk20.held")
             : "",
       );
     }
@@ -164,27 +195,32 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
                   setStatus(
                     panel,
                     result.phase === "authorization"
-                      ? "Waiting for co-owners."
-                      : "Sign the transaction.",
+                      ? t("multisig.strk20.waiting")
+                      : t("multisig.strk20.signIt"),
                   );
                   reloadAuthorizations();
                 },
                 (error: unknown) =>
-                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+                  setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
               );
             },
             onSend: (authorizationId) => {
               void deps.multisig.submitStrk20Relay(authorizationId).then(
-                (result) => setStatus(panel, `Sent ${result.transactionHash}.`),
+                (result) =>
+                  setStatus(panel, t("multisig.strk20.sent", { hash: result.transactionHash })),
                 (error: unknown) =>
-                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+                  setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
               );
             },
             onShare: (authorizationId) => {
               void deps.multisig.shareStrk20Authorization(authorizationId).then(
-                (result) => setStatus(panel, `Shared with ${result.recipients} co-signers.`),
+                (result) =>
+                  setStatus(
+                    panel,
+                    t("multisig.strk20.sharedWith", { count: String(result.recipients) }),
+                  ),
                 (error: unknown) =>
-                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+                  setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
               );
             },
             onSign: (authorizationId) => {
@@ -193,13 +229,13 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
                   setStatus(
                     panel,
                     result.phase === "authorization"
-                      ? "You signed. Waiting for co-owners."
-                      : "You signed.",
+                      ? t("multisig.strk20.signedWaiting")
+                      : t("multisig.strk20.signed"),
                   );
                   reloadAuthorizations();
                 },
                 (error: unknown) =>
-                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+                  setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
               );
             },
           },
@@ -214,7 +250,7 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
     // the section never sits blank with no action and no explanation.
     void deps.multisig.strk20KeyStatus(multisigId).then(apply, (error: unknown) => {
       if (!loading) return;
-      loading.textContent = errorLine(error, "Couldn't load private balances. Try again.");
+      loading.textContent = errorLine(error, t("multisig.strk20.loadFailed"));
       loading.setAttribute("role", "alert");
     });
     reloadAuthorizations();
@@ -241,15 +277,15 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
           setStatus(
             panel,
             result.phase === "authorization"
-              ? "Waiting for co-owners."
+              ? t("multisig.strk20.waiting")
               : result.phase === "intent"
-                ? "Sign the transaction."
-                : "Send it when the owners are ready.",
+                ? t("multisig.strk20.signIt")
+                : t("multisig.strk20.sendWhenReady"),
           );
           reloadAuthorizations();
         },
         (error: unknown) => {
-          setStatus(panel, errorLine(error, "Couldn't prepare this private action."));
+          setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed")));
         },
       );
   };
@@ -258,17 +294,18 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       const kind = action.dataset["msStrk20Action"];
       if (kind === "share" && lastId) {
         void deps.multisig.shareStrk20Authorization(lastId).then(
-          (result) => setStatus(panel, `Shared with ${result.recipients} co-signers.`),
+          (result) =>
+            setStatus(panel, t("multisig.strk20.sharedWith", { count: String(result.recipients) })),
           (error: unknown) =>
-            setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+            setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
         );
         return;
       }
       if (kind === "send" && lastId) {
         void deps.multisig.submitStrk20Relay(lastId).then(
-          (result) => setStatus(panel, `Sent ${result.transactionHash}.`),
+          (result) => setStatus(panel, t("multisig.strk20.sent", { hash: result.transactionHash })),
           (error: unknown) =>
-            setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+            setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
         );
         return;
       }
@@ -278,11 +315,13 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
             lastId = result.id;
             setStatus(
               panel,
-              result.phase === "authorization" ? "Waiting for co-owners." : "Sign the transaction.",
+              result.phase === "authorization"
+                ? t("multisig.strk20.waiting")
+                : t("multisig.strk20.signIt"),
             );
           },
           (error: unknown) =>
-            setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+            setStatus(panel, errorLine(error, t("multisig.strk20.prepareFailed"))),
         );
         return;
       }
@@ -314,32 +353,38 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       if (!id) return;
       if (action === "drop" && !dropArmed) {
         dropArmed = true;
-        setStatus(panel, DROP_PROMPT);
+        setStatus(panel, t("multisig.strk20.dropPrompt"));
         return;
       }
       dropArmed = false;
       buttonBusy(button, true);
       const work =
         action === "share"
-          ? deps.multisig
-              .shareStrk20Key(id)
-              .then((result) =>
-                result.recipients < result.totalRecipients
-                  ? `Reached ${result.recipients} of ${result.totalRecipients} co-signers. Share again to retry the remaining delivery.`
-                  : `Shared securely with ${result.recipients} co-signer${result.recipients === 1 ? "" : "s"}`,
-              )
+          ? deps.multisig.shareStrk20Key(id).then((result) =>
+              result.recipients < result.totalRecipients
+                ? t("multisig.strk20.partialShare", {
+                    reached: String(result.recipients),
+                    total: String(result.totalRecipients),
+                  })
+                : t(
+                    result.recipients === 1
+                      ? "multisig.intents.sharedOne"
+                      : "multisig.intents.sharedMany",
+                    { count: String(result.recipients) },
+                  ),
+            )
           : action === "drop"
-            ? deps.multisig.forgetStrk20Key(id).then(() => "This wallet forgot the viewing key.")
-            : deps.multisig.createStrk20Key(id).then(() => "This wallet holds the viewing key.");
+            ? deps.multisig.forgetStrk20Key(id).then(() => t("multisig.strk20.forgot"))
+            : deps.multisig.createStrk20Key(id).then(() => t("multisig.strk20.held"));
       void work.then(
         async (message) => {
           showToast(message, "success", button);
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          setStatus(panel, errorLine(error, "Couldn't update this multisig's key."));
+          setStatus(panel, errorLine(error, t("multisig.strk20.updateFailed")));
           showToast(
-            errorLine(error, "Couldn't update this multisig's key."),
+            errorLine(error, t("multisig.strk20.updateFailed")),
             failureTone(error),
             button,
           );

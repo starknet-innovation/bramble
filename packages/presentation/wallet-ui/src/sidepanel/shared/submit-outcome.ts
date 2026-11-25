@@ -30,6 +30,7 @@ import {
   PrivacyBlockerError,
 } from "@bramble/wallet-protocol/privacy-blocker";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { localizeErrorCopy } from "../../i18n/error-copy";
 import { friendlyError } from "../runtime/friendly-error";
 import {
   REQUEST_FAILED,
@@ -231,7 +232,8 @@ export const outcomeUnknownReason = (error: unknown, subject: string): string =>
   // unless it is the generic one, which this subject can say better.
   const typed = error instanceof SubmissionUnknownError;
   const detail = typed ? error.message : friendlyError(errorDetails(error, "")).message;
-  if (NO_DETAIL.has(detail)) return unknown;
-  if (typed || ALREADY_UNKNOWN.test(detail)) return detail;
-  return `${detail} ${unknown}`;
+  // Decided on the English, then shown in the reader's language.
+  if (NO_DETAIL.has(detail)) return localizeErrorCopy(unknown);
+  if (typed || ALREADY_UNKNOWN.test(detail)) return localizeErrorCopy(detail);
+  return `${localizeErrorCopy(detail)} ${localizeErrorCopy(unknown)}`;
 };

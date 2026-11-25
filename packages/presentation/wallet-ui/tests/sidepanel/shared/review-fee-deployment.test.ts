@@ -78,7 +78,7 @@ describe("undeployed-account fee review", () => {
       requiresDeployment: true,
     });
 
-    expect(html).toContain("Couldn't estimate");
+    expect(html).toContain("Couldn&#39;t estimate");
     expect(html).not.toContain("Estimated fee:");
     expect(html).not.toContain("of that");
   });
@@ -92,7 +92,7 @@ describe("undeployed-account fee review", () => {
       requiresDeployment: true,
     });
 
-    expect(html).toContain("Couldn't estimate");
+    expect(html).toContain("Couldn&#39;t estimate");
     expect(html).not.toContain("Estimated fee:");
   });
 

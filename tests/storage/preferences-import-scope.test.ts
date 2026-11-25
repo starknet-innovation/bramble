@@ -47,6 +47,8 @@ const hostileBackup = (): WalletPreferences => ({
   displayCurrency: "eur",
   groups: [{ accountIds: [], icon: "folder", id: "imported", name: "Imported" }],
   hiddenTokens: [`SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`],
+  // The language every review sentence renders in.
+  language: "zh-Hans",
   nftIndexerUrl: HOSTILE_INDEXER,
   nfts: [{ contract: "0x7", id: "SN_MAIN:0x7:1", networkId: "SN_MAIN", tokenId: "1" }],
   nostrRelayUrl: HOSTILE_NOSTR_RELAY,
@@ -92,7 +94,7 @@ const seededStore = async (): Promise<ReturnType<typeof createPreferencesStore>>
   await preferences.setNftIndexerUrl({ url: MINE_INDEXER });
   await preferences.setNostrRelayUrl({ relayUrl: MINE_NOSTR_RELAY });
   await preferences.addNft({ contract: "0x5", networkId: "SN_MAIN", tokenId: "3" });
-  await preferences.setDisplay({ approvalSurface: "side-panel", theme: "dark" });
+  await preferences.setDisplay({ approvalSurface: "side-panel", language: "en", theme: "dark" });
   return preferences;
 };
 
@@ -112,6 +114,7 @@ describe("importPreferences trust scope", () => {
     expect(next.nfts).toEqual(before.nfts);
     expect(next.strk20Networks).toEqual(before.strk20Networks);
     expect(next.approvalSurface).toBe("side-panel");
+    expect(next.language).toBe("en");
     expect(next.addressBook).toEqual(before.addressBook);
     // The persisted record must match what the caller was told was applied.
     await expect(preferences.read()).resolves.toEqual(next);

@@ -1,5 +1,6 @@
 /**
- * Entry point for `bun run test:e2e:mainnet:wallet`. With no account
+ * Entry point for `bun run test:e2e:mainnet:wallet` and, with `multisig` as
+ * its argument, `bun run test:e2e:mainnet:multisig`. With no account
  * configured it prints the skip and exits 0. A partial or unsafe
  * configuration exits 1 before Chromium starts. A ready account runs the
  * Playwright suite, which still re-checks the same gates.
@@ -11,15 +12,18 @@ import { loadLocalMainnetFromProcess } from "../tests/mainnet/local-mainnet-acco
 
 const playwrightBin = join(process.cwd(), "node_modules", ".bin", "playwright");
 
-const runPlaywright = (): Promise<number> =>
+// The suites this entry point may start. Anything else is refused, so an
+// argument can never point Playwright at an arbitrary config.
+const SUITE_CONFIGS: Readonly<Record<string, string>> = {
+  multisig: "playwright.mainnet-multisig.config.ts",
+  wallet: "playwright.mainnet-wallet.config.ts",
+};
+
+const runPlaywright = (config: string): Promise<number> =>
   new Promise((resolve) => {
-    const child = spawn(
-      playwrightBin,
-      ["test", "--config", "playwright.mainnet-wallet.config.ts"],
-      {
-        stdio: "inherit",
-      },
-    );
+    const child = spawn(playwrightBin, ["test", "--config", config], {
+      stdio: "inherit",
+    });
     child.on("exit", (code) => resolve(code ?? 1));
     child.on("error", (error) => {
       console.error(error.message);
@@ -28,6 +32,12 @@ const runPlaywright = (): Promise<number> =>
   });
 
 const main = async (): Promise<number> => {
+  const suite = process.argv[2] ?? "wallet";
+  const config = Object.hasOwn(SUITE_CONFIGS, suite) ? SUITE_CONFIGS[suite] : undefined;
+  if (config === undefined) {
+    console.error("Unknown suite. Use wallet or multisig.");
+    return 1;
+  }
   const loaded = await loadLocalMainnetFromProcess();
   if (loaded.kind === "skip") {
     console.log(loaded.message);
@@ -42,7 +52,7 @@ const main = async (): Promise<number> => {
     return 1;
   }
   console.log(`Using ${loaded.account.label}`);
-  return runPlaywright();
+  return runPlaywright(config);
 };
 
 if (import.meta.main) {

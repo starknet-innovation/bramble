@@ -16,6 +16,7 @@ import {
   ledgerApduHidDevices,
   readLedgerOsAndRestoreStarknet,
 } from "@bramble/ledger-protocol/device-transition";
+import { classifyLedgerTransportError } from "@bramble/ledger-protocol/transport-error";
 import { ledgerUSBVendorId } from "@ledgerhq/devices";
 import { StarknetClient } from "@ledgerhq/hw-app-starknet";
 import TransportWebHID from "@ledgerhq/hw-transport-webhid";
@@ -157,8 +158,30 @@ export const bindLedgerTransportRaw = (initial, binding) => {
   return transport;
 };
 
+const closeDeviceQuietly = async (device) => {
+  if (typeof device?.close !== "function") return;
+  try {
+    await device.close();
+  } catch {
+    // The retried open is the result that matters.
+  }
+};
+
+// A second open of this page's own handle ("already open", a state change
+// still in progress) is closed and tried once. A claim held by someone else
+// is not retried here; the typed boundary releases our hardware tab first.
+const openTransport = async (kind, device) => {
+  try {
+    return await transports[kind].open(device);
+  } catch (error) {
+    if (!classifyLedgerTransportError(error).ownStale) throw error;
+    await closeDeviceQuietly(device);
+    return transports[kind].open(device);
+  }
+};
+
 const bindCableTransport = async (kind, device) =>
-  bindLedgerTransportRaw(await transports[kind].open(device), {
+  bindLedgerTransportRaw(await openTransport(kind, device), {
     listDevices: () => transports[kind].list(),
     openDevice: (selected) => transports[kind].open(selected),
     selectedDevice: device,

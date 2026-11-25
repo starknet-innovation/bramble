@@ -48,7 +48,14 @@ describe("handleOriginOps invalid/locked branches", () => {
         multisigGrants: {
           async sites() {
             await gate;
-            return [{ accountCount: 1, origin: "https://multi.example" }];
+            return [
+              {
+                accountCount: 1,
+                accountIds: [],
+                multisigIds: ["SN_MAIN:0x2"],
+                origin: "https://multi.example",
+              },
+            ];
           },
         } as unknown as MultisigOriginGrantStore,
         session,

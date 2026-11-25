@@ -2,6 +2,7 @@
 
 import { UndeployedBraavosError } from "@bramble/starknet/deployment";
 import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { networkRejectionMessage, nodeRejectionReason } from "@bramble/starknet/node-rejection";
 import type { FeeSpeed } from "@bramble/starknet/rpc-submit";
 import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -41,7 +42,13 @@ export const estimateInvokeAndDeployment = async (
     readonly signHash: Parameters<RuntimeRpc["estimateInvokeFee"]>[0]["signHash"];
     readonly speed?: FeeSpeed;
   },
-): Promise<{ readonly deploymentFee: FeeEstimate | null; readonly fee: FeeEstimate | null }> => {
+): Promise<{
+  readonly deploymentFee: FeeEstimate | null;
+  readonly fee: FeeEstimate | null;
+  /** The node's refusal, when estimation failed because the network said no. */
+  readonly feeRejection?: string;
+}> => {
+  let feeRejection: string | undefined;
   const [fee, deploymentFee] = await Promise.all([
     runtimeRpc
       .estimateInvokeFee({
@@ -55,7 +62,10 @@ export const estimateInvokeAndDeployment = async (
       .catch((error: unknown) => {
         // The platform's own deploy-then-act refusal, should the two
         // deployment reads disagree; every other failure stays retryable.
+        // A node's own refusal keeps its reason. A transport failure does not.
         if (error instanceof UndeployedBraavosError) throw error;
+        const reason = nodeRejectionReason(error);
+        if (reason) feeRejection = networkRejectionMessage(reason);
         return null;
       }),
     !input.deployed && runtimeRpc.estimateAccountDeploymentFee
@@ -68,7 +78,7 @@ export const estimateInvokeAndDeployment = async (
           .catch(() => null)
       : Promise.resolve(null),
   ]);
-  return { deploymentFee, fee };
+  return { deploymentFee, fee, ...(feeRejection ? { feeRejection } : {}) };
 };
 
 /**

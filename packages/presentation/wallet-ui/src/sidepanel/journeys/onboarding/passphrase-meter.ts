@@ -7,8 +7,25 @@
  * Acceptance stays with `isVaultPassphrase` in the callers; nothing here
  * keeps the value.
  */
-import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { estimatePassphraseStrength } from "@bramble/wallet-model/passphrase-strength";
+import { t } from "../../../i18n/messages";
+
+// The meter's line in the UI language. It follows the estimator's band, and
+// says how long the passphrase must be until it is long enough to accept.
+const strengthHint = (
+  level: ReturnType<typeof estimatePassphraseStrength>["level"],
+  valid: boolean,
+): string =>
+  !valid || level === "empty"
+    ? t("onboarding.passphrase.tooShort", { min: String(MIN_VAULT_PASSPHRASE_LENGTH) })
+    : t(
+        level === "strong"
+          ? "onboarding.passphrase.strong"
+          : level === "fair"
+            ? "onboarding.passphrase.fair"
+            : "onboarding.passphrase.weak",
+      );
 
 /**
  * Elements of one `.password-requirement` block: the container that carries
@@ -39,12 +56,13 @@ export const applyPassphraseMeter = (
     requirement.classList.toggle("is-ready", matches);
   }
   if (result) {
+    const hint = strengthHint(strength.level, valid);
     result.textContent =
       !valid || confirmation.length === 0
-        ? strength.hint
+        ? hint
         : matches
-          ? `${strength.hint} · Passphrases match`
-          : "Passphrases do not match";
+          ? t("onboarding.passphrase.match", { strength: hint })
+          : t("onboarding.passphrase.mismatch");
   }
 };
 

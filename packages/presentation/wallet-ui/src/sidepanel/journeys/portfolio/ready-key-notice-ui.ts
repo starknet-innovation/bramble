@@ -4,6 +4,7 @@
  * accounts keep theirs.
  */
 
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -31,7 +32,7 @@ export const bindReadyKeyNotice = (deps: ReadyKeyNoticeUiDeps): void => {
     try {
       await deps.wallet.setDisplay({ readyKeyNoticeDismissed: accountId });
     } catch (error) {
-      showToast(errorDetails(error, "Notice preference failed"), "error", hide);
+      showToast(errorDetails(error, t("portfolio.readyKey.saveFailed")), "error", hide);
       buttonBusy(hide, false);
       return;
     }

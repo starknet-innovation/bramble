@@ -4,6 +4,7 @@
 
 import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { actionLink, button } from "@bramble/ui-kit/controls";
+import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 
 /**
@@ -37,13 +38,13 @@ export const onboardingLaunch = (): string => `
   <section class="screen flow gate onboarding-gate">
     <div class="gate-brand">${BRAMBLE_MARK}</div>
     <div class="gate-head">
-      <p class="eyebrow">Wallet setup</p>
-      <h1>Set up in a browser tab</h1>
+      <p class="eyebrow">${th("onboarding.launch.eyebrow")}</p>
+      <h1>${th("onboarding.launch.title")}</h1>
     </div>
     <div class="onboarding-gate-actions">
       ${actionLink({
         href: "onboarding.html",
-        label: "Open full-screen setup",
+        label: t("onboarding.launch.open"),
         target: "_blank",
       })}
     </div>
@@ -57,10 +58,10 @@ export const onboardingComplete = (): string => `
   <section class="screen flow gate onboarding-complete">
     <div class="gate-brand onboarding-complete-mark">${icon("check")}</div>
     <div class="gate-head">
-      <h1>You’re all set</h1>
+      <h1>${th("onboarding.complete.title")}</h1>
     </div>
     <div class="onboarding-complete-actions">
-      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open Bramble" })}
+      ${button({ attributes: { id: "onboarding-open-wallet" }, label: t("onboarding.complete.open") })}
       <p id="onboarding-complete-result" class="hint" role="status"></p>
     </div>
   </section>`;
@@ -79,8 +80,6 @@ export const bindOnboardingLaunch = (
   const link = app?.querySelector<HTMLAnchorElement>('a.onboarding-launch[target="_blank"]');
   link?.addEventListener("click", () => defer(closeSurface));
 };
-
-const TOOLBAR_FALLBACK = "Open Bramble from the browser toolbar to continue.";
 
 /**
  * Hands a completed full-page setup into the wallet side panel. Chrome opens
@@ -114,18 +113,18 @@ export const bindOnboardingCompletion = (
           : null;
     if (!raise) {
       if (result && announceFallback) {
-        result.textContent = TOOLBAR_FALLBACK;
+        result.textContent = t("onboarding.complete.toolbar");
       }
       return;
     }
     button.disabled = true;
     if (result) {
-      result.textContent = "Opening the wallet…";
+      result.textContent = t("onboarding.complete.opening");
     }
     void raise().then(closeSurface, () => {
       button.disabled = false;
       if (result) {
-        result.textContent = announceFallback ? TOOLBAR_FALLBACK : "";
+        result.textContent = announceFallback ? t("onboarding.complete.toolbar") : "";
       }
     });
   };

@@ -61,7 +61,8 @@ describe("locked gate view", () => {
       '<details class="disclosure gate-forgot" data-disclosure="unlock-forgot-password">',
     );
     expect(html).toContain("Forgot password?");
-    expect(html).toContain("Bramble can't recover or reset it. It's never stored.");
+    // Catalog text is escaped into the template; the rendered text is unchanged.
+    expect(html).toContain("Bramble can&#39;t recover or reset it. It&#39;s never stored.");
     expect(html).toContain("Accounts from imported keys or other recovery phrases");
     expect(html).toContain("Ledger accounts (add them again with your device)");
     expect(html).toContain(

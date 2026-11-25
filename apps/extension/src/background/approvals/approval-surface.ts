@@ -157,13 +157,13 @@ const surfaceRequest = (
   message: unknown,
   sender: RuntimeSender | undefined,
   extensionId: string,
-): { readonly origin: string; readonly tabId: number } | null => {
+): { readonly connect: boolean; readonly origin: string; readonly tabId: number } | null => {
   const tabId = sender?.id === extensionId ? sender.tab?.id : undefined;
   const request = readApprovalSurfaceRequest(message);
   if (typeof tabId !== "number" || !request || request.silent) {
     return null;
   }
-  return { origin: request.origin, tabId };
+  return { connect: request.connect, origin: request.origin, tabId };
 };
 
 /**
@@ -273,7 +273,7 @@ export const createApprovalSurfaceOpener = ({
     }
     const windowId = sender?.tab?.windowId;
     // Prepared now, before the request can queue its approval.
-    const attempt = rescue?.({ origin: request.origin, windowId });
+    const attempt = rescue?.({ connect: request.connect, origin: request.origin, windowId });
     raiseSurface(browser, preference(), request.tabId, windowId, attempt);
   };
 };
