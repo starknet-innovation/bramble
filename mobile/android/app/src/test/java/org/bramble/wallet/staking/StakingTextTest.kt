@@ -103,5 +103,10 @@ class StakingTextTest {
     fun aRefusalIsTheCoresSentence() {
         assertEquals("No rewards to claim.", stakingMessage(StakingException.Refused("No rewards to claim.")))
         assertEquals(StakingCopy.readFailed, stakingMessage(StakingException.Storage()))
+        // A refusal reads through the extension's friendly copy, as the side panel's errorLine.
+        assertEquals(
+            "Couldn't prepare this staking action. Try again.",
+            stakingMessage(StakingException.Refused("staking preparation failed")),
+        )
     }
 }

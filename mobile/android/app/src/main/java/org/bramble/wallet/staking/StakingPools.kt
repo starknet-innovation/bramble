@@ -38,6 +38,7 @@ import org.bramble.wallet.design.SecretKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.errors.friendlyError
 import org.bramble.wallet.send.CostBox
 import org.bramble.wallet.send.Outcome
 import org.bramble.wallet.send.ReceiptCard
@@ -102,7 +103,13 @@ private fun PoolRow(
         Text(row.symbol, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold))
         val figures = row.figures
         if (figures == null) {
-            row.refusal?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption)) }
+            row.refusal?.let {
+                Text(
+                    friendlyError(it),
+                    color = skin.muted,
+                    style = textStyle(BrambleTypeScale.caption),
+                )
+            }
         } else {
             PoolActions(row, figures, act)
         }

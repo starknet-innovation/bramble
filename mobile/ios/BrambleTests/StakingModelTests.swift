@@ -100,6 +100,14 @@ final class StakingModelTests: XCTestCase {
         XCTAssertTrue(action.send.posts.isEmpty)
     }
 
+    func testARefusalReadsThroughTheFriendlyCopy() {
+        XCTAssertEqual(
+            StakingText.message(StakingError.Refused(reason: "staking preparation failed")),
+            "Couldn't prepare this staking action. Try again."
+        )
+        XCTAssertEqual(StakingText.message(StakingError.Storage), StakingCopy.readFailed)
+    }
+
     func testTheExitWindowRoundsDownToItsLargestUnit() {
         XCTAssertEqual(StakingText.exitWindow(604_800), "7 days")
         XCTAssertEqual(StakingText.exitWindow(3_600), "1 hour")

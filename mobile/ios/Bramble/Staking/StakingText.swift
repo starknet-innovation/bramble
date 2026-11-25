@@ -3,7 +3,8 @@ import Foundation
 
 /// The staking screens' wording, filled from the extension's copy (`StakingCopy`, generated) and
 /// the core's figures. Pure: every figure is a string the core formatted from an on-chain read,
-/// and nothing here derives one. Refusals are the core's sentences, shown verbatim.
+/// and nothing here derives one. Refusals are the core's sentences read through the friendly
+/// copy (`message`).
 enum StakingText {
     private static let secondsPerMinute: UInt64 = 60
     private static let secondsPerHour: UInt64 = 3_600
@@ -108,10 +109,13 @@ enum StakingText {
         return fill(StakingCopy.directoryPool, ["delegated": delegated, "symbol": pool.symbol])
     }
 
-    /// The core's refusal sentence, or the extension's `STAKING_UNREADABLE` (`StakingCopy.readFailed`)
-    /// for anything that is not a refusal, so a failed read never reads as "no stakes".
-    static func message(_ error: Error) -> String {
-        if case let StakingError.Refused(reason) = error { return reason }
+    /// A refusal or error as the reader sees it: the core's refusal through the extension's
+    /// friendly copy (`FriendlyError`, the side panel's `friendlyError`), with `context` the
+    /// screen's own line for one that says nothing a reader needs; anything that is not a refusal
+    /// reads the extension's `STAKING_UNREADABLE` (`StakingCopy.readFailed`), so a failed read
+    /// never reads as "no stakes". Never for the review sentence or a risk line.
+    static func message(_ error: Error, context: String? = nil) -> String {
+        if case let StakingError.Refused(reason) = error { return FriendlyError.message(reason, context: context) }
         return StakingCopy.readFailed
     }
 

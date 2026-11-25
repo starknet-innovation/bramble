@@ -73,7 +73,7 @@ struct StakingRowCard: View {
                 }
                 if figures.state == .staked { StakingAmountForm(action: .unstake, row: row, act: act) }
             } else if let refusal = row.refusal {
-                caption(refusal)
+                caption(FriendlyError.message(refusal))
             }
         }
         .padding(BrambleSpace.md)

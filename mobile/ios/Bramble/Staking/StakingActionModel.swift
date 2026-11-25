@@ -97,7 +97,7 @@ final class StakingActionModel: Identifiable {
             driver = started
             show(try await started.run(from: .start))
         } catch let error as StakingError {
-            message = StakingText.message(error)
+            message = StakingText.message(error, context: StakingCopy.reviewFailed)
             stage = .refused
         } catch {
             fail(driver?.plan.interruptedFailure() ?? SendFailure(code: .locked, hash: nil))

@@ -127,7 +127,7 @@ class StakingActionModel internal constructor(
                 sentence = staking.review
                 staking.plan
             } catch (refused: StakingException) {
-                message = stakingMessage(refused)
+                message = stakingMessage(refused, StakingCopy.reviewFailed)
                 stage = Stage.REFUSED
                 return
             }

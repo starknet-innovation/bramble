@@ -12,7 +12,8 @@ rule; the apps own the screens, the byte moving and the tests. Nothing here is n
 | "Your stakes" | `stakingPositionsRequest` (off when the explorer choice keeps the address from Starkscan) → `stakingPositions` → `StakingChainRead` | Drives the chain read (below), then `view(nowSeconds)` |
 | One validator's pools | `stakingOverview` → `StakingChainRead` | Same |
 | An action | `prepareStaking` → `StakingPreparation` (pinned pool read) → `plan(nowSeconds, feeBalance)` → `StakingPlan { plan, review }` | Runs `plan` through `SendDriver`, as Send and Deploy do |
-| Every review, refusal and risk string | `StakingPlan.review`, `StakingError.Refused`, `TransferPlan.riskFlags()` | Shown verbatim |
+| Every review and risk string | `StakingPlan.review`, `TransferPlan.riskFlags()` | Shown verbatim |
+| Refusals | `StakingError.Refused`, a row's `refusal` | Read through the extension's friendly copy (`FriendlyError`, [friendly-errors.md](friendly-errors.md)), as the side panel's `errorLine`; an action's refusal takes "Staking failed" as its context |
 
 A chain read (`StakingChainRead`, `StakingPreparation`) is driven by `PortfolioEndpoints.drive`
 (iOS) / `PortfolioReads.drive` (Android): the first endpoint that proves the chain, replayed from

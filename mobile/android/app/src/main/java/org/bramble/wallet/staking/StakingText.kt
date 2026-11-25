@@ -6,6 +6,7 @@ import org.bramble.core.PositionState
 import org.bramble.core.RowFigures
 import org.bramble.core.StakingException
 import org.bramble.core.StakingRowView
+import org.bramble.wallet.errors.friendlyError
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -111,7 +112,13 @@ fun poolLine(pool: DirectoryPoolEntry): String =
         ?: fill(StakingCopy.directoryPoolUnknown, SYMBOL to pool.symbol)
 
 /**
- * The core's refusal sentence, or the extension's `STAKING_UNREADABLE` ([StakingCopy.readFailed])
- * for anything that is not a refusal, so a failed read never reads as "no stakes".
+ * A refusal or error as the reader sees it: the core's refusal through the extension's friendly
+ * copy ([friendlyError]), with [context] the screen's own line for one that says nothing a reader
+ * needs; anything that is not a refusal reads the extension's `STAKING_UNREADABLE`
+ * ([StakingCopy.readFailed]), so a failed read never reads as "no stakes". Never for the review
+ * sentence or a risk line.
  */
-fun stakingMessage(error: Throwable): String = (error as? StakingException.Refused)?.reason ?: StakingCopy.readFailed
+fun stakingMessage(
+    error: Throwable,
+    context: String? = null,
+): String = (error as? StakingException.Refused)?.let { friendlyError(it.reason, context) } ?: StakingCopy.readFailed
