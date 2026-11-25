@@ -135,8 +135,8 @@ export const trimTrailingSlashes = (value: string): string => {
 
 /**
  * Checks a service endpoint without performing network access: HTTPS, or HTTP
- * on a loopback host, with no credentials or fragment (not even an empty "#"), written in its canonical
- * spelling. That spelling is the URL parser's serialization, which is what a
+ * on a loopback host, with no credentials or fragment (not even an empty "#"),
+ * written in its canonical spelling. That spelling is the URL parser's serialization, which is what a
  * request sends (a bare origin may keep or drop its trailing slash), and it
  * holds no character {@link redactEndpoints} ends a URL at. The parser would
  * otherwise accept a raw spelling it only fixes when it serializes:
@@ -179,8 +179,8 @@ export const canonicalWebSocketServiceUrl = (value: unknown): string | null =>
  * rule accepted the endpoint but it has no canonical spelling: it is over the
  * 2,048-character cap once percent-encoded, its serialization keeps a
  * character the redactor ends a URL at, which encoding would change on the
- * wire, or it ends in an empty fragment ("https://rpc.example/#"). The caller drops such an endpoint rather than fail the whole record.
- * Anything else is returned unchanged for the record's validator to reject,
+ * wire, or it ends in an empty fragment ("https://rpc.example/#"). The caller
+ * drops such an endpoint rather than fail the whole record. Anything else is returned unchanged for the record's validator to reject,
  * because the earlier rule refused it too. Pure and total.
  */
 export const normalizeStoredServiceUrl = (value: unknown): unknown =>
