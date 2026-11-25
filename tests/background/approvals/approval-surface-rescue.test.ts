@@ -165,6 +165,38 @@ describe("rescuing a refused side panel open", () => {
     expect(run.calls.lookups).toBe(0);
   });
 
+  test("a repeated Connect surfaces the connect approval it joins (#973)", async () => {
+    // The popup closed when the user went back to the dapp; the queue keeps
+    // one connect approval per origin, so the second Connect queues nothing.
+    const run = chromium({ noApproval: true });
+    run.approvals.push({ id: "connect", kind: "connect", origin: ORIGIN });
+    run.open(request(), fromTab(42));
+    await settleAll();
+    expect(run.calls.panels).toEqual([42]);
+    expect(run.calls.popups).toEqual([{ windowId: 7 }]);
+  });
+
+  test("only a connection request joins a pending connect approval", async () => {
+    const popups: number[] = [];
+    const rescue = createSurfaceRescue({
+      approvals: () => [
+        { id: "connect", kind: "connect", origin: ORIGIN },
+        { id: "other", kind: "connect", origin: "https://other.example" },
+      ],
+      browser: { sidePanel: {} },
+      now: () => 0,
+      showPopup: async (windowId, admit) => {
+        if (admit()) popups.push(windowId);
+      },
+      wait: async () => undefined,
+    });
+    await rescue({ origin: ORIGIN, windowId: 7 })();
+    await rescue({ connect: true, origin: "https://third.example", windowId: 7 })();
+    expect(popups).toEqual([]);
+    await rescue({ connect: true, origin: ORIGIN, windowId: 7 })();
+    expect(popups).toEqual([7]);
+  });
+
   test("opens nothing when the approval is decided while the rescue waits", async () => {
     const run = chromium();
     const release = run.holdLookup();
