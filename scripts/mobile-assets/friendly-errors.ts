@@ -9,13 +9,12 @@
  *
  * Approval, review and signing sentences never go through this lookup on mobile.
  */
+import { readFileSync } from "node:fs";
 import { NETWORK_ERROR_MESSAGE, NETWORK_FAILURE_MARKERS } from "@bramble/core/network-error";
 import { LEDGER_MESSAGES } from "@bramble/ledger-protocol/errors";
 import {
   FRIENDLY_ERROR_RULES,
   friendlyError,
-  STRK20_RATE_LIMITED,
-  STRK20_STAGE_COPY,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error";
 import {
   ERROR_COPY,
@@ -77,10 +76,51 @@ const portable = (pattern: RegExp): string => {
   return `${pattern.flags === "i" ? "(?i)" : ""}${out}`;
 };
 
+/**
+ * `rawServiceDiagnostic` keeps its length limit and two patterns inline, and the extension is not
+ * restructured to export them, so they are read from its source: the limit after
+ * `value.length >`, and the two regex literals tested against `value`, in order (line breaks,
+ * then a JSON body). Anything else in that body fails generation loudly rather than drifting.
+ */
+const RAW_SERVICE = (() => {
+  const source = readFileSync(
+    new URL(
+      "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const body = /\nconst rawServiceDiagnostic = \(value: string\): boolean =>\n([\s\S]*?);\n/.exec(
+    source,
+  )?.[1];
+  const limit = body === undefined ? undefined : /value\.length > (\d+) \|\|/.exec(body)?.[1];
+  const literals = [...(body ?? "").matchAll(/\/((?:\\.|[^/\n])+)\/([a-z]*)\.test\(value\)/g)];
+  const [lineBreak, rawJson] = literals.map(
+    ([, pattern = "", flags]) => new RegExp(pattern, flags),
+  );
+  if (limit === undefined || literals.length !== 2 || !lineBreak || !rawJson) {
+    throw new Error("friendly-error.ts rawServiceDiagnostic no longer has the shape this reads");
+  }
+  return { lineBreak, maxLength: Number(limit), rawJson };
+})();
+
+const RULES = FRIENDLY_ERROR_RULES;
+
 const PATTERNS: readonly (readonly [string, RegExp])[] = [
-  ...Object.entries(FRIENDLY_ERROR_RULES).flatMap(([name, value]) =>
-    value instanceof RegExp ? [[name, value] as const] : [],
-  ),
+  ["developerVoice", RULES.developerVoice],
+  ["lineBreak", RAW_SERVICE.lineBreak],
+  ["rateLimit", RULES.rateLimit],
+  ["rawHttp", RULES.rawHttp],
+  ["rawJson", RAW_SERVICE.rawJson],
+  ["rawRpc", RULES.rawRpc],
+  ["rawRpcResponse", RULES.rawRpcResponse],
+  ["strk20", RULES.strk20],
+  ["strk20OutageCause", RULES.strk20OutageCause],
+  ["strk20PrivacyLeak", RULES.strk20PrivacyLeak],
+  ["strk20Protocol", RULES.strk20Protocol],
+  ["strk20ServiceDown", RULES.strk20ServiceDown],
+  ["strk20Stage", RULES.strk20Stage],
+  ["validationRequest", RULES.validationRequest],
   ["factTerms", FACT_TERMS],
   ["kmsTemplatePlumbing", KMS_TEMPLATE_PLUMBING],
 ];
@@ -92,13 +132,13 @@ const MESSAGES: Readonly<Record<string, string>> = {
   rateLimited: RATE_LIMITED,
   rpcRejected: RPC_REJECTED,
   serviceRejected: SERVICE_REJECTED,
-  strk20RateLimited: STRK20_RATE_LIMITED,
-  strk20ServicesDown: FRIENDLY_ERROR_RULES.strk20ServicesDown,
+  strk20RateLimited: RULES.strk20RateLimited,
+  strk20ServicesDown: RULES.strk20ServicesDown,
   unexpectedFallback: UNEXPECTED_FALLBACK,
 };
 
 /** Each STRK20 category's sentence without a detail, and with `{detail}` in its place. */
-const STAGES = [...STRK20_STAGE_COPY].map(
+const STAGES = [...RULES.strk20StageCopy].map(
   ([category, sentence]) => [category, sentence(undefined), sentence(DETAIL)] as const,
 );
 
@@ -150,7 +190,7 @@ const swiftRules = (): string =>
     "/// reviewed plumbing, Ledger catalog, transport markers and STRK20 category sentences.",
     "enum FriendlyErrorRules {",
     ...Object.entries(MESSAGES).map(([key, value]) => `    static let ${key} = ${swift(value)}`),
-    `    static let rawServiceMaxLength = ${FRIENDLY_ERROR_RULES.rawServiceMaxLength}`,
+    `    static let rawServiceMaxLength = ${RAW_SERVICE.maxLength}`,
     `    static let detail = ${swift(DETAIL)}`,
     ...PATTERNS.map(([key, value]) => `    static let ${key} = ${swiftRaw(portable(value))}`),
     "    static let networkMarkers: [String] = [",
@@ -185,7 +225,7 @@ const kotlinRules = (): string =>
     " */",
     "object FriendlyErrorRules {",
     ...Object.entries(MESSAGES).map(([key, value]) => `    const val ${key} = ${kotlin(value)}`),
-    `    const val rawServiceMaxLength = ${FRIENDLY_ERROR_RULES.rawServiceMaxLength}`,
+    `    const val rawServiceMaxLength = ${RAW_SERVICE.maxLength}`,
     `    const val detail = ${kotlin(DETAIL)}`,
     ...PATTERNS.map(([key, value]) => `    const val ${key} = ${kotlin(portable(value))}`),
     "    val networkMarkers: List<String> =",

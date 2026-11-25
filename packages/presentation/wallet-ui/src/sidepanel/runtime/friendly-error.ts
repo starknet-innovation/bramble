@@ -51,8 +51,7 @@ const DEVELOPER_VOICE = /^[a-z]/;
 // security fact and is shown as written (issue 652 review, F1).
 const STRK20_SERVICE_DOWN =
   /^strk20 services unavailable(?:: (?:no viewing-key provider is wired|no privacy routing is configured for this network|the configured pool address is not a valid felt|no privacy runtime is wired in this build|no rpc endpoint is configured|could not read the pool fee \([^)]*\)|could not read pool registration \([^)]*\)))?$/;
-/** The STRK20 rate-limit refusal, matched exactly (lowercased). */
-export const STRK20_RATE_LIMITED = "strk20 services unavailable (rate limited; retry shortly)";
+const STRK20_RATE_LIMITED = "strk20 services unavailable (rate limited; retry shortly)";
 // A refusal that would have linked the reader's identity to a private action.
 const STRK20_PRIVACY_LEAK = /^strk20 privacy leak\b/;
 const STRK20 = /^strk20\b/;
@@ -84,20 +83,18 @@ const withReason =
 // The STRK20 SDK categories that say what happened to a private transaction,
 // each in the reader's words. The nonce sentence names the reader's move and
 // drops the reason, which stays behind the toast's copy control.
-/** Reviewed sentences per STRK20 SDK category; each takes the sanitised detail, if any. */
-export const STRK20_STAGE_COPY: ReadonlyMap<string, (detail: string | undefined) => string> =
-  new Map([
-    ["execution-reverted", withReason("Starknet rejected the private transaction")],
-    ["insufficient-fee", withReason("The fee couldn't be covered")],
-    ["invalid-nonce", () => "The account's nonce changed. Review the transaction again."],
-    ["proof-rejected", withReason("The privacy pool rejected the proof")],
-    // Proving API UNSUPPORTED_BUILTIN (1002): the prover can't prove this call.
-    [
-      "unsupported-builtin",
-      withReason("The privacy prover can't prove this transaction (unsupported builtin)"),
-    ],
-    ["validation-failed", withReason("The private transaction failed validation")],
-  ]);
+const STRK20_STAGE_COPY: ReadonlyMap<string, (detail: string | undefined) => string> = new Map([
+  ["execution-reverted", withReason("Starknet rejected the private transaction")],
+  ["insufficient-fee", withReason("The fee couldn't be covered")],
+  ["invalid-nonce", () => "The account's nonce changed. Review the transaction again."],
+  ["proof-rejected", withReason("The privacy pool rejected the proof")],
+  // Proving API UNSUPPORTED_BUILTIN (1002): the prover can't prove this call.
+  [
+    "unsupported-builtin",
+    withReason("The privacy prover can't prove this transaction (unsupported builtin)"),
+  ],
+  ["validation-failed", withReason("The private transaction failed validation")],
+]);
 
 /**
  * STRK20 messages share one head, "strk20 services unavailable", whatever
@@ -136,39 +133,32 @@ const strk20Message = (trimmed: string, normalized: string): string => {
   return trimmed;
 };
 
-// A diagnostic longer than this, over several lines, or wrapped as JSON is a
-// service's raw answer rather than a sentence.
-const RAW_SERVICE_MAX_LENGTH = 240;
-const LINE_BREAK = /[\r\n]/;
-const RAW_JSON = /^\s*[[{][\s\S]*[\]}]\s*$/;
-
 const rawServiceDiagnostic = (value: string): boolean =>
-  value.length > RAW_SERVICE_MAX_LENGTH ||
-  LINE_BREAK.test(value) ||
+  value.length > 240 ||
+  /[\r\n]/.test(value) ||
   RAW_HTTP.test(value) ||
-  RAW_JSON.test(value);
+  /^\s*[[{][\s\S]*[\]}]\s*$/.test(value);
 
 /**
- * The classifier's patterns and limits, exported only so the mobile apps'
+ * The classifier's patterns and tables, exported only so the mobile apps'
  * generated lookup (`scripts/mobile-assets/friendly-errors.ts`) matches exactly
  * what `friendlyError` matches. Not an API for other screens.
  */
 export const FRIENDLY_ERROR_RULES = {
   developerVoice: DEVELOPER_VOICE,
-  lineBreak: LINE_BREAK,
   rateLimit: RATE_LIMIT,
   rawHttp: RAW_HTTP,
-  rawJson: RAW_JSON,
   rawRpc: RAW_RPC,
   rawRpcResponse: RAW_RPC_RESPONSE,
-  rawServiceMaxLength: RAW_SERVICE_MAX_LENGTH,
   strk20: STRK20,
   strk20OutageCause: STRK20_OUTAGE_CAUSE,
   strk20PrivacyLeak: STRK20_PRIVACY_LEAK,
   strk20Protocol: STRK20_PROTOCOL,
+  strk20RateLimited: STRK20_RATE_LIMITED,
   strk20ServiceDown: STRK20_SERVICE_DOWN,
   strk20ServicesDown: STRK20_SERVICES_DOWN,
   strk20Stage: STRK20_STAGE,
+  strk20StageCopy: STRK20_STAGE_COPY,
   validationRequest: VALIDATION_REQUEST,
 } as const;
 
