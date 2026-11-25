@@ -11,12 +11,9 @@ final class CoreBridgeTests: XCTestCase {
             let address: String
             let networkId: String
             let publicKeyX: String
-            let signatureR: String
-            let signatureS: String
         }
 
         let accounts: [Account]
-        let messageHash: String
         let mnemonic: String
     }
 
