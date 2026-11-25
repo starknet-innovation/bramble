@@ -2,8 +2,8 @@ import BrambleCore
 
 /// The extension's words for multisig transactions (`i18n/messages/multisig*.ts`,
 /// `review-steps-multisig.ts`), byte for byte. Summaries and refusals are never here: a summary is
-/// the core's review of the calls (`MultisigIntent.summary`) and a refusal is the core's reason
-/// (`describe`), both shown as they come.
+/// the core's review of the calls (`MultisigIntent.summary`), shown as it comes, and a refusal is
+/// the core's reason through the extension's friendly copy (`describeRefusal`).
 enum MultisigTxText {
     static let transactions = "Transactions"
     static let send = "Send"

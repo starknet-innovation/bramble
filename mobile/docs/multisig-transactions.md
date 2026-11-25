@@ -67,10 +67,11 @@ Copy is the extension's (`i18n/messages/multisig*.ts`, `review-steps-multisig.ts
 
 `MultisigTxFailure` has no text in the core, so `MultisigTxText.failure` maps each variant to the
 extension's sentence. Send's generated `SendCopy` covers the variants it shares with Send. Every other
-refusal is the core's `InvalidInput` reason, shown through `describe`, for example "Invalid Argent
-multisig intent package". The extension rewrites those diagnostics through
-`friendly-error-copy-multisig.ts`. Mobile shows the core's words unchanged, so the mobile copy can
-differ from the extension's (§5).
+refusal is the core's `InvalidInput` reason, shown through `describeRefusal`: the extension's
+friendly copy (`FriendlyError`, [friendly-errors.md](friendly-errors.md), generated from
+`friendly-error-copy-multisig.ts` and the tables it joins), then redacted. "Invalid Argent multisig
+intent package" reads "That package isn't a valid transaction. Ask for a fresh copy."; a reason
+the extension has no sentence for keeps its words.
 
 ## 4. Activity
 
@@ -90,7 +91,6 @@ settles as soon as a row does.
 - Relay sync still holds trusted packages without importing them (`imported` is 0 at `v0.7.0`).
   A co-signer pastes the package into Import.
 - Advanced contract calls, replace-signer, and re-pricing a stale version.
-- The extension's friendly rewrite of core diagnostics. A generated table would bring it to mobile.
 - Decoding a signer change on the card (threshold before and after, resulting signers). The core
   returns it only on the proposal (`MultisigProposal.review()`), not on a stored intent.
 

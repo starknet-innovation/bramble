@@ -15,7 +15,6 @@ import org.bramble.core.MultisigProposalRequest
 import org.bramble.core.MultisigRecord
 import org.bramble.core.MultisigTxFailure
 import org.bramble.wallet.WalletStore
-import org.bramble.wallet.describe
 import org.bramble.wallet.design.BrambleField
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.Eyebrow
@@ -88,7 +87,7 @@ private fun ProposalScreen(
                         }.onFailure {
                             val failure = (it as? MultisigTxException)?.failure
                             armed = if (failure == MultisigTxFailure.RESEND_UNCONFIRMED) request else null
-                            error = (it as? MultisigTxException)?.message ?: describe(it)
+                            error = (it as? MultisigTxException)?.message ?: describeRefusal(it)
                         }
                         busy = false
                     }
@@ -247,7 +246,7 @@ internal fun MultisigImportScreen(
                             intent = it
                             error = null
                             store.showNotice(MultisigTxText.VERIFIED)
-                        }.onFailure { error = describe(it) }
+                        }.onFailure { error = describeRefusal(it) }
                     busy = false
                 }
             }

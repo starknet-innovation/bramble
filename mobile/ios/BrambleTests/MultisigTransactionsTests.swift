@@ -46,7 +46,10 @@ final class MultisigTransactionsTests: XCTestCase {
         _ = try core.restoreRecoveredAccounts(network: .sepolia, selections: (0...3).map { index in
             RecoverySelection(family: .openZeppelin, accountIndex: index, classHash: nil)
         })
-        let node = try MultisigNode(account: try fixtureValue(net, "account"), proposal: try fixtureValue(net, "proposal"))
+        let node = try MultisigNode(
+            account: try fixtureValue(net, "account"),
+            proposal: try fixtureValue(net, "proposal")
+        )
         let wallet = Wallet(net: net, core: core, node: node, network: try sepolia())
         let deploy: [String: Any] = try fixtureValue(net, "deploy")
         let input: [String: Any] = try fixtureValue(deploy, "input")
@@ -175,7 +178,7 @@ final class MultisigTransactionsTests: XCTestCase {
         XCTAssertThrowsError(
             try wallet.core.importMultisigIntent(package: "not a package", state: read, tokens: tokens)
         ) { error in
-            XCTAssertEqual(describe(error), "Invalid Argent multisig intent package")
+            XCTAssertEqual(describeRefusal(error), "That package isn't a valid transaction. Ask for a fresh copy.")
         }
         let imported = try wallet.core.importMultisigIntent(
             package: try fixtureValue(wallet.proposal, "readyPackage"),

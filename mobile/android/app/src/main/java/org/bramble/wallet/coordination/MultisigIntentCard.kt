@@ -21,7 +21,6 @@ import org.bramble.core.AccountRecord
 import org.bramble.core.IntentState
 import org.bramble.core.MultisigIntent
 import org.bramble.wallet.WalletStore
-import org.bramble.wallet.describe
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleRadius
 import org.bramble.wallet.design.BrambleSpace
@@ -67,7 +66,7 @@ internal fun IntentCard(
                     result = it
                     failed = false
                 }.onFailure {
-                    result = (it as? MultisigTxException)?.message ?: describe(it)
+                    result = (it as? MultisigTxException)?.message ?: describeRefusal(it)
                     failed = true
                 }
             store.coordination

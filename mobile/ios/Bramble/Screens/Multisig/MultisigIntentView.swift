@@ -182,7 +182,7 @@ struct IntentCard: View {
                 result = try await body()
                 failed = false
             } catch {
-                result = (error as? MultisigTxError)?.errorDescription ?? describe(error)
+                result = (error as? MultisigTxError)?.errorDescription ?? describeRefusal(error)
                 failed = true
                 await reload()
             }

@@ -62,7 +62,7 @@ final class MultisigTransactionsFlowTests: XCTestCase {
         UITest.tap(app.buttons["Import transaction"])
         UITest.type("not a package", into: field("Intent package", in: app))
         UITest.tap(app.buttons["Verify and import"])
-        expect("Invalid Argent multisig intent package", in: app)
+        expect("That package isn't a valid transaction. Ask for a fresh copy.", in: app)
         snapshot(app, "multisig-import-refused")
     }
 }

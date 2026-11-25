@@ -1,5 +1,6 @@
 package org.bramble.wallet.coordination
 
+import org.bramble.core.CoreException
 import org.bramble.core.MultisigIntent
 import org.bramble.core.MultisigProposalRequest
 import org.bramble.core.MultisigRecord
@@ -8,7 +9,10 @@ import org.bramble.core.MultisigTxStep
 import org.bramble.core.NetworkInfo
 import org.bramble.core.StepReply
 import org.bramble.core.TokenPreferences
+import org.bramble.core.redactEndpoints
 import org.bramble.wallet.RpcPost
+import org.bramble.wallet.describe
+import org.bramble.wallet.errors.friendlyError
 import org.bramble.wallet.send.RpcEndpoint
 
 // Multisig transactions (M18, mobile/docs/multisig-transactions.md), port of the iOS
@@ -116,3 +120,12 @@ internal suspend fun runPlan(
         reply = endpoint.exchange(step.id, step.body, step.purpose, step.isWrite)
     }
 }
+
+/**
+ * A multisig step's refusal as the screen shows it, twin of the iOS `describeRefusal`: the core's
+ * refusal ([CoreException.InvalidInput]) read through the extension's friendly copy
+ * ([friendlyError]), as the side panel's multisig screens show it, then redacted like every
+ * failure text; any other error as [describe] words it.
+ */
+fun describeRefusal(error: Throwable): String =
+    (error as? CoreException.InvalidInput)?.let { redactEndpoints(friendlyError(it.reason)) } ?: describe(error)

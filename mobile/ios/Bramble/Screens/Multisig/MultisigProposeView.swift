@@ -63,7 +63,7 @@ struct ProposalScreen<Form: View>: View {
                 error = failure.errorDescription
             } catch {
                 armed = nil
-                self.error = describe(error)
+                self.error = describeRefusal(error)
             }
         }
     }
@@ -241,7 +241,7 @@ struct MultisigImportView: View {
                 error = nil
                 store.notify(MultisigTxText.verified)
             } catch {
-                self.error = describe(error)
+                self.error = describeRefusal(error)
             }
         }
     }
