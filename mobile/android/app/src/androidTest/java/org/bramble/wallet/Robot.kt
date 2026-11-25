@@ -71,9 +71,18 @@ class Robot(
             rule.waitUntil(timeoutMs) { exists(matcher) }
         } catch (timeout: ComposeTimeoutException) {
             val screen = runCatching { rule.onRoot(useUnmergedTree = false).printToString() }.getOrDefault("")
-            throw AssertionError("${matcher.description} not shown after $timeoutMs ms; screen:\n$screen", timeout)
+            val header = "${matcher.description} not shown after $timeoutMs ms; screen:"
+            throw AssertionError(listOf(header, screen, "threads:", threadDump()).joinToString("\n"), timeout)
         }
     }
+
+    /** Every app thread's stack, so a timeout behind a stuck core call shows what it waits on. */
+    private fun threadDump(): String =
+        Thread
+            .getAllStackTraces()
+            .flatMap { (thread, frames) ->
+                listOf("${thread.name} ${thread.state}") + frames.take(25).map { "    at $it" }
+            }.joinToString("\n")
 
     /**
      * Runs [action] and waits until the store raises the toast [text]. Every toast is recorded as
