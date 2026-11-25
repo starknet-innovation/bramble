@@ -38,11 +38,15 @@ final class RevokeFlowModel {
     private let network: NetworkInfo
     private let accountId: String
     private let tokens: TokenPreferences
-    private let feeBalance: String?
+    /// The live STRK balance, read at each prepare so Try again sees a refreshed one.
+    private let feeBalance: () -> String?
     private let endpoints: PortfolioEndpoints
     private let transport: RpcTransport
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
+    /// Bumped when a preparation is abandoned (a new prepare, or a close before submitting), so a
+    /// stale prepare or estimate that resumes afterwards changes nothing.
+    private var epoch = 0
 
     init(
         core: WalletCore,
@@ -50,7 +54,7 @@ final class RevokeFlowModel {
         accountId: String,
         allowance: AllowanceView,
         tokens: TokenPreferences,
-        feeBalance: String?,
+        feeBalance: @escaping () -> String?,
         endpoints: PortfolioEndpoints,
         transport: RpcTransport,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
@@ -69,6 +73,8 @@ final class RevokeFlowModel {
     /// Prepares and reviews the revoke. Runs when the screen opens, and again after a failure.
     func prepare() async {
         close()
+        epoch += 1
+        let started = epoch
         review = nil
         risks = []
         message = nil
@@ -79,7 +85,8 @@ final class RevokeFlowModel {
             let revoke = try core.prepareRevoke(accountId: accountId, allowanceId: allowance.id, tokens: tokens)
             // Unanswered, the read stays unfinished and `plan` refuses an untrusted contract.
             _ = await endpoints.drive(revoke, on: network)
-            plan = try revoke.plan(feeBalance: feeBalance)
+            guard started == epoch else { return }
+            plan = try revoke.plan(feeBalance: feeBalance())
         } catch let error as RevokeError {
             message = Self.shown(error)
             stage = .refused
@@ -90,9 +97,9 @@ final class RevokeFlowModel {
             return
         }
         track(plan)
-        let started = SendDriver(plan: plan, network: network, transport: transport)
-        driver = started
-        await settle(plan) { try await started.run(from: .start) }
+        let fresh = SendDriver(plan: plan, network: network, transport: transport)
+        driver = fresh
+        await settle(plan) { try await fresh.run(from: .start) }
     }
 
     /// The Cost box's retry: re-estimates on a freshly proven endpoint.
@@ -110,9 +117,24 @@ final class RevokeFlowModel {
         await settle(driver.plan) { try await driver.run(from: .confirm) }
     }
 
+    /// Opening (or reopening) the screen: prepares when no review is live, so a screen that
+    /// disappeared before submitting never sits on a Revoke that has no plan behind it.
+    func open() async {
+        guard driver == nil, stage == .preparing else { return }
+        await prepare()
+    }
+
+    /// Dismissal, lock, or the screen disappearing. Before submitting, the review is withdrawn and
+    /// any preparation in flight is abandoned; `open` prepares again. Once submitting, the write
+    /// settles as Send's does.
     func close() {
         driver?.plan.cancel()
         driver = nil
+        guard stage == .preparing || stage == .review else { return }
+        epoch += 1
+        review = nil
+        risks = []
+        stage = .preparing
     }
 
     /// What the screen shows for a refusal: Send's lock line for a lock (the extension's lookup
@@ -161,9 +183,13 @@ final class RevokeFlowModel {
     }
 
     private func settle(_ plan: TransferPlan, _ outcome: () async throws -> SendStep) async {
+        let started = epoch
         do {
-            try await handle(try await outcome(), plan: plan)
+            let step = try await outcome()
+            guard started == epoch else { return }
+            try await handle(step, plan: plan)
         } catch {
+            guard started == epoch else { return }
             // Closed (a lock, dismissal) after the signed write may have left: the core says so.
             fail(plan.interruptedFailure() ?? SendFailure(code: .locked, hash: nil))
         }

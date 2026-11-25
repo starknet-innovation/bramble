@@ -30,10 +30,9 @@ struct RevokeAllowanceView: View {
             }
             .padding(BrambleMetrics.Screen.shellPadding)
         }
-        .onAppear {
-            guard model == nil, let started = store.makeRevokeModel(allowance) else { return }
-            model = started
-            Task { await started.prepare() }
+        .task {
+            if model == nil { model = store.makeRevokeModel(allowance) }
+            await model?.open()
         }
         .onDisappear { model?.close() }
         .onChange(of: model?.stage) { _, stage in

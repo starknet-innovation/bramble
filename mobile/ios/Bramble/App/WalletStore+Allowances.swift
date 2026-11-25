@@ -71,13 +71,14 @@ extension WalletStore {
     /// so a lock cancels it.
     func makeRevokeModel(_ allowance: AllowanceView) -> RevokeFlowModel? {
         guard let account = activeRecord else { return nil }
+        let feeBalance: () -> String? = { [weak self] in self?.balances["STRK"] }
         return RevokeFlowModel(
             core: core,
             network: networkInfo,
             accountId: account.id,
             allowance: allowance,
             tokens: portfolio.preferences,
-            feeBalance: balances["STRK"],
+            feeBalance: feeBalance,
             endpoints: portfolio.endpoints,
             transport: rpc.transport
         ) { [weak self] plan in self?.plans.append(plan) }
