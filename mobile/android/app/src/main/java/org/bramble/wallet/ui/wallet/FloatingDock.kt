@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -32,6 +33,9 @@ import org.bramble.wallet.design.brambleShadow
 import org.bramble.wallet.design.brambleTween
 import org.bramble.wallet.design.fillPress
 
+/** Test tag on the dock, which overlays the bottom of every tab's scrolling content. */
+const val FLOATING_DOCK_TAG = "floating-dock"
+
 /** `.wallet-dock`: a floating pill of three 44dp items; the active one sits on accent-soft. */
 @Composable
 fun FloatingDock(
@@ -43,6 +47,7 @@ fun FloatingDock(
     val pill = RoundedCornerShape(percent = 50)
     Row(
         modifier
+            .testTag(FLOATING_DOCK_TAG)
             .brambleShadow(BrambleShadow.md, pill)
             .background(skin.panel, pill)
             .padding(vertical = BrambleLayout.dockPaddingVertical, horizontal = BrambleSpace.md),
