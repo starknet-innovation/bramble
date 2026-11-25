@@ -98,10 +98,11 @@ struct StakingAmountForm: View {
     var body: some View {
         let label = action == .stake ? StakingCopy.actionStakeAmount : StakingCopy.actionUnstakeAmount
         HStack(spacing: BrambleSpace.sm) {
-            BrambleField(label: nil, placeholder: "0 \(row.symbol)", text: $amount)
+            BrambleField(label: nil, placeholder: "0 \(row.symbol)", text: $amount, keyboard: .decimalPad)
                 .accessibilityLabel(StakingText.fill(label, ["symbol": row.symbol]))
             PillButton(StakingText.label(action), kind: action == .stake ? .primary : .secondary, small: true) {
-                let typed = amount.trimmingCharacters(in: .whitespaces)
+                // A decimal pad types "," in some locales; the core reads ".", as Send does.
+                let typed = amount.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
                 if !typed.isEmpty { act(action, row, typed) }
             }
         }
