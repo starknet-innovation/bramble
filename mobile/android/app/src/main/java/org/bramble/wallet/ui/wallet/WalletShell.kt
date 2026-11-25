@@ -182,28 +182,8 @@ private fun FlowScreen(
             )
         }
 
-        Flow.MANAGE_ACCOUNTS -> {
-            ManageAccountsScreen(store, back = pop)
-        }
-
-        Flow.NETWORK -> {
-            NetworkScreen(store, back = pop)
-        }
-
-        Flow.APPEARANCE -> {
-            AppearanceScreen(store, back = pop)
-        }
-
-        Flow.SECURITY -> {
-            SecurityScreen(store, back = pop)
-        }
-
-        Flow.REVEAL -> {
-            RevealScreen(store, back = pop)
-        }
-
-        Flow.REMOVE -> {
-            RemoveWalletScreen(store, back = pop)
+        Flow.MANAGE_ACCOUNTS, Flow.NETWORK, Flow.APPEARANCE, Flow.SECURITY, Flow.REVEAL, Flow.REMOVE -> {
+            SettingsFlowScreen(flow, store, pop)
         }
 
         Flow.ADDRESS_BOOK -> {
@@ -229,6 +209,24 @@ private fun FlowScreen(
         Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL, Flow.TOKENS, Flow.ADD_TOKEN, Flow.DISCOVER_TOKENS -> {
             PortfolioFlowScreen(flow, store, arguments, pop, push)
         }
+    }
+}
+
+/** The Settings hub's own screens: accounts, network, appearance, security, reveal, remove. */
+@Composable
+private fun SettingsFlowScreen(
+    flow: Flow,
+    store: WalletStore,
+    pop: () -> Unit,
+) {
+    when (flow) {
+        Flow.MANAGE_ACCOUNTS -> ManageAccountsScreen(store, back = pop)
+        Flow.NETWORK -> NetworkScreen(store, back = pop)
+        Flow.APPEARANCE -> AppearanceScreen(store, back = pop)
+        Flow.SECURITY -> SecurityScreen(store, back = pop)
+        Flow.REVEAL -> RevealScreen(store, back = pop)
+        Flow.REMOVE -> RemoveWalletScreen(store, back = pop)
+        else -> Unit
     }
 }
 
