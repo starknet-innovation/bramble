@@ -55,6 +55,12 @@ jobs:
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt,clippy
           rustup default "$RUST_TOOLCHAIN"
+      # Restores the compiled dependencies (bramble-core at opt-level 3 dominates); only pushes to
+      # main and feature/mobile-wallet save, so pull-request code never writes a cache another ref reads.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: mobile/core -> target
+          save-if: ${{ github.event_name == 'push' }}
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked --no-fail-fast
@@ -109,6 +115,10 @@ jobs:
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal \
             --target aarch64-apple-ios --target aarch64-apple-ios-sim
           rustup default "$RUST_TOOLCHAIN"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: mobile/core -> target
+          save-if: ${{ github.event_name == 'push' }}
       - run: bash mobile/scripts/build-core-ios.sh debug
       - name: Generate Xcode project
         run: |
@@ -146,6 +156,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
       # The runner image ships the Android SDK. Its sdkmanager adds the exact packages, since
       # third-party setup actions are not on the organisation's allowlist.
       - name: Install Android SDK packages
@@ -153,12 +164,17 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
-      - name: Install Rust toolchain and cargo-ndk
+      - name: Install Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal \
             --target aarch64-linux-android --target x86_64-linux-android
           rustup default "$RUST_TOOLCHAIN"
-          cargo install cargo-ndk --version 4.1.2 --locked
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: mobile/core -> target
+          save-if: ${{ github.event_name == 'push' }}
+      # A restored ~/.cargo/bin already holds it, and install then exits early.
+      - run: cargo install cargo-ndk --version 4.1.2 --locked
       - name: Build core
         run: |
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
@@ -192,6 +208,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: android-core
