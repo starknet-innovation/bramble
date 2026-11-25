@@ -1,5 +1,6 @@
 package org.bramble.wallet.staking
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +74,7 @@ fun StakingScreen(
     LaunchedEffect(model) { model.load() }
     val current = action
     if (current != null) {
-        StakingActionScreen(store, current, viewActivity) {
+        val close: () -> Unit = {
             action = null
             // The pools and "Your stakes" are read again after an action.
             scope.launch {
@@ -82,8 +82,12 @@ fun StakingScreen(
                 model.loadPositions()
             }
         }
+        // System back leaves the action, not the whole staking flow, as the header's back does.
+        BackHandler(onBack = close)
+        StakingActionScreen(store, current, viewActivity, close)
         return
     }
+    BackHandler(enabled = model.validator != null) { model.closeValidator() }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
@@ -248,10 +252,4 @@ internal fun RowPanel(
             .semantics { testTag = tag },
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
     ) { content() }
-}
-
-/** Closes an unsigned plan when the action's screen leaves. */
-@Composable
-internal fun CloseOnLeave(model: StakingActionModel) {
-    DisposableEffect(model) { onDispose { model.close() } }
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -179,7 +180,8 @@ internal fun StakingActionScreen(
     viewActivity: () -> Unit,
     close: () -> Unit,
 ) {
-    CloseOnLeave(model)
+    // Leaving cancels an unsigned plan.
+    DisposableEffect(model) { onDispose { model.close() } }
     LaunchedEffect(model) { model.prepare() }
     LaunchedEffect(model.stage) {
         if (model.stage == StakingActionModel.Stage.SUBMITTED) {

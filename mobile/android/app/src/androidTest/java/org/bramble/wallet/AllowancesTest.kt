@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.bramble.core.NetworkId
 import org.bramble.wallet.allowances.AllowanceCopy
 import org.bramble.wallet.allowances.AllowancesScreen
 import org.bramble.wallet.design.BrambleTheme
@@ -36,16 +37,19 @@ class AllowancesTest {
 
     private fun showing(text: String): Boolean = rule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
 
-    /** Files one 1000-unit STRK grant to [SPENDER] by the active account (test data). */
+    /**
+     * Files one 1000-unit STRK grant to [SPENDER] by the active account on the store's network
+     * (Mainnet by default, as the listing reads it; a Sepolia record would never be listed).
+     */
     private fun seed(): String {
-        val owner = onMainThread { activeRecord?.id }.orEmpty()
+        val (owner, network) = onMainThread { activeRecord?.id.orEmpty() to network }
         val id = "$owner:$STRK:$SPENDER"
         val record =
             JSONObject()
                 .put("accountId", owner)
                 .put("amount", "1000")
                 .put("id", id)
-                .put("networkId", "SN_SEPOLIA")
+                .put("networkId", if (network == NetworkId.SEPOLIA) "SN_SEPOLIA" else "SN_MAIN")
                 .put("spender", SPENDER)
                 .put("token", STRK)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -60,7 +64,7 @@ class AllowancesTest {
         val id = seed()
         rule.setContent { BrambleTheme { AllowancesScreen(appStore, viewActivity = {}) {} } }
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasTestTag("revoke-$id")).fetchSemanticsNodes().isNotEmpty() }
-        assertFalse(showing(AllowanceCopy.NONE))
+        assertFalse(showing(AllowanceCopy.noneFound))
         rule.onNode(hasTestTag("revoke-$id")).performClick()
 
         // No second press: the review, with its fee, is fetched as the screen opens.
@@ -71,7 +75,7 @@ class AllowancesTest {
         rule.onNode(hasTestTag("revoke-confirm") and hasClickAction()).performClick()
         rule.waitUntil(TIMEOUT_MS) { node.writes.get() == 1 && showing(SendCopy.back) }
         assertEquals("the signed revoke is posted exactly once", 1, node.writes.get())
-        assertFalse("a refused revoke is never reported submitted", showing(AllowanceCopy.SUBMITTED))
+        assertFalse("a refused revoke is never reported submitted", showing(AllowanceCopy.submitted))
     }
 
     private companion object {

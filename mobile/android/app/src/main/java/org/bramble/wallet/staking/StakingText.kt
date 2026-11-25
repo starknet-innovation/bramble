@@ -53,10 +53,10 @@ fun exitWindow(seconds: ULong): String {
 /** The validator screen's exit-window line, e.g. "Unstaking takes 7 days, with no rewards …". */
 fun exitWindowLine(seconds: ULong): String = fill(StakingCopy.validatorExitWindow, "window" to exitWindow(seconds))
 
-/** `unlockText`: the unlock time in fixed UTC, never the device's zone, e.g. 15 Jan 2027, 08:01. */
+/** `unlockText`: the unlock time in fixed UTC, never the device's zone, e.g. 15 Jan 2027, 08:01 UTC. */
 fun unlockText(seconds: ULong): String {
     val instant = Instant.ofEpochSecond(seconds.toLong())
-    return "${utcDay.format(instant)}, ${utcClock.format(instant)}"
+    return "${utcDay.format(instant)}, ${utcClock.format(instant)} UTC"
 }
 
 private fun held(value: String) = value.isNotEmpty() && value != "0"

@@ -84,25 +84,25 @@ fun AllowancesScreen(
     val subtitle =
         when {
             loading -> null
-            list == null -> AllowanceCopy.NOT_LOADED
+            list == null -> AllowanceCopy.notLoaded
             else -> AllowanceCopy.subtitle(list?.allowances?.size)
         }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
-        FlowHeader(AllowanceCopy.TITLE, subtitle = subtitle, network = store.networkLabel, back = back)
+        FlowHeader(AllowanceCopy.title, subtitle = subtitle, network = store.networkLabel, back = back)
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm), verticalAlignment = Alignment.Top) {
             Text(
-                AllowanceCopy.LEDE,
+                AllowanceCopy.lede,
                 color = LocalSkin.current.muted,
                 style = textStyle(BrambleTypeScale.body),
                 modifier = Modifier.weight(1f),
             )
-            IconButton(BrambleIconName.REFRESH, AllowanceCopy.REFRESH, enabled = !loading) { reads++ }
+            IconButton(BrambleIconName.REFRESH, AllowanceCopy.refresh, enabled = !loading) { reads++ }
         }
-        Disclosure(AllowanceCopy.SCOPE_TITLE, open = scopeOpen, onToggle = { scopeOpen = !scopeOpen }) {
-            Text(AllowanceCopy.SCOPE_BODY, color = LocalSkin.current.muted, style = textStyle(BrambleTypeScale.caption))
+        Disclosure(AllowanceCopy.scopeTitle, open = scopeOpen, onToggle = { scopeOpen = !scopeOpen }) {
+            Text(AllowanceCopy.scopeBody, color = LocalSkin.current.muted, style = textStyle(BrambleTypeScale.caption))
         }
         Listing(store, loading, list) { revoking = it }
         Spacer(Modifier.height(BrambleSpace.lg))
@@ -119,21 +119,21 @@ private fun Listing(
 ) {
     when {
         store.activeRecord == null -> {
-            Empty(AllowanceCopy.NO_ACCOUNT)
+            Empty(AllowanceCopy.noAccount)
         }
 
         loading -> {
-            Empty(AllowanceCopy.LOADING)
+            Empty(AllowanceCopy.loading)
         }
 
         list == null -> {
-            Empty(AllowanceCopy.UNAVAILABLE)
+            Empty(AllowanceCopy.unavailable)
         }
 
         else -> {
             list.notices.forEach { StatusLine(AllowanceCopy.notice(it)) }
             if (list.allowances.isEmpty()) {
-                Empty(AllowanceCopy.NONE)
+                Empty(AllowanceCopy.noneFound)
             } else {
                 val tokens = store.allowanceTokens
                 MenuGroup {
@@ -178,7 +178,7 @@ private fun AllowanceRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(shortAddress(allowance.spender), color = skin.text, style = textStyle(BrambleTypeScale.mono))
-            CopyButton(store, allowance.spender, AllowanceCopy.COPY_SPENDER)
+            CopyButton(store, allowance.spender, AllowanceCopy.copySpender)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -187,13 +187,13 @@ private fun AllowanceRow(
                 style = textStyle(BrambleTypeScale.caption),
                 modifier = Modifier.weight(1f, fill = false),
             )
-            CopyButton(store, allowance.token, AllowanceCopy.COPY_TOKEN_CONTRACT)
+            CopyButton(store, allowance.token, AllowanceCopy.copyTokenContract)
         }
-        if (allowance.unconfirmedToken) Note(AllowanceCopy.UNCONFIRMED_TOKEN)
-        if (allowance.revoking) Note(AllowanceCopy.REVOKING)
+        if (allowance.unconfirmedToken) Note(AllowanceCopy.unconfirmedToken)
+        if (allowance.revoking) Note(AllowanceCopy.revoking)
         if (AllowanceCopy.canRevoke(allowance)) {
             PillButton(
-                AllowanceCopy.REVOKE,
+                AllowanceCopy.revoke,
                 Modifier.padding(top = BrambleSpace.sm).testTag("revoke-${allowance.id}"),
                 kind = PillKind.DANGER,
                 onClick = revoke,
@@ -212,7 +212,7 @@ internal fun rowDetail(
     allowance: AllowanceView,
     token: TokenConfig?,
 ): String {
-    val contract = if (token == null) " ${AllowanceCopy.OF} ${shortAddress(allowance.token)}" else ""
+    val contract = if (token == null) " ${AllowanceCopy.ofContract} ${shortAddress(allowance.token)}" else ""
     return "${amountLabel(allowance, token)}$contract · ${AllowanceCopy.source(allowance.source)}"
 }
 
@@ -229,7 +229,7 @@ internal fun amountLabel(
         if (token != null && formatted != null) {
             "${compactAmount(formatted, null)} ${token.symbol}"
         } else {
-            AllowanceCopy.BASE_UNITS.replace("{amount}", compactAmount(amount, null))
+            AllowanceCopy.baseUnits.replace("{amount}", compactAmount(amount, null))
         }
     }
 

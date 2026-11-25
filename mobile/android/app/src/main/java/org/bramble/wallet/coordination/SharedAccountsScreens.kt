@@ -55,7 +55,10 @@ internal sealed interface MultisigFlow {
     /** One shared account's home. */
     data class Account(
         val id: String,
-    ) : MultisigFlow
+    ) : MultisigFlow {
+        /** Its tab, held by the stack entry so back from a screen above lands on the same tab. */
+        val tab = mutableStateOf(SharedTab.TOKENS)
+    }
 
     /** One shared account's receive address. */
     data class Receive(
@@ -101,7 +104,7 @@ private fun MultisigStack(
         null -> root(open)
         MultisigFlow.AddShared -> AddSharedAccountScreen(store, back = pop)
         is MultisigFlow.Create -> CreateMultisigScreen(store, top.resume, back = pop)
-        is MultisigFlow.Account -> SharedAccountHomeScreen(store, top.id, open, back = pop)
+        is MultisigFlow.Account -> SharedAccountHomeScreen(store, top.id, top.tab, open, back = pop)
         is MultisigFlow.Receive -> SharedReceiveScreen(store, top.id, back = pop)
         is MultisigFlow.Propose -> MultisigProposeScreen(store, top.id, back = pop)
         is MultisigFlow.Signers -> MultisigSignersScreen(store, top.id, back = pop)

@@ -77,8 +77,9 @@ private fun ProposalScreen(
         } else if (record != null) {
             val control =
                 ProposalControl(busy, armed) { request ->
+                    // Busy before the coroutine starts, so a second tap in the same frame is ignored.
+                    busy = true
                     scope.launch {
-                        busy = true
                         runCatching {
                             store.coordination.propose(request, record, store.portfolio.preferences, armed == request)
                         }.onSuccess {
@@ -239,8 +240,8 @@ internal fun MultisigImportScreen(
                 hint = MultisigTxText.IMPORT_NOTE,
             )
             PillButton(MultisigTxText.VERIFY_IMPORT, busy = busy, enabled = pkg.isNotBlank()) {
+                busy = true
                 scope.launch {
-                    busy = true
                     runCatching { store.coordination.importIntent(pkg, record, store.portfolio.preferences) }
                         .onSuccess {
                             intent = it

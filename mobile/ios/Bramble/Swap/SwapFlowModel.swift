@@ -174,10 +174,12 @@ final class SwapFlowModel {
     /// Asks for a fresh quote of the pair and amount on screen. A reply that lands after an edit
     /// is dropped; a refusal ends that quote and shows the core's sentence through the friendly copy.
     func requestQuote() async {
+        // A late debounce must not drop the quote a build is already using.
+        guard stage == .edit else { return }
         invalidate()
         let mine = generation
         let typed = amount.trimmingCharacters(in: .whitespaces)
-        guard stage == .edit, !typed.isEmpty, let sell, let buy else { return }
+        guard !typed.isEmpty, let sell, let buy else { return }
         quoting = true
         defer { if mine == generation { quoting = false } }
         do {

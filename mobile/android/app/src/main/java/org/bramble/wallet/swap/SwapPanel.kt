@@ -71,7 +71,8 @@ internal fun Panel(
         if (selling) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 val max = model.maxAmount
-                IconlessShortcut(SwapCopy.max, enabled = max != null) { max?.let { model.amount = it } }
+                val editing = model.stage == SwapFlowModel.Stage.EDIT
+                IconlessShortcut(SwapCopy.max, enabled = max != null && editing) { max?.let { model.amount = it } }
             }
         }
         if (picking) {

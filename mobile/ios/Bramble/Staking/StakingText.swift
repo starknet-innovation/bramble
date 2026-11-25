@@ -41,10 +41,10 @@ enum StakingText {
         fill(StakingCopy.validatorExitWindow, ["window": exitWindow(seconds)])
     }
 
-    /// `unlockText`: the unlock time in fixed UTC ("12 Sep 2026, 14:05"), never the device's zone.
+    /// `unlockText`: the unlock time in fixed UTC ("12 Sep 2026, 14:05 UTC"), never the device's zone.
     static func unlock(_ seconds: UInt64) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(seconds))
-        return "\(utc("dd MMM yyyy").string(from: date)), \(utc("HH:mm").string(from: date))"
+        return "\(utc("dd MMM yyyy").string(from: date)), \(utc("HH:mm").string(from: date)) UTC"
     }
 
     private static func utc(_ format: String) -> DateFormatter {
