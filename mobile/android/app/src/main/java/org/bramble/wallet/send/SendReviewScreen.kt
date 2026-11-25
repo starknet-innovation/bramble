@@ -242,12 +242,15 @@ private fun Hairline() {
     Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(LocalSkin.current.hairline))
 }
 
-/** The Cost box (`reviewFeeSection`): "Cost", then the figure and its share, or the failure and a retry. */
+/**
+ * The Cost box (`reviewFeeSection`): "Cost", then the figure and its share, or the failure and a
+ * retry. Only Send passes gasless [offers]; the revoke, swap and stake reviews offer none, as on iOS.
+ */
 @Composable
 internal fun CostBox(
     cost: ReviewCost,
-    offers: List<GaslessOffer>,
-    pay: (GaslessOffer) -> Unit,
+    offers: List<GaslessOffer> = emptyList(),
+    pay: (GaslessOffer) -> Unit = {},
     retry: () -> Unit,
 ) {
     val skin = LocalSkin.current
