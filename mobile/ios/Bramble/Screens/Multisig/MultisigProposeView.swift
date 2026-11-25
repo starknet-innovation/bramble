@@ -87,7 +87,7 @@ struct MultisigProposeView: View {
             let tokens = store.portfolio.tracked.map(\.token)
             let selected = tokenId ?? tokens.first?.id
             let request = selected.map { token in
-                MultisigProposalRequest.transfer(tokenId: token, recipient: recipient, amount: amount)
+                MultisigProposalRequest.transfer(tokenId: token, recipient: recipient, amount: amount.replacingOccurrences(of: ",", with: "."))
             }
             if tokens.isEmpty {
                 EmptyState(message: MultisigTxText.noTokens)
@@ -100,7 +100,7 @@ struct MultisigProposeView: View {
                 }
             }
             BrambleField(label: MultisigTxText.recipient, placeholder: "0x…", text: $recipient, mono: true)
-            BrambleField(label: MultisigTxText.amountToSend, placeholder: "0", text: $amount, mono: true)
+            BrambleField(label: MultisigTxText.amountToSend, placeholder: "0", text: $amount, mono: true, keyboard: .decimalPad)
             PillButton(
                 control.label(MultisigTxText.reviewTransaction, for: request),
                 icon: .send,
@@ -156,17 +156,17 @@ struct MultisigSignersView: View {
             }
             section(MultisigTxText.addParticipant) {
                 BrambleField(label: MultisigTxText.enterKey, placeholder: "0x…", text: $newKey, mono: true)
-                BrambleField(label: MultisigTxText.approvalsAfterAdding, placeholder: "", text: $addThreshold)
+                BrambleField(label: MultisigTxText.approvalsAfterAdding, placeholder: "", text: $addThreshold, keyboard: .numberPad)
                 button(MultisigTxText.reviewAddition, add, control).disabled(add == nil || newKey.isEmpty)
             }
             if removing != nil {
                 section(MultisigTxText.reviewRemoval) {
-                    BrambleField(label: MultisigTxText.approvalsAfterRemoval, placeholder: "", text: $removeThreshold)
+                    BrambleField(label: MultisigTxText.approvalsAfterRemoval, placeholder: "", text: $removeThreshold, keyboard: .numberPad)
                     button(MultisigTxText.reviewRemoval, remove, control).disabled(remove == nil)
                 }
             }
             section("Change approvals required") {
-                BrambleField(label: MultisigTxText.newThreshold, placeholder: "", text: $threshold)
+                BrambleField(label: MultisigTxText.newThreshold, placeholder: "", text: $threshold, keyboard: .numberPad)
                 button(MultisigTxText.reviewThreshold, change, control).disabled(change == nil)
             }
         }
