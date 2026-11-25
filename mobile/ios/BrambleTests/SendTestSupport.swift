@@ -9,9 +9,10 @@ let testPassword = "parity password"
 let account1 = "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3"
 
 /// The published wallet as after "Find your accounts": OZ 0 and 1 restored on Sepolia, OZ 0
-/// projected onto Mainnet, and OZ 0 on Sepolia active.
-func unlockedCore() throws -> WalletCore {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+/// projected onto Mainnet, and OZ 0 on Sepolia active. `dir` is the core's data directory.
+func unlockedCore(
+    in dir: URL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+) throws -> WalletCore {
     let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
     try core.importWallet(password: testPassword, phrase: publicPhrase)
     let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: [0, 1].map { index in

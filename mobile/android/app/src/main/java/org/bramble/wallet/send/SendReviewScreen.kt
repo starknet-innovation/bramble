@@ -244,7 +244,7 @@ private fun Hairline() {
 
 /** The Cost box (`reviewFeeSection`): "Cost", then the figure and its share, or the failure and a retry. */
 @Composable
-private fun CostBox(
+internal fun CostBox(
     cost: ReviewCost,
     offers: List<GaslessOffer>,
     pay: (GaslessOffer) -> Unit,
@@ -291,7 +291,7 @@ private fun CostBox(
 
 /** `reviewPanel`: "Risk and recovery" over each warning; nothing at all when there is none. */
 @Composable
-private fun RisksPanel(risks: List<String>) {
+internal fun RisksPanel(risks: List<String>) {
     if (risks.isEmpty()) return
     val skin = LocalSkin.current
     Column(

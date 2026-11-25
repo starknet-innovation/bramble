@@ -367,7 +367,8 @@ export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
 // numbers the encoder computed, not a check on an address).
 // The KMS result-field checks are not here: their field can be a public key or
 // a signature, so they stay visible. The anchored grammar admits nothing else.
-const KMS_TEMPLATE_PLUMBING =
+/** Exported for the mobile apps' generated lookup (scripts/mobile-assets/friendly-errors.ts). */
+export const KMS_TEMPLATE_PLUMBING =
   /^krusty kms export missing: [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$|^qr layout mismatch: [^\s]+ cells for [^\s]+ bits$|^missing message parameter: [a-z][a-z0-9]*$|^unknown message: [^\s]+$/;
 
 /**

@@ -10,6 +10,7 @@ struct HomeView: View {
     let receive: () -> Void
     let open: (WalletShell.Flow) -> Void
     var send: () -> Void = { /* No action unless the shell wires the send flow. */ }
+    var swap: () -> Void = { /* No action unless the shell wires the swap flow. */ }
     var privacy: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
 
     var body: some View {
@@ -26,14 +27,17 @@ struct HomeView: View {
             }
             HStack(spacing: BrambleMetrics.ActionRow.gap) {
                 ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
-                ActionTile(title: "Swap", icon: .shuffle) {
-                    // No action: swapping is not available on mobile yet, and the tile is disabled.
-                }
-                .disabled(true)
+                ActionTile(title: SwapCopy.homeAction, icon: .swap, action: swap).disabled(store.account == nil)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
                 ShieldActionTile(journey: privacy)
             }
             PortfolioTokens(open: open)
+            // Where the core's staking policy is on (Mainnet): the extension's Staking tab.
+            if store.stakingAvailable {
+                MenuGroup {
+                    MenuRow(icon: .trendingUp, title: StakingCopy.title) { open(.staking) }
+                }
+            }
         }
     }
 }

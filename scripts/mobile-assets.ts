@@ -20,6 +20,7 @@ import { renderAndroidTokenLogos } from "./mobile-assets/android-token-logos";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { parseCss } from "./mobile-assets/css";
 import { TOAST_SOURCE } from "./mobile-assets/feedback";
+import { renderFriendlyErrors } from "./mobile-assets/friendly-errors";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { MULTISIG_JSON_PATH, renderMultisigConstants } from "./mobile-assets/multisig";
 import { PRIVACY_JSON_PATH, renderPrivacyRouting } from "./mobile-assets/privacy";
@@ -31,6 +32,18 @@ import {
 } from "./mobile-assets/rpc-fixtures";
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
+import {
+  renderKotlinStakingCopy,
+  renderSwiftStakingCopy,
+  STAKING_COPY_KOTLIN_PATH,
+  STAKING_COPY_SWIFT_PATH,
+} from "./mobile-assets/staking-copy";
+import {
+  renderKotlinSwapCopy,
+  renderSwiftSwapCopy,
+  SWAP_COPY_KOTLIN_PATH,
+  SWAP_COPY_SWIFT_PATH,
+} from "./mobile-assets/swap-copy";
 import { renderSwift, renderSwiftLayout } from "./mobile-assets/swift";
 import { renderVectorAssets, tokenLogoAddresses } from "./mobile-assets/vectors";
 
@@ -165,6 +178,10 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [POLICY_JSON_PATH, renderPolicyJson()],
     [SWIFT_COPY_PATH, renderSwiftCopy()],
     [KOTLIN_COPY_PATH, renderKotlinCopy()],
+    [STAKING_COPY_SWIFT_PATH, renderSwiftStakingCopy()],
+    [STAKING_COPY_KOTLIN_PATH, renderKotlinStakingCopy()],
+    [SWAP_COPY_SWIFT_PATH, renderSwiftSwapCopy()],
+    [SWAP_COPY_KOTLIN_PATH, renderKotlinSwapCopy()],
     [RPC_FIXTURES_PATH, renderRpcFixtures()],
     [KOTLIN_RPC_FIXTURES_PATH, renderKotlinRpcFixtures()],
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],
@@ -175,6 +192,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],
+    ...renderFriendlyErrors(),
     ...renderVectorAssets(),
     ...renderAndroidTokenLogos(),
   ]);

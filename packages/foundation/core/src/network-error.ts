@@ -18,7 +18,11 @@ export const NETWORK_ERROR_MESSAGE =
  */
 export const NETWORK_RETRY_MESSAGE = "Couldn't reach the network, try again";
 
-const NETWORK_FAILURE_MARKERS = [
+/**
+ * Lowercase substrings that mark a transport failure (`friendlyNetworkError`);
+ * exported for the mobile apps' generated lookup.
+ */
+export const NETWORK_FAILURE_MARKERS = [
   "failed to fetch",
   "fetch failed",
   "network request failed",

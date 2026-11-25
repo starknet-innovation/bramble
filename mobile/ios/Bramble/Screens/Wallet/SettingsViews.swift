@@ -38,6 +38,9 @@ struct SettingsHubView: View {
             SettingsSection(title: Self.deployRow.section) {
                 MenuRow(icon: .rocket, title: Self.deployRow.title) { open(Self.deployFlow) }
             }
+            SettingsSection(title: AllowanceCopy.settingsSection) {
+                MenuRow(icon: .coins, title: AllowanceCopy.settingsRow) { open(.allowances(nil)) }
+            }
             SettingsSection(title: "Preferences") {
                 MenuRow(
                     icon: .settings,
