@@ -24,11 +24,13 @@ import org.bramble.wallet.coordination.MultisigTxText
 import org.bramble.wallet.coordination.readAuthority
 import org.bramble.wallet.coordination.readState
 import org.bramble.wallet.coordination.runPlan
+import org.bramble.wallet.coordination.settleSubmitted
 import org.bramble.wallet.security.DeviceClock
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -147,6 +149,28 @@ class MultisigTransactionsTest {
             assertEquals(IntentState.SUBMITTED, stored(intent.id).state)
         }
 
+    /**
+     * A submitted intent's activity row is read by `refreshActivity` for the multisig id
+     * (wallet-core #115), and the core's next list settles the intent from it. Never a write.
+     */
+    @Test
+    fun submittedIntentSettles() =
+        runBlocking {
+            val id = (propose() as MultisigTxStep.Proposed).intentId
+            val cosigners = proposal.getJSONArray("cosignerAccountIndexes")
+            for (i in 0 until cosigners.length()) {
+                core.signMultisigIntent(id, signer(cosigners.getInt(i)), intentRead(id))
+            }
+            val submission = core.submitMultisigIntent(id, intentRead(id))
+            runPlan(network, node) { submission.advance(it) }
+            assertEquals(IntentState.SUBMITTED, stored(id).state)
+
+            node.landed = true
+            assertTrue(settleSubmitted(core.multisigIntents(multisigId), multisigId, core, network, node))
+            assertEquals(IntentState.ACCEPTED, stored(id).state)
+            assertEquals("settling never writes", 1, node.writes.get())
+        }
+
     /** The nonce moved past a collecting intent: it goes stale, and a resend needs "Send anyway". */
     @Test
     fun staleAndResendGuards() =
@@ -169,7 +193,8 @@ class MultisigTransactionsTest {
 
 /**
  * A fake node for one multisig: its authority, the recorded nonce and fee estimate, no known
- * transaction hashes, and the recorded acceptance of the one write, which it counts.
+ * transaction hashes until [landed] (then every status read answers accepted on L2), and the
+ * recorded acceptance of the one write, which it counts.
  */
 private class MultisigNode(
     account: JSONObject,
@@ -186,6 +211,8 @@ private class MultisigNode(
     private val accepted = recorded(proposal, "submit", "starknet_addInvokeTransaction")
 
     @Volatile var nonce = "0x5"
+
+    @Volatile var landed = false
     val writes = AtomicInteger()
 
     private fun recorded(
@@ -216,19 +243,28 @@ private class MultisigNode(
         val id = request.getLong("id")
         val selector =
             request.optJSONObject("params")?.optJSONObject("request")?.optString("entry_point_selector") ?: ""
-        val result: Any =
-            when (request.getString("method")) {
-                "starknet_chainId" -> "0x534e5f5345504f4c4941"
-                "starknet_blockHashAndNumber" -> JSONObject(mapOf("block_hash" to "0x1", "block_number" to 1))
-                "starknet_getClassHashAt" -> classHash
-                "starknet_call" -> callResult(selector)
-                "starknet_getNonce" -> nonce
-                "starknet_estimateFee" -> estimate
-                "starknet_addInvokeTransaction" -> accepted.also { check(write) }.also { writes.incrementAndGet() }
-                else -> return """{"jsonrpc":"2.0","id":$id,"error":$NOT_FOUND}"""
-            }
-        return JSONObject(mapOf("jsonrpc" to "2.0", "id" to id, "result" to result)).toString()
+        val result = answer(request.getString("method"), selector, write)
+        return result?.let { JSONObject(mapOf("jsonrpc" to "2.0", "id" to id, "result" to it)).toString() }
+            ?: """{"jsonrpc":"2.0","id":$id,"error":$NOT_FOUND}"""
     }
+
+    /** The result for [method], or null for a hash this node does not know. */
+    private fun answer(
+        method: String,
+        selector: String,
+        write: Boolean,
+    ): Any? =
+        when (method) {
+            "starknet_chainId" -> "0x534e5f5345504f4c4941"
+            "starknet_blockHashAndNumber" -> JSONObject(mapOf("block_hash" to "0x1", "block_number" to 1))
+            "starknet_getClassHashAt" -> classHash
+            "starknet_call" -> callResult(selector)
+            "starknet_getNonce" -> nonce
+            "starknet_estimateFee" -> estimate
+            "starknet_getTransactionStatus" -> ACCEPTED.takeIf { landed }
+            "starknet_addInvokeTransaction" -> accepted.also { check(write) }.also { writes.incrementAndGet() }
+            else -> null
+        }
 
     private fun callResult(selector: String): JSONArray =
         if (selector.startsWith("0x1753")) {
@@ -240,5 +276,8 @@ private class MultisigNode(
     private companion object {
         /** `TXN_HASH_NOT_FOUND`, the answer to every hash lookup. */
         const val NOT_FOUND = """{"code":29,"message":"Transaction hash not found"}"""
+
+        /** A landed transaction's status. */
+        val ACCEPTED = JSONObject(mapOf("finality_status" to "ACCEPTED_ON_L2", "execution_status" to "SUCCEEDED"))
     }
 }

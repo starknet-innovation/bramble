@@ -1,19 +1,23 @@
 package org.bramble.wallet.coordination
 
 import org.bramble.core.CoreException
+import org.bramble.core.IntentState
 import org.bramble.core.MultisigIntent
 import org.bramble.core.MultisigProposalRequest
 import org.bramble.core.MultisigRecord
 import org.bramble.core.MultisigTxFailure
 import org.bramble.core.MultisigTxStep
 import org.bramble.core.NetworkInfo
+import org.bramble.core.SendException
 import org.bramble.core.StepReply
 import org.bramble.core.TokenPreferences
+import org.bramble.core.WalletCore
 import org.bramble.core.redactEndpoints
 import org.bramble.wallet.RpcPost
 import org.bramble.wallet.describe
 import org.bramble.wallet.errors.friendlyError
 import org.bramble.wallet.send.RpcEndpoint
+import org.bramble.wallet.send.SendDriver
 
 // Multisig transactions (M18, mobile/docs/multisig-transactions.md), port of the iOS
 // `CoordinationStore+Transactions.swift`: propose, co-sign, submit and import around wallet-core's
@@ -23,13 +27,47 @@ import org.bramble.wallet.send.RpcEndpoint
 
 /**
  * The signing intents stored for [multisigId], newest first; empty when the core refuses.
- *
- * TODO(M18): a submitted intent settles only once its activity row does, and that row is read by
- * `refresh_activity` for the multisig id: wallet-core #115, after v0.7.0. Until the pin moves past
- * it, a submitted intent stays "Submitted to Starknet" here.
+ * Submitted intents are settled first ([settleSubmitted]), so one the chain has accepted or
+ * rejected leaves "Submitted to Starknet" on this read.
  */
-suspend fun CoordinationStore.intents(multisigId: String): List<MultisigIntent> =
+suspend fun CoordinationStore.intents(multisigId: String): List<MultisigIntent> {
+    val listed = storedIntents(multisigId)
+    val settled = settleSubmitted(listed, multisigId, core, network(), txPost)
+    return if (settled) storedIntents(multisigId) else listed
+}
+
+private suspend fun CoordinationStore.storedIntents(multisigId: String): List<MultisigIntent> =
     runCatching { work { core.multisigIntents(multisigId) } }.getOrDefault(emptyList())
+
+/**
+ * Reads the status of each of [intents]' submitted transactions through `refreshActivity` for
+ * [multisigId] (wallet-core #115: a multisig's submissions are filed under its id), as Activity's
+ * observation does for an account. The plan never signs; the core settles the intent from the
+ * updated row on its next list read. A refused or failed read leaves the intent submitted for a
+ * later list. Returns whether any read ran.
+ */
+internal suspend fun settleSubmitted(
+    intents: List<MultisigIntent>,
+    multisigId: String,
+    core: WalletCore,
+    info: NetworkInfo,
+    transport: RpcPost,
+): Boolean {
+    var ran = false
+    val hashes = intents.filter { it.state == IntentState.SUBMITTED }.mapNotNull { it.broadcastTransactionHash }
+    for (hash in hashes) {
+        val plan = runCatching { work { core.refreshActivity(multisigId, hash) } }.getOrNull() ?: continue
+        try {
+            SendDriver(plan, info, transport).run(StepReply.Start)
+        } catch (ignored: SendException) {
+            // The intent stays submitted; the next list reads it again.
+        } finally {
+            plan.cancel()
+        }
+        ran = true
+    }
+    return ran
+}
 
 /**
  * Freezes and stores [request] from [record] (`prepareIntent`) after a fresh authority read, over

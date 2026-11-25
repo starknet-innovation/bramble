@@ -133,6 +133,35 @@ final class MultisigTransactionsTests: XCTestCase {
         XCTAssertThrowsError(try wallet.core.submitMultisigIntent(intentId: intent.id, state: again), "never twice")
     }
 
+    /// A submitted intent's activity row is read by `refresh_activity` for the multisig id
+    /// (wallet-core #115), and the core's next list settles the intent from it. Never a write.
+    func testSubmittedIntentSettlesAfterTheRefresh() async throws {
+        let wallet = try wallet()
+        guard case .proposed(let id) = try await propose(wallet) else {
+            XCTFail("proposed")
+            return
+        }
+        for index in try XCTUnwrap(wallet.proposal["cosignerAccountIndexes"] as? [Int]) {
+            let read = try await intentRead(wallet, id)
+            _ = try wallet.core.signMultisigIntent(intentId: id, signerAccountId: try wallet.signer(index), state: read)
+        }
+        let submission = try wallet.core.submitMultisigIntent(intentId: id, state: try await intentRead(wallet, id))
+        _ = try await MultisigTxDriver.run(submission, network: wallet.network, transport: wallet.node)
+        XCTAssertEqual(try wallet.stored().first { $0.id == id }?.state, .submitted)
+
+        wallet.node.landed = true
+        let ran = await MultisigTxDriver.settle(
+            try wallet.stored(),
+            of: wallet.multisigId,
+            core: wallet.core,
+            network: wallet.network,
+            transport: wallet.node
+        )
+        XCTAssertTrue(ran)
+        XCTAssertEqual(try wallet.stored().first { $0.id == id }?.state, .accepted)
+        XCTAssertEqual(wallet.node.writes, 1, "settling never writes")
+    }
+
     /// The chain's nonce moved past a collecting intent: signing it is refused and it is stored
     /// stale; proposing the same calls again then needs the person's "Send anyway".
     func testStaleIntentAndResendGuardReachTheScreens() async throws {
@@ -196,7 +225,8 @@ final class MultisigTransactionsTests: XCTestCase {
 }
 
 /// A fake node for one multisig: its authority, the recorded nonce and fee estimate, no known
-/// transaction hashes, and the recorded acceptance of the one write. Counts writes.
+/// transaction hashes until `landed` (then every status read answers accepted on L2), and the
+/// recorded acceptance of the one write. Counts writes.
 final class MultisigNode: RpcTransport, @unchecked Sendable {
     static let hexRadix = 16
     /// `TXN_HASH_NOT_FOUND`, the answer to every hash lookup.
@@ -210,12 +240,17 @@ final class MultisigNode: RpcTransport, @unchecked Sendable {
     private let accepted: Any
     private var currentNonce = "0x5"
     private var writeCount = 0
+    private var hasLanded = false
 
     var nonce: String {
         get { lock.withLock { currentNonce } }
         set { lock.withLock { currentNonce = newValue } }
     }
     var writes: Int { lock.withLock { writeCount } }
+    var landed: Bool {
+        get { lock.withLock { hasLanded } }
+        set { lock.withLock { hasLanded = newValue } }
+    }
 
     init(account: [String: Any], proposal: [String: Any]) throws {
         classHash = try fixtureValue(account, "classHash")
@@ -262,6 +297,9 @@ final class MultisigNode: RpcTransport, @unchecked Sendable {
 
         case "starknet_estimateFee":
             result = estimate
+
+        case "starknet_getTransactionStatus" where landed:
+            result = ["finality_status": "ACCEPTED_ON_L2", "execution_status": "SUCCEEDED"]
 
         case "starknet_addInvokeTransaction":
             XCTAssertTrue(write)

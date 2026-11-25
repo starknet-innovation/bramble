@@ -12,12 +12,21 @@ extension CoordinationStore {
     private var nowMs: UInt64 { UInt64(Date().timeIntervalSince1970 * Self.millisecondsPerSecond) }
 
     /// The signing intents stored for a multisig, newest first; empty when the core refuses.
-    ///
-    /// Open item (M18, wallet-core #115; SwiftLint forbids the usual marker): a submitted intent
-    /// settles only once its activity row does, and that row is read by `refresh_activity` for the
-    /// multisig id, which landed after v0.7.0. Until the pin moves past it, a submitted intent
-    /// stays "Submitted to Starknet" here.
+    /// Submitted intents are settled first (`MultisigTxDriver.settle`), so one the chain has
+    /// accepted or rejected leaves "Submitted to Starknet" on this read.
     func intents(of multisigId: String) async -> [MultisigIntent] {
+        let listed = await storedIntents(of: multisigId)
+        let settled = await MultisigTxDriver.settle(
+            listed,
+            of: multisigId,
+            core: core,
+            network: wallet.networkInfo,
+            transport: rpc
+        )
+        return settled ? await storedIntents(of: multisigId) : listed
+    }
+
+    private func storedIntents(of multisigId: String) async -> [MultisigIntent] {
         let walletCore = core
         return (try? await work { try walletCore.multisigIntents(multisigId: multisigId) }) ?? []
     }
@@ -156,5 +165,27 @@ enum MultisigTxDriver {
             guard case let .rpc(id, body, purpose, isWrite) = step else { return step }
             reply = await endpoint.exchange(id: id, body: body, purpose: purpose, write: isWrite)
         }
+    }
+
+    /// Reads the status of each of `intents`' submitted transactions through `refresh_activity`
+    /// for `multisigId` (wallet-core #115: a multisig's submissions are filed under its id), as
+    /// Activity's observation does for an account. The plan never signs; the core settles the
+    /// intent from the updated row on its next list read. A refused or failed read leaves the
+    /// intent submitted for a later list. Returns whether any read ran.
+    static func settle(
+        _ intents: [MultisigIntent],
+        of multisigId: String,
+        core: WalletCore,
+        network: NetworkInfo,
+        transport: RpcTransport
+    ) async -> Bool {
+        var ran = false
+        for intent in intents where intent.state == .submitted {
+            guard let hash = intent.broadcastTransactionHash,
+                  let plan = try? core.refreshActivity(accountId: multisigId, hash: hash) else { continue }
+            _ = try? await SendDriver(plan: plan, network: network, transport: transport).run(from: .start)
+            ran = true
+        }
+        return ran
     }
 }

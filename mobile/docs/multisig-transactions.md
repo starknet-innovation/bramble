@@ -1,9 +1,9 @@
 # Multisig transactions on mobile (M18)
 
-Status: implemented on `mobile/m18-multisig-tx` (2026-11-25), on wallet-core `v0.7.0` (X1,
-wallet-core #111). Scope: propose, co-sign, submit and change signers for a saved, deployed Argent
-(Ready) Multisig 0.2 account, plus importing a co-signer's package. Setup, deployment and the relay
-are `nostr-multisig.md`.
+Status: implemented on `mobile/m18-multisig-tx` (2026-11-25), on wallet-core `v0.8.0` (X1,
+wallet-core #111, and its settle, #115). Scope: propose, co-sign, submit and change signers for a
+saved, deployed Argent (Ready) Multisig 0.2 account, plus importing a co-signer's package. Setup,
+deployment and the relay are `nostr-multisig.md`.
 
 ## 1. Who does what
 
@@ -15,7 +15,7 @@ built in app code.
 
 | Step | Core export | App code |
 | --- | --- | --- |
-| List | `multisig_intents(multisig_id)` (settles first) | `intents(of:)` |
+| List | `refresh_activity(multisig_id, hash)` per submitted intent, then `multisig_intents(multisig_id)` (settles first) | `intents(of:)`, `MultisigTxDriver.settle` / `settleSubmitted` |
 | Propose | `MultisigAuthorityRead`, then `propose_multisig_transaction(read, request, tokens, confirm_resend)` → `MultisigProposal` | `propose`, driven by `MultisigTxDriver` / `runPlan` |
 | Co-sign | `multisig_intent_read(intent_id, now_ms)`, then `sign_multisig_intent(intent_id, signer_account_id, state)` | `sign` |
 | Submit | `multisig_intent_read`, then `submit_multisig_intent(intent_id, state)` → `MultisigSubmission` | `submit` |
@@ -80,11 +80,12 @@ is stored `Submitted` with its hash ("Submitted to Starknet" on the card). Mobil
 lists the active account's rows only, so a multisig's transactions show in its Transactions tab
 and in the list's " · N open" count.
 
-**Known gap.** Settling a submitted intent to accepted or rejected needs `refresh_activity` by
-multisig id, which is wallet-core #115. That change landed after `v0.7.0` and is not tagged yet. Both
-apps carry `TODO(M18)` at `intents(of:)` and `intents(multisigId)`. Until the pin moves, a
-submitted intent stays submitted on mobile, and the core's `settle` runs on every list read, so it
-settles as soon as a row does.
+**Settling.** Each list read (`intents(of:)` / `intents(multisigId)`) first reads the status of
+every submitted intent's transaction through `refresh_activity` for the multisig id (wallet-core
+#115, in `v0.8.0`), relayed by `SendDriver` like Activity's observation; the plan never signs. The
+core's list read then settles the intent from the updated row: "Submitted to Starknet" becomes
+accepted or rejected, and a settled intent can be evicted from the 25-intent store. A refused or
+failed read leaves the intent submitted, and the next list reads it again.
 
 ## 5. Not in M18
 
@@ -101,7 +102,9 @@ settles as soon as a row does.
   fake node. The proposal, both co-signatures and the ready package must equal the extension's
   bytes. The submission must return the recorded hash with exactly one write. A moved nonce must
   leave the intent stale, and a repeat proposal must come back `ResendUnconfirmed` and then succeed
-  with `confirm_resend`.
+  with `confirm_resend`. A submitted intent must become accepted once the node reports its
+  transaction accepted, through the app's settle (`MultisigTxDriver.settle` / `settleSubmitted`),
+  with no further write.
 - Android `test/.../MultisigTxTextTest.kt` holds the card's action, note and status for each state,
   plus the failure copy.
 - iOS `BrambleUITests/MultisigTransactionsFlowTests.swift` proposes and signs on the stub 1-of-1
