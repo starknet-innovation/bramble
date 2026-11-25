@@ -61,6 +61,27 @@ internal sealed interface MultisigFlow {
     data class Receive(
         val id: String,
     ) : MultisigFlow
+
+    /** A transfer from the multisig (M18). */
+    data class Propose(
+        val id: String,
+    ) : MultisigFlow
+
+    /** The multisig's signers and a signer change. */
+    data class Signers(
+        val id: String,
+    ) : MultisigFlow
+
+    /** Import a co-signer's package. */
+    data class Import(
+        val id: String,
+    ) : MultisigFlow
+
+    /** One stored signing intent. */
+    data class Intent(
+        val multisigId: String,
+        val intentId: String,
+    ) : MultisigFlow
 }
 
 /**
@@ -82,6 +103,10 @@ private fun MultisigStack(
         is MultisigFlow.Create -> CreateMultisigScreen(store, top.resume, back = pop)
         is MultisigFlow.Account -> SharedAccountHomeScreen(store, top.id, open, back = pop)
         is MultisigFlow.Receive -> SharedReceiveScreen(store, top.id, back = pop)
+        is MultisigFlow.Propose -> MultisigProposeScreen(store, top.id, back = pop)
+        is MultisigFlow.Signers -> MultisigSignersScreen(store, top.id, back = pop)
+        is MultisigFlow.Import -> MultisigImportScreen(store, top.id, back = pop)
+        is MultisigFlow.Intent -> MultisigIntentScreen(store, top.multisigId, top.intentId, back = pop)
     }
 }
 
@@ -123,7 +148,13 @@ fun SharedAccountsScreen(
             MenuGroup {
                 records.forEachIndexed { index, record ->
                     if (index > 0) MenuDivider()
-                    MenuRow(BrambleIconName.WALLET, multisigDisplayName(record), value = multisigConfigLabel(record)) {
+                    val pending = coordination.openIntents[record.id]?.takeIf { it > 0 }?.let { " · $it open" } ?: ""
+                    MenuRow(
+                        BrambleIconName.WALLET,
+                        multisigDisplayName(record),
+                        value =
+                            multisigConfigLabel(record) + pending,
+                    ) {
                         open(MultisigFlow.Account(record.id))
                     }
                 }

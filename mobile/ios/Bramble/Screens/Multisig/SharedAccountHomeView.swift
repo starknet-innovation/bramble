@@ -2,9 +2,9 @@ import BrambleCore
 import SwiftUI
 
 /// `multisig-home` (`journeys/multisig/multisig-portfolio.ts`): the shared account's actions and
-/// notes, then Tokens and Intents. Intents holds "Co-signer updates": a coordination sync that
-/// authenticates gift wraps and reports trusted packages, which are held until intent import
-/// lands (docs/nostr-multisig.md §1). Send, Signers, and signing are not on mobile yet.
+/// notes, then Tokens and Transactions. Transactions lists the open signing intents and imports
+/// one; "Co-signer updates" syncs gift wraps, whose trusted packages are still held, not imported
+/// (wallet-core v0.7.0 imports a package only by paste, docs/multisig-transactions.md).
 struct SharedAccountHomeView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -20,6 +20,7 @@ struct SharedAccountHomeView: View {
     @State private var syncFailed = false
     @State private var syncing = false
     @State private var confirmingRemove = false
+    @State private var intents: [MultisigIntent] = []
 
     enum Tab: Hashable { case tokens, intents }
 
@@ -43,7 +44,7 @@ struct SharedAccountHomeView: View {
                     ) { dismiss() }
                     actions(record)
                     SegmentedControl(
-                        options: [("Tokens", Tab.tokens), ("Intents", Tab.intents)],
+                        options: [("Tokens", Tab.tokens), (MultisigTxText.transactions, Tab.intents)],
                         selection: $tab
                     )
                     .accessibilityElement(children: .contain)
@@ -60,6 +61,9 @@ struct SharedAccountHomeView: View {
             .padding(BrambleMetrics.Screen.shellPadding)
             .padding(.bottom, BrambleSpace.xl)
         }
+        // Again on every return, so a signature or submission made one screen deeper shows here.
+        .onAppear { Task { await loadIntents() } }
+        .task(id: tab) { await loadIntents() }
         .task {
             if let address = record?.address {
                 let fetched = try? await store.coordination.balances(of: address)
@@ -73,6 +77,10 @@ struct SharedAccountHomeView: View {
         let undeployed = record.deployment != nil && !record.hasCurrentConfig
         return VStack(alignment: .leading, spacing: BrambleSpace.sm) {
             HStack(spacing: BrambleSpace.sm) {
+                if record.hasCurrentConfig, !record.localSignerAccountIds.isEmpty {
+                    PillButton(MultisigTxText.send, kind: .secondary, icon: .send) { open(.propose(id: record.id)) }
+                    PillButton(MultisigTxText.signers, kind: .secondary, icon: .users) { open(.signers(id: record.id)) }
+                }
                 if undeployed {
                     PillButton("Deploy", kind: .secondary, icon: .wallet) { open(.createMultisig(resume: record.id)) }
                 }
@@ -148,11 +156,34 @@ struct SharedAccountHomeView: View {
             }
             PillButton("Check for updates", kind: .secondary, icon: .refresh, busy: syncing) { sync(record) }
             StatusLine(text: syncResult, tone: syncFailed ? .danger : .muted)
-            Text("No intents are awaiting verification or signature. Import one to review it here.")
-                .brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+            if intents.isEmpty {
+                Text(MultisigTxText.nothingImport).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+            } else {
+                Eyebrow(text: intentsHeading)
+                MenuGroup {
+                    ForEach(intents, id: \.id) { intent in
+                        MenuRow(icon: .users, title: intent.summary, value: MultisigTxText.status(intent)) {
+                            open(.intent(multisigId: record.id, intentId: intent.id))
+                        }
+                    }
+                }
+            }
+            PillButton(MultisigTxText.importTransaction, kind: .ghost, icon: .chevronRight, small: true) {
+                open(.importIntent(id: record.id))
+            }
         }
         .padding(BrambleSpace.lg)
         .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
+    }
+
+    private func loadIntents() async {
+        if tab == .intents { intents = await store.coordination.intents(of: id).filter(isOpen) }
+    }
+
+    /// `compactIntentList`'s heading: all stale, some stale, or all awaiting.
+    private var intentsHeading: String {
+        if intents.allSatisfy({ $0.state == .stale }) { return MultisigTxText.attention }
+        return intents.contains { $0.state == .stale } ? MultisigTxText.needingYou : MultisigTxText.waiting
     }
 
     private func sync(_ record: MultisigRecord) {

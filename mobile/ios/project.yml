@@ -117,6 +117,9 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/extension-privacy-copy.json
         buildPhase: resources
+      # The multisig proposal the multisig transaction tests replay (docs/multisig-transactions.md).
+      - path: ../core/tests/fixtures/extension-multisig-transactions.json
+        buildPhase: resources
     dependencies:
       # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code,
       # and the host-side account code (Clipboard, the discovery driver, routing).
