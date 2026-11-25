@@ -63,11 +63,14 @@ export type FeatureFlagSource = {
  * Loads the flags once and re-marks `root` when they arrive. Before they do,
  * and when the read fails or is refused, every gated feature is hidden.
  */
-export const createFeatureGate = (root: ParentNode, source: FeatureFlagSource): FeatureGate => {
+export const createFeatureGate = (
+  root: ParentNode | null,
+  source: FeatureFlagSource,
+): FeatureGate => {
   let flags: FeatureFlagValues = {};
   const apply = (latest?: ExperimentalFeaturesState): void => {
     if (typeof latest === "object") flags = latest.flags;
-    applyFeatureVisibility(root, flags);
+    if (root) applyFeatureVisibility(root, flags);
   };
   void source.loadExperimentalFeatures().then(
     (loaded) => {

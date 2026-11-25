@@ -32,7 +32,6 @@ import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showNoticeToast, showToast } from "../shared/dom";
-import { createFeatureGate } from "../shared/feature-gates";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
 import { networkChangeAnnouncer } from "../shared/network-change";
 import { utcDayKey } from "../shared/timestamp";
@@ -49,12 +48,9 @@ import { startSidePanelNotice, startSidePanelVisibility } from "../shell/side-pa
 import { startUpdateBanner } from "../shell/update-banner";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
+import { createGatedScenes } from "./rendering/gated-scenes";
 import { emptyRenderCache, type RenderData, updateRenderScope } from "./rendering/render-cache";
-import {
-  createSceneRenderer,
-  createScopeAnnouncer,
-  scopeChangeAnnouncement,
-} from "./rendering/scene-renderer";
+import { createScopeAnnouncer, scopeChangeAnnouncement } from "./rendering/scene-renderer";
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
 import { adoptStoredMultisig, bindConnectChoice } from "./screens/connect-account";
@@ -79,7 +75,6 @@ export const startWalletUi = async (
   const runtime = extensionApi?.runtime;
   const mutationRuntime = createMutationRuntime(runtime);
   const wallet = createSidepanelRuntime(mutationRuntime);
-  const features = createFeatureGate(document, wallet);
   const multisig = createMultisigClient(mutationRuntime);
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
@@ -106,11 +101,11 @@ export const startWalletUi = async (
   let snoozedApprovalIds: readonly string[] = [];
   let sendIntent: SendIntent | null = null;
   let hasPaintedScope = false;
-  const renderScene = createSceneRenderer(app, () => bindAll());
   const announceNetwork = networkChangeAnnouncer(app);
   const deployment = createDeploymentCache(wallet);
   const signability = createSignabilityCache(wallet);
   const cache: RenderData = emptyRenderCache();
+  const { features, renderScene } = createGatedScenes(app, wallet, cache, () => bindAll());
   const heroWait = createHeroTotalWait({ paint: () => paint() });
   let privacy: ReturnType<typeof createPrivacyController>;
   const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
@@ -378,7 +373,6 @@ export const startWalletUi = async (
     }
     lastContent = content;
     renderScene(content, animate, direction);
-    features.apply(cache.experimentalFeatures);
   };
   privacy = createPrivacyController({
     app,
