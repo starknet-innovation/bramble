@@ -1,5 +1,4 @@
 import BrambleCore
-import Foundation
 
 /// The Swap journey on top of `WalletStore`.
 extension WalletStore {
