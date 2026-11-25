@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,18 +68,20 @@ private const val WATCH_ONLY =
 private const val BALANCE_FRACTION_DIGITS: UByte = 4u
 
 /** The two sections of a shared account's home. */
-private enum class SharedTab { TOKENS, INTENTS }
+internal enum class SharedTab { TOKENS, INTENTS }
 
 /**
  * `multisig-home`, port of the iOS `SharedAccountHomeView`: the shared account's actions and
  * notes, then Tokens and Transactions. Transactions lists the open signing intents and imports one;
  * "Co-signer updates" syncs gift wraps, whose trusted packages are still held, not imported
- * (docs/multisig-transactions.md). [open] pushes Send, Signers, Deploy, Receive and each intent.
+ * (docs/multisig-transactions.md). [tabState] is the stack entry's, so it outlives a push; [open]
+ * pushes Send, Signers, Deploy, Receive and each intent.
  */
 @Composable
 internal fun SharedAccountHomeScreen(
     store: WalletStore,
     id: String,
+    tabState: MutableState<SharedTab>,
     open: (MultisigFlow) -> Unit,
     back: () -> Unit,
 ) {
@@ -87,7 +90,7 @@ internal fun SharedAccountHomeScreen(
         Page(store, "Ready multisig", null, back) { Caption("This Ready multisig is no longer watched.") }
         return
     }
-    var tab by remember { mutableStateOf(SharedTab.TOKENS) }
+    var tab by tabState
     // Raw balances by symbol; null until a read succeeds, and after one fails.
     var balances by remember { mutableStateOf<Map<String, String>?>(null) }
     LaunchedEffect(record.address) {
@@ -226,7 +229,8 @@ private fun Intents(
     var result by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf(false) }
-    var intents by remember { mutableStateOf(emptyList<MultisigIntent>()) }
+    // Null until read, so the empty line never shows ahead of the list.
+    var intents by remember { mutableStateOf<List<MultisigIntent>?>(null) }
     // Keyed on the open count too, so a signature or submission made one screen deeper shows here.
     LaunchedEffect(record.id, store.coordination.openIntents[record.id]) {
         intents = store.coordination.intents(record.id).filter(::isOpen)
@@ -250,12 +254,13 @@ private fun Intents(
             }
         }
         StatusLine(result, if (failed) StatusTone.DANGER else StatusTone.MUTED)
-        if (intents.isEmpty()) {
+        val listed = intents
+        if (listed?.isEmpty() == true) {
             Text(MultisigTxText.NOTHING_IMPORT, color = skin.muted, style = textStyle(BrambleTypeScale.body))
-        } else {
-            Eyebrow(intentsHeading(intents))
+        } else if (listed != null) {
+            Eyebrow(intentsHeading(listed))
             MenuGroup {
-                intents.forEachIndexed { index, intent ->
+                listed.forEachIndexed { index, intent ->
                     if (index > 0) MenuDivider()
                     MenuRow(BrambleIconName.USERS, intent.summary, value = MultisigTxText.status(intent)) {
                         open(MultisigFlow.Intent(record.id, intent.id))
