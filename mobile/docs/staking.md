@@ -46,9 +46,9 @@ Matching the extension's `journeys/staking/`:
 
 Copy comes from the extension's catalogs through `scripts/mobile-assets/staking-copy.ts`
 (`StakingCopy.generated.*`, checked by `tests/conformance/mobile-generated.test.ts`): `staking.*`
-and the `review.staking.*` signing wrappers. One string is restated: `StakingText.readFailed` /
-`STAKING_READ_FAILED`, the core's own `StakingRefusal::Unreadable`, shown only when the core
-throws something that is not a refusal (a wallet file it could not read).
+and the `review.staking.*` signing wrappers, plus `readFailed`: the extension's own
+`STAKING_UNREADABLE` (`apps/extension/src/background/staking/staking-context.ts`), shown only when
+the core throws something that is not a refusal (a wallet file it could not read).
 
 Time is injected: the models take a Unix-seconds clock (the portfolio's clock on device), so
 tests pin the position state and the unlock text.

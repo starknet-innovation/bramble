@@ -45,6 +45,7 @@ enum StakingCopy {
     static let positionUnstaking = "Unstaking {amount} {symbol} · withdraw from {time}"
     static let positionsMayNotBeListed = "Some of your stakes may not be listed."
     static let positionsTitle = "Your stakes"
+    static let readFailed = "Couldn't read staking on this network. Try again."
     static let reviewConfirm = "Confirm · {fee}"
     static let reviewEstimating = "Estimating the maximum fee…"
     static let reviewFailed = "Staking failed"

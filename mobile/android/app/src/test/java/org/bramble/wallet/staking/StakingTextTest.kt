@@ -102,6 +102,6 @@ class StakingTextTest {
     @Test
     fun aRefusalIsTheCoresSentence() {
         assertEquals("No rewards to claim.", stakingMessage(StakingException.Refused("No rewards to claim.")))
-        assertEquals(STAKING_READ_FAILED, stakingMessage(StakingException.Storage()))
+        assertEquals(StakingCopy.readFailed, stakingMessage(StakingException.Storage()))
     }
 }

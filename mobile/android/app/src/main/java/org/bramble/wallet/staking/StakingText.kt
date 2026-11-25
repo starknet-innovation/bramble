@@ -16,12 +16,6 @@ import java.util.Locale
 // core formatted from an on-chain read. The core's formatters (`compactAmount`, `accountLabel`)
 // are passed in, so the JVM tests run without the native library.
 
-/**
- * The core's `StakingRefusal::Unreadable`, verbatim: shown only when the core threw something
- * other than a refusal, so a failed read never reads as "no stakes".
- */
-const val STAKING_READ_FAILED = "Couldn't read staking on this network. Try again."
-
 private const val AMOUNT = "amount"
 private const val SYMBOL = "symbol"
 private const val DAY = 86_400uL
@@ -116,5 +110,8 @@ fun poolLine(pool: DirectoryPoolEntry): String =
     pool.delegated?.let { fill(StakingCopy.directoryPool, "delegated" to it, SYMBOL to pool.symbol) }
         ?: fill(StakingCopy.directoryPoolUnknown, SYMBOL to pool.symbol)
 
-/** The core's refusal sentence, or [STAKING_READ_FAILED] for anything that is not a refusal. */
-fun stakingMessage(error: Throwable): String = (error as? StakingException.Refused)?.reason ?: STAKING_READ_FAILED
+/**
+ * The core's refusal sentence, or the extension's `STAKING_UNREADABLE` ([StakingCopy.readFailed])
+ * for anything that is not a refusal, so a failed read never reads as "no stakes".
+ */
+fun stakingMessage(error: Throwable): String = (error as? StakingException.Refused)?.reason ?: StakingCopy.readFailed

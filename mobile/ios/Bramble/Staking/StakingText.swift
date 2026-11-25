@@ -5,11 +5,6 @@ import Foundation
 /// the core's figures. Pure: every figure is a string the core formatted from an on-chain read,
 /// and nothing here derives one. Refusals are the core's sentences, shown verbatim.
 enum StakingText {
-    /// The core's `StakingRefusal::Unreadable`, verbatim: shown only when the core threw something
-    /// other than a refusal (a wallet file it could not read), so a failed read never reads as
-    /// "no stakes".
-    static let readFailed = "Couldn't read staking on this network. Try again."
-
     private static let secondsPerMinute: UInt64 = 60
     private static let secondsPerHour: UInt64 = 3_600
     private static let secondsPerDay: UInt64 = 86_400
@@ -113,10 +108,11 @@ enum StakingText {
         return fill(StakingCopy.directoryPool, ["delegated": delegated, "symbol": pool.symbol])
     }
 
-    /// The core's refusal sentence, or `readFailed` for anything that is not a refusal.
+    /// The core's refusal sentence, or the extension's `STAKING_UNREADABLE` (`StakingCopy.readFailed`)
+    /// for anything that is not a refusal, so a failed read never reads as "no stakes".
     static func message(_ error: Error) -> String {
         if case let StakingError.Refused(reason) = error { return reason }
-        return readFailed
+        return StakingCopy.readFailed
     }
 
     /// The actions a verified row offers (`rowActions`), in the extension's order; the stake and

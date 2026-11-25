@@ -9,7 +9,9 @@
  * Rust core (`StakingPlan.review`, `StakingError.Refused`, `TransferPlan.riskFlags`) and are
  * shown verbatim.
  */
-// Not package exports: the English catalogs, read here only to pin the mobile copy to them.
+// Not package exports: the English catalogs and the background's unreadable-staking refusal, read
+// here only to pin the mobile copy to them.
+import { STAKING_UNREADABLE } from "../../apps/extension/src/background/staking/staking-context";
 import { reviewStepsSwapMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/review-steps-swap";
 import { swapStakingMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/swap-staking";
 import { HEADER, sorted } from "./shared";
@@ -29,13 +31,19 @@ const camel = (key: string): string =>
     .map((part, index) => (index === 0 ? part : `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`))
     .join("");
 
-/** Every English `staking.*` and `review.staking.*` string, keyed by its camelCase name. */
-export const stakingCopy = (): Readonly<Record<string, string>> =>
-  Object.fromEntries(
+/**
+ * Every English `staking.*` and `review.staking.*` string, keyed by its camelCase name, and
+ * `readFailed`: the extension's `STAKING_UNREADABLE`, which the apps show when the core throws
+ * something that is not a refusal, so a failed read never reads as "no stakes".
+ */
+export const stakingCopy = (): Readonly<Record<string, string>> => ({
+  ...Object.fromEntries(
     Object.entries({ ...swapStakingMessages.en, ...reviewStepsSwapMessages.en })
       .filter(([key]) => key.startsWith("staking.") || key.startsWith("review.staking."))
       .map(([key, value]) => [camel(key), value]),
-  );
+  ),
+  readFailed: STAKING_UNREADABLE.error,
+});
 
 const quoted = (value: string): string => JSON.stringify(value);
 

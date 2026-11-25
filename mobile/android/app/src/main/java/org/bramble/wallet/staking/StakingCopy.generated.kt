@@ -46,6 +46,7 @@ object StakingCopy {
     const val positionUnstaking = "Unstaking {amount} {symbol} · withdraw from {time}"
     const val positionsMayNotBeListed = "Some of your stakes may not be listed."
     const val positionsTitle = "Your stakes"
+    const val readFailed = "Couldn't read staking on this network. Try again."
     const val reviewConfirm = "Confirm · {fee}"
     const val reviewEstimating = "Estimating the maximum fee…"
     const val reviewFailed = "Staking failed"
