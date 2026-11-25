@@ -44,7 +44,7 @@ const context = { account, addressBook: [contact], nftContracts: [NFT], tokens }
 const CONTACT_TWIN = `0x777a${"9".repeat(55)}bbcc`;
 const ACCOUNT_TWIN = `0x1234${"0".repeat(54)}bcde`;
 const SPENDER_SENTENCE =
-  "The address this allows closely mimics an address you saved or paid but is a different account. Re-check every character before approving.";
+  "The approved address closely mimics an address you saved or paid but is a different account. Re-check every character before approving.";
 
 const call = (contractAddress: string, entrypoint: string, calldata: string[]): Call => ({
   calldata,

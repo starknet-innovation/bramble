@@ -49,7 +49,7 @@ const en = {
     "This lets one address transfer EVERY item you own in this collection, including ones you acquire later, until you revoke it. Grant it only to a marketplace you trust.",
   "review.flag.selfTransfer": "The recipient is this wallet's own address.",
   "review.flag.spenderPoisoning":
-    "The address this allows closely mimics an address you saved or paid but is a different account. Re-check every character before approving.",
+    "The approved address closely mimics an address you saved or paid but is a different account. Re-check every character before approving.",
   "review.flag.tokenContractRecipient":
     "This is a token contract, not a wallet. Tokens sent here are usually lost.",
   "review.flag.undecodedSwap":

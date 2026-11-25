@@ -442,7 +442,7 @@ describe("multisig review uses the same trusted set (#163)", () => {
         null,
       );
     await expect(approve(SECOND_TWIN, "0x5")).resolves.toEqual({
-      error: expect.stringContaining("The address this allows closely mimics"),
+      error: expect.stringContaining("The approved address closely mimics"),
     });
     await expect(approve(SECOND.address, "0x5")).resolves.toMatchObject({
       summary: expect.stringContaining("Allow"),

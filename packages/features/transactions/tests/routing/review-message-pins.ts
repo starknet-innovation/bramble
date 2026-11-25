@@ -27,7 +27,7 @@ export const REVIEW_MESSAGE_PINS: Readonly<Record<string, string>> = {
   "review.flag.foreignBeneficiary": "46badb465e386859",
   "review.flag.operatorApproval": "3fbb60c06b2c42ba",
   "review.flag.selfTransfer": "72554654fc4570be",
-  "review.flag.spenderPoisoning": "a456fb027642a7e4",
+  "review.flag.spenderPoisoning": "a5a40c4a0ea1ff25",
   "review.flag.tokenContractRecipient": "71c0202474c09788",
   "review.flag.undecodedSwap": "d770d6ec4edbc42d",
   "review.flag.unknownContract": "f65657f934bfa2df",
