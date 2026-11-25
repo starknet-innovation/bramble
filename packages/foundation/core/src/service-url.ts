@@ -180,8 +180,9 @@ export const canonicalWebSocketServiceUrl = (value: unknown): string | null =>
  * 2,048-character cap once percent-encoded, its serialization keeps a
  * character the redactor ends a URL at, which encoding would change on the
  * wire, or it ends in an empty fragment ("https://rpc.example/#"). The caller
- * drops such an endpoint rather than fail the whole record. Anything else is returned unchanged for the record's validator to reject,
- * because the earlier rule refused it too. Pure and total.
+ * drops such an endpoint rather than fail the whole record. Anything else is
+ * returned unchanged for the record's validator to reject, because the earlier
+ * rule refused it too. Pure and total.
  */
 export const normalizeStoredServiceUrl = (value: unknown): unknown =>
   normalizeStoredFor(value, "https:", "http:");
