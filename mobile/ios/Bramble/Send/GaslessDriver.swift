@@ -70,7 +70,8 @@ struct GaslessDriver: Sendable {
         } catch let error as GaslessFeeError {
             return Self.outcome(error)
         } catch {
-            return .locked
+            // Not the core's refusal, so the execute may have gone out: say so, never "locked".
+            return .unknown(SendCopy.failureIndeterminate)
         }
     }
 
