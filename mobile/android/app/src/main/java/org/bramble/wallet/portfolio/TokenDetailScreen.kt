@@ -32,6 +32,7 @@ import org.bramble.core.fiatValueText
 import org.bramble.core.formatFiat
 import org.bramble.core.tokenSparkline
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.canStake
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleSize
@@ -43,10 +44,12 @@ import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.FlowHeader
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
+import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.privacy.TokenPrivacySection
 import org.bramble.wallet.send.Receipt
+import org.bramble.wallet.staking.StakingCopy
 import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
@@ -59,6 +62,7 @@ private const val SPARKLINE_HEIGHT = 32.0
  * balance, the token's Send (opening Send on this token, [send] with its address; shown only
  * where the Send journey can carry it), the private half of this token ([TokenPrivacySection],
  * from the core's `tokenDetailPrivacy` over the real deployment state), and the contract receipt.
+ * [stake] opens staking for STRK where the core's policy has it on (`canStakeToken`).
  * The extension's Swap is not offered: mobile has no swap flow. [tokenId] names a tracked token;
  * one no longer tracked (a lock, a network switch) returns to the shell.
  */
@@ -69,6 +73,7 @@ fun TokenDetailScreen(
     back: () -> Unit,
     send: (String) -> Unit,
     journey: () -> Unit,
+    stake: () -> Unit = {},
 ) {
     val portfolio = store.portfolio
     val token = portfolio.tracked.firstOrNull { it.token.id == tokenId }?.token
@@ -86,6 +91,15 @@ fun TokenDetailScreen(
         TokenPrivacySection(store, token.address, journey = journey) {
             if (store.canSend(token.address)) {
                 PillButton("Send", icon = BrambleIconName.SEND) { send(token.address) }
+            }
+            // `canStakeToken`: STRK by address where the core's policy has staking on.
+            if (store.canStake(token.address)) {
+                PillButton(
+                    StakingCopy.actionStake,
+                    kind = PillKind.SECONDARY,
+                    icon = BrambleIconName.TRENDING_UP,
+                    onClick = stake,
+                )
             }
         }
         ContractSection(store, token)

@@ -34,6 +34,12 @@ struct HomeView: View {
                 ShieldActionTile(journey: privacy)
             }
             PortfolioTokens(open: open)
+            // Where the core's staking policy is on (Mainnet): the extension's Staking tab.
+            if store.stakingAvailable {
+                MenuGroup {
+                    MenuRow(icon: .trendingUp, title: StakingCopy.title) { open(.staking) }
+                }
+            }
         }
     }
 }

@@ -205,6 +205,11 @@ private fun FlowScreen(
                 .ReadyMultisigScreen(store, back = pop)
         }
 
+        Flow.STAKING -> {
+            org.bramble.wallet.staking
+                .StakingScreen(store, viewActivity = arguments.showActivity, back = pop)
+        }
+
         Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL, Flow.TOKENS, Flow.ADD_TOKEN, Flow.DISCOVER_TOKENS -> {
             PortfolioFlowScreen(flow, store, arguments, pop, push)
         }
@@ -233,6 +238,7 @@ private fun PortfolioFlowScreen(
                 back = pop,
                 send = arguments.openSend,
                 journey = { push(Flow.PRIVACY) },
+                stake = { push(Flow.STAKING) },
             )
         }
 
@@ -283,6 +289,7 @@ private fun DockScreen(
                     privacy = { push(Flow.PRIVACY) },
                     openToken = openToken,
                     manageTokens = { push(Flow.TOKENS) },
+                    staking = { push(Flow.STAKING) },
                 ),
             )
         }

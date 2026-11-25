@@ -31,6 +31,12 @@ import {
 } from "./mobile-assets/rpc-fixtures";
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
+import {
+  renderKotlinStakingCopy,
+  renderSwiftStakingCopy,
+  STAKING_COPY_KOTLIN_PATH,
+  STAKING_COPY_SWIFT_PATH,
+} from "./mobile-assets/staking-copy";
 import { renderSwift, renderSwiftLayout } from "./mobile-assets/swift";
 import { renderVectorAssets, tokenLogoAddresses } from "./mobile-assets/vectors";
 
@@ -165,6 +171,8 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [POLICY_JSON_PATH, renderPolicyJson()],
     [SWIFT_COPY_PATH, renderSwiftCopy()],
     [KOTLIN_COPY_PATH, renderKotlinCopy()],
+    [STAKING_COPY_SWIFT_PATH, renderSwiftStakingCopy()],
+    [STAKING_COPY_KOTLIN_PATH, renderKotlinStakingCopy()],
     [RPC_FIXTURES_PATH, renderRpcFixtures()],
     [KOTLIN_RPC_FIXTURES_PATH, renderKotlinRpcFixtures()],
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],

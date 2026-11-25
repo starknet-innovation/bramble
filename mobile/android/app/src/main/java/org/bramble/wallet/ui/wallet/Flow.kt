@@ -52,4 +52,7 @@ enum class Flow {
 
     /** Scan the token registry for held tokens. */
     DISCOVER_TOKENS,
+
+    /** Staking (M21), offered only where the core's policy allows it. */
+    STAKING,
 }

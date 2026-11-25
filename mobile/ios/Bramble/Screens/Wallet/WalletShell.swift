@@ -12,6 +12,8 @@ struct WalletShell: View {
         case tokens, addToken, discoverTokens
         case token(String)
         case privacy
+        /// Staking (M21), offered only where the core's policy allows it.
+        case staking
     }
 
     @Environment(WalletStore.self) private var store
@@ -78,6 +80,16 @@ struct WalletShell: View {
         flows.append(flow)
     }
 
+    /// A tracked token's screen, with its Send, privacy and staking entries.
+    private func tokenDetail(_ id: String) -> some View {
+        TokenDetailView(
+            tokenId: id,
+            send: { openSend(.sendToken($0)) },
+            journey: { flows.append(.privacy) },
+            stake: { flows.append(.staking) }
+        )
+    }
+
     /// The screen each pushed flow shows.
     private func destination(_ flow: Flow) -> some View {
         Group {
@@ -125,14 +137,13 @@ struct WalletShell: View {
                 DiscoverTokensView()
 
             case let .token(id):
-                TokenDetailView(
-                    tokenId: id,
-                    send: { openSend(.sendToken($0)) },
-                    journey: { flows.append(.privacy) }
-                )
+                tokenDetail(id)
 
             case .privacy:
                 PrivacyJourneyView { flows.append(.network) }
+
+            case .staking:
+                StakingScreen()
             }
         }
     }
