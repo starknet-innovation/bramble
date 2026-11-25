@@ -215,7 +215,7 @@ struct SendCostBox: View {
                 Text(SendCopy.shortfall).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.warning)
             }
             ForEach(offers, id: \.tokenAddress) { offer in
-                PillButton(SendReviewCopy.payUpTo(offer), kind: .secondary, small: true) { pay(offer) }
+                PillButton(SendReviewCopy.payUpTo(offer), kind: .secondary) { pay(offer) }
             }
         }
         .padding(metrics.feeLayerPadding)
