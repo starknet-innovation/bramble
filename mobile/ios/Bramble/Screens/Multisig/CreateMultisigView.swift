@@ -174,7 +174,8 @@ struct CreateMultisigView: View {
                 label: "Signatures required",
                 placeholder: "1",
                 text: $threshold,
-                hint: "How many signers must approve each transaction?"
+                hint: "How many signers must approve each transaction?",
+                keyboard: .numberPad
             )
             deployerPicker
             Disclosure(

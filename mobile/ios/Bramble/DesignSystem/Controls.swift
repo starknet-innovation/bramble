@@ -194,6 +194,8 @@ struct BrambleField: View {
     var mono = false
     var invalid = false
     var hint: String?
+    /// `.decimalPad` for amounts, `.numberPad` for counts; addresses and names keep the ASCII keyboard.
+    var keyboard: UIKeyboardType = .asciiCapable
 
     /// Gap between the label, the field, and the hint.
     private static let stackSpacing: CGFloat = 6
@@ -218,7 +220,7 @@ struct BrambleField: View {
             .accessibilityHint(hint ?? "")
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
-            .keyboardType(.asciiCapable)
+            .keyboardType(keyboard)
             .brambleText(mono ? BrambleTypeScale.mono : BrambleTypeScale.body, mono: mono)
             .foregroundStyle(invalid ? skin.danger : skin.text)
             .padding(BrambleMetrics.Field.padding)
