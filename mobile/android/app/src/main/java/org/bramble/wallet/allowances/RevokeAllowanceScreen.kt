@@ -66,7 +66,7 @@ fun RevokeAllowanceScreen(
     DisposableEffect(model) { onDispose { model.close() } }
     LaunchedEffect(model) { model.prepare(store.feeBalance) }
     LaunchedEffect(model.stage) {
-        if (model.stage == RevokeFlowModel.Stage.SUBMITTED) store.showNotice(AllowanceCopy.SUBMITTED)
+        if (model.stage == RevokeFlowModel.Stage.SUBMITTED) store.showNotice(AllowanceCopy.submitted)
     }
     val activity = {
         store.appScope.launch { store.refreshSendState() }
@@ -76,13 +76,13 @@ fun RevokeAllowanceScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
-        FlowHeader(AllowanceCopy.REVOKE, network = store.networkLabel, back = back)
+        FlowHeader(AllowanceCopy.revoke, network = store.networkLabel, back = back)
         if (model.stage == RevokeFlowModel.Stage.SUBMITTED) {
             Outcome(
                 BrambleIconName.CHECK,
                 LocalSkin.current.positive,
-                AllowanceCopy.SUBMITTED,
-                message = AllowanceCopy.REVOKING.takeUnless { model.confirmed },
+                AllowanceCopy.submitted,
+                message = AllowanceCopy.revoking.takeUnless { model.confirmed },
                 detail = { ReceiptCard(store, summary = null, hash = model.hash) },
             ) {
                 PillButton(SendCopy.viewActivity, icon = BrambleIconName.ACTIVITY, onClick = activity)
@@ -109,9 +109,9 @@ private fun RevokeForm(
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         Receipt(
             listOf(
-                AllowanceCopy.SPENDER_ROW to shortAddress(allowance.spender),
-                AllowanceCopy.TOKEN_ROW to (token?.symbol ?: shortAddress(allowance.token)),
-                AllowanceCopy.AMOUNT_ROW to amountLabel(allowance, token),
+                AllowanceCopy.spenderRow to shortAddress(allowance.spender),
+                AllowanceCopy.tokenRow to (token?.symbol ?: shortAddress(allowance.token)),
+                AllowanceCopy.amountRow to amountLabel(allowance, token),
             ),
         )
         model.review?.let { review ->
@@ -147,7 +147,7 @@ private fun RevokeForm(
 
             else -> {
                 PillButton(
-                    AllowanceCopy.REVOKE,
+                    AllowanceCopy.revoke,
                     Modifier.testTag("revoke-confirm"),
                     icon = BrambleIconName.CHECK,
                     busy =

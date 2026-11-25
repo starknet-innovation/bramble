@@ -123,7 +123,6 @@ func isOpen(_ intent: MultisigIntent) -> Bool {
     [.collecting, .ready, .stale].contains(intent.state)
 }
 
-/// How a multisig plan ended when it did not reach its goal.
 /// A multisig step's refusal as the screen shows it: the core's refusal (`InvalidInput`) read
 /// through the extension's friendly copy (`FriendlyError`), as the side panel's multisig screens
 /// show it, then redacted like every failure text; any other error as `describe` words it.
@@ -132,6 +131,7 @@ func describeRefusal(_ error: Error) -> String {
     return redactEndpoints(text: FriendlyError.message(reason))
 }
 
+/// How a multisig plan ended when it did not reach its goal; the message is the extension's.
 struct MultisigTxError: LocalizedError {
     let failure: MultisigTxFailure?
 

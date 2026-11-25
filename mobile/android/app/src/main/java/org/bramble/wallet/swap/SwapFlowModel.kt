@@ -108,12 +108,12 @@ class SwapFlowModel(
 
     private var typed by mutableStateOf("")
 
-    /** The amount sold, as typed ("," read as "."); any edit drops the quote. */
+    /** The amount sold, as typed ("," read as "."); any edit drops the quote. Read-only off the edit face. */
     var amount: String
         get() = typed
         set(text) {
             val next = text.replace(',', '.')
-            if (next != typed) {
+            if (stage == Stage.EDIT && next != typed) {
                 typed = next
                 close()
             }
@@ -231,20 +231,22 @@ class SwapFlowModel(
      * the friendly copy.
      */
     suspend fun requestQuote() {
+        if (stage != Stage.EDIT) return
         close()
         val mine = generation
         val text = amount.trim()
         val from = sell
         val to = buy
-        if (stage != Stage.EDIT || text.isEmpty()) return
-        if (from == null || to == null) return
+        if (text.isEmpty() || from == null || to == null) return
         quoting = true
         try {
             val started =
                 withContext(Dispatchers.Default) { core.prepareSwap(accountId, from.id, to.id, text, preferences) }
             val outcome = http.perform(started.quoteRequest())
+            val judged = withContext(Dispatchers.Default) { started.acceptQuote(outcome, prices) }
+            // Checked after the last suspension, so a reply judged across an edit is dropped too.
             if (mine == generation) {
-                quote = withContext(Dispatchers.Default) { started.acceptQuote(outcome, prices) }
+                quote = judged
                 swap = started
             }
         } catch (error: SwapException) {
@@ -259,19 +261,22 @@ class SwapFlowModel(
         val pending = swap?.takeIf { canReview } ?: return
         val mine = generation
         stage = Stage.PREPARING
-        val plan =
+        val built =
             try {
                 val outcome = http.perform(pending.buildRequest(null))
-                if (mine == generation && stage == Stage.PREPARING) {
-                    swapReview = withContext(Dispatchers.Default) { pending.acceptBuild(outcome) }
-                    withContext(Dispatchers.Default) { pending.plan(feeBalance) }
-                } else {
-                    null
-                }
+                val accepted = withContext(Dispatchers.Default) { pending.acceptBuild(outcome) }
+                accepted to withContext(Dispatchers.Default) { pending.plan(feeBalance) }
             } catch (error: SwapException) {
-                backToEdit(reason(error))
+                if (mine == generation) backToEdit(reason(error))
                 null
-            } ?: return
+            }
+        // Back (or a lock) during the build already left this face: its plan is never shown.
+        if (built == null || mine != generation || stage != Stage.PREPARING) {
+            built?.second?.cancel()
+            return
+        }
+        val (judged, plan) = built
+        swapReview = judged
         swap = null
         track(plan)
         val started = SendDriver(plan, network, rpc).also { driver = it }
