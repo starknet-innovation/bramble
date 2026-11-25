@@ -48,7 +48,7 @@ final class AllowanceNode: PortfolioTransport, @unchecked Sendable {
 /// The allowance manager over the real core and canned nodes, as the core's own
 /// `tests/allowances.rs`: the listing names the wallet's grant, the revoke is reviewed as the
 /// core's one `approve(spender, 0)` with its fee in view and is sent once, a zero reading then
-/// settles it, a refusal reads in the core's own words, and an unanswered listing says it is
+/// settles it, a refusal reads in the extension's words for the core's sentence, and an unanswered listing says it is
 /// partial. The row copy is held to the extension's (`allowance-views.ts`) and to the fixture.
 @MainActor
 final class AllowanceFlowTests: XCTestCase {
@@ -175,12 +175,15 @@ final class AllowanceFlowTests: XCTestCase {
         let revoke = try model(view(amount: "1000", id: id(other)))
         await revoke.prepare()
         XCTAssertEqual(revoke.stage, .refused)
-        XCTAssertEqual(revoke.message, "switch to the account that granted this allowance")
+        XCTAssertEqual(revoke.message, "Switch to the account that granted this allowance.")
         XCTAssertFalse(node.posts.contains(where: \.write))
 
         let malformed = try model(view(amount: "1000", id: ""))
         await malformed.prepare()
-        XCTAssertEqual(malformed.message, "invalid revoke request")
+        XCTAssertEqual(
+            malformed.message,
+            "Something about that request wasn't right. Check the details and try again."
+        )
     }
 
     func testAnUnansweredListingSaysItIsPartialAndKeepsTheStoredGrant() async throws {

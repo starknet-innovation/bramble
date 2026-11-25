@@ -81,11 +81,11 @@ final class RevokeFlowModel {
             _ = await endpoints.drive(revoke, on: network)
             plan = try revoke.plan(feeBalance: feeBalance)
         } catch let error as RevokeError {
-            message = Self.refusal(error)
+            message = FriendlyError.message(Self.refusal(error))
             stage = .refused
             return
         } catch {
-            message = Self.refusal(.Locked)
+            message = FriendlyError.message(Self.refusal(.Locked))
             stage = .refused
             return
         }
@@ -118,7 +118,8 @@ final class RevokeFlowModel {
     /// The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.7.0
     /// (`send/revoke.rs`), byte for byte. The bindings carry only `Refused`'s sentence (the batch
     /// review's own); the other variants reach Swift without their text, so it is mirrored here
-    /// until the core exports it.
+    /// until the core exports it. The screen shows it through the extension's friendly copy
+    /// (`FriendlyError.message`), as the side panel does.
     nonisolated static func refusal(_ error: RevokeError) -> String {
         switch error {
         case let .Refused(reason):

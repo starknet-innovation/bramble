@@ -22,6 +22,7 @@ import org.bramble.wallet.AllowanceReads
 import org.bramble.wallet.RpcClient
 import org.bramble.wallet.RpcPost
 import org.bramble.wallet.drive
+import org.bramble.wallet.errors.friendlyError
 import org.bramble.wallet.portfolio.PortfolioReads
 import org.bramble.wallet.send.SendCopy
 import org.bramble.wallet.send.SendDriver
@@ -119,7 +120,7 @@ internal class RevokeFlowModel(
                 links.reads.drive(AllowanceReads(revoke::nextCalls, revoke::accept, revoke::restart), network)
                 withContext(Dispatchers.Default) { revoke.plan(feeBalance) }
             } catch (error: RevokeException) {
-                message = refusal(error)
+                message = friendlyError(refusal(error))
                 stage = Stage.REFUSED
                 return
             }
@@ -220,7 +221,8 @@ internal class RevokeFlowModel(
          * The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.7.0
          * (`send/revoke.rs`), byte for byte. The bindings carry only `Refused`'s sentence (the batch
          * review's own); the other variants reach Kotlin without their text, so it is mirrored here
-         * until the core exports it.
+         * until the core exports it. The screen shows it through the extension's friendly copy
+         * ([friendlyError]), as the side panel does.
          */
         fun refusal(error: RevokeException): String =
             when (error) {

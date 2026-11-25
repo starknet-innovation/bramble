@@ -35,14 +35,17 @@ The host never names a call: it hands the core an `AllowanceView.id` and the cor
   the chain offers Activity, never a blind second revoke.
 
 Mobile shows the revoke as its own screen where the extension reviews inline in the row; the
-words are the extension's (`portfolio.allowance.*`), and every review, risk and refusal sentence
-is the core's.
+words are the extension's (`portfolio.allowance.*`), and every review and risk sentence is the
+core's. Refusals are the core's sentences read through the extension's friendly copy
+(`FriendlyError`): "invalid revoke request" reads "Something about that request wasn't right.
+Check the details and try again."
 
 ## 3. Gaps in v0.7.0 (host-side stand-ins, to remove when the core exports them)
 
 - **Refusal sentences.** `RevokeError`'s `#[error]` text does not cross UniFFI except for
   `Refused { reason }`. `RevokeFlowModel.refusal` mirrors the eight fixed sentences from
-  `send/revoke.rs` byte for byte; a core export (a `message()` or a flat error) should replace it.
+  `send/revoke.rs` byte for byte, and the screen passes the result through `FriendlyError`; a
+  core export (a `message()` or a flat error) should replace the mirror.
 - **Unlimited cut-off.** `isUnlimitedAllowance` is not exported; `AllowanceCopy.isUnlimited`
   holds 2^128 - 1 and is pinned to the `unlimited` block of `extension-allowances.jsonl` on both
   platforms.
@@ -61,7 +64,8 @@ is the core's.
 - iOS `BrambleTests/AllowanceFlowTests`: the real core over canned nodes. The listing names a
   seeded grant; the revoke reviews with nothing written, sends exactly one
   `starknet_addInvokeTransaction` on Revoke and confirms; a zero reading then settles it; a
-  refusal reads in the core's words; an unanswered listing keeps the stored grant and says it is
+  refusal reads in the extension's friendly copy for the core's sentence (`FriendlyError`, see
+  [friendly-errors.md](friendly-errors.md)); an unanswered listing keeps the stored grant and says it is
   partial; the row copy and the unlimited cut-off match the extension and the fixture.
 - iOS `BrambleUITests/AllowancesTests`: Settings opens the manager on the offline fixture node.
 - Android `test/AllowanceCopyTest` (JVM): row copy, notices, the revoke control, the fixture's
