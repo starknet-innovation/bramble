@@ -37,6 +37,8 @@ class StakingTest {
     fun sepoliaIsTheCoresRefusal() {
         val node = FixtureNode(deployed = true)
         openPublicWalletOn(node)
+        // A fresh install starts on Mainnet (`NetworkPreference.fromStored`), so pick Sepolia here.
+        onMainThread { switchNetwork(NetworkId.SEPOLIA) }
         assertEquals("Staking isn't available on this network.", stakingRefusal(NetworkId.SEPOLIA))
         assertFalse(onMainThread { stakingAvailable })
         val strk = onMainThread { portfolio.tracked.first { it.token.symbol == "STRK" }.token }
