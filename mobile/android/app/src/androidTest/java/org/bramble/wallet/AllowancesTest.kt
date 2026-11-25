@@ -60,7 +60,7 @@ class AllowancesTest {
         val id = seed()
         rule.setContent { BrambleTheme { AllowancesScreen(appStore, viewActivity = {}) {} } }
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(hasTestTag("revoke-$id")).fetchSemanticsNodes().isNotEmpty() }
-        assertFalse(showing(AllowanceCopy.NONE))
+        assertFalse(showing(AllowanceCopy.noneFound))
         rule.onNode(hasTestTag("revoke-$id")).performClick()
 
         // No second press: the review, with its fee, is fetched as the screen opens.
@@ -71,7 +71,7 @@ class AllowancesTest {
         rule.onNode(hasTestTag("revoke-confirm") and hasClickAction()).performClick()
         rule.waitUntil(TIMEOUT_MS) { node.writes.get() == 1 && showing(SendCopy.back) }
         assertEquals("the signed revoke is posted exactly once", 1, node.writes.get())
-        assertFalse("a refused revoke is never reported submitted", showing(AllowanceCopy.SUBMITTED))
+        assertFalse("a refused revoke is never reported submitted", showing(AllowanceCopy.submitted))
     }
 
     private companion object {

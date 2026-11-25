@@ -75,9 +75,9 @@ fun SettingsHubScreen(
         MenuGroup {
             MenuRow(BrambleIconName.ROCKET, SendCopy.settingsDeployRow) { open(Flow.DEPLOY) }
         }
-        Eyebrow(AllowanceCopy.SETTINGS_SECTION)
+        Eyebrow(AllowanceCopy.settingsSection)
         MenuGroup {
-            MenuRow(BrambleIconName.COINS, AllowanceCopy.SETTINGS_ROW) { open(Flow.ALLOWANCES) }
+            MenuRow(BrambleIconName.COINS, AllowanceCopy.settingsRow) { open(Flow.ALLOWANCES) }
         }
         Eyebrow("Preferences")
         MenuGroup {
