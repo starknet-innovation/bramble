@@ -59,8 +59,9 @@ internal fun IntentCard(
     var result by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
     val run = { body: suspend () -> String ->
+        // Busy before the coroutine starts, so a second tap in the same frame cannot submit twice.
+        busy = true
         scope.launch {
-            busy = true
             runCatching { body() }
                 .onSuccess {
                     result = it

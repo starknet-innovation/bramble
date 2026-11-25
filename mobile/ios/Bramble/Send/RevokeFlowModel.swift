@@ -123,7 +123,7 @@ final class RevokeFlowModel {
         return FriendlyError.message(refusal(error))
     }
 
-    /// The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.7.0
+    /// The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.8.0
     /// (`send/revoke.rs`), byte for byte. The bindings carry only `Refused`'s sentence (the batch
     /// review's own); the other variants reach Swift without their text, so it is mirrored here
     /// until the core exports it. The screen shows it through the extension's friendly copy

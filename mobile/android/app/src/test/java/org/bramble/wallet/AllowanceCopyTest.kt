@@ -9,6 +9,12 @@ import org.bramble.core.SendFailure
 import org.bramble.core.SendFailureCode
 import org.bramble.wallet.allowances.AllowanceCopy
 import org.bramble.wallet.allowances.RevokeFlowModel
+import org.bramble.wallet.allowances.amount
+import org.bramble.wallet.allowances.canRevoke
+import org.bramble.wallet.allowances.isUnlimited
+import org.bramble.wallet.allowances.notice
+import org.bramble.wallet.allowances.source
+import org.bramble.wallet.allowances.subtitle
 import org.bramble.wallet.errors.friendlyError
 import org.bramble.wallet.send.SendFailureText
 import org.junit.Assert.assertEquals
@@ -20,7 +26,7 @@ import java.io.File
 /**
  * The allowance manager's row lines as the extension's `allowance-views.ts` paints them, and the
  * unlimited cut-off held to the fixture's `unlimited` block (the core does not export the judge in
- * v0.7.0). Pure: the listing, the review and the revoke run against the core in `AllowancesTest`
+ * v0.8.0). Pure: the listing, the review and the revoke run against the core in `AllowancesTest`
  * and the iOS `AllowanceFlowTests`.
  */
 class AllowanceCopyTest {
@@ -63,7 +69,7 @@ class AllowanceCopyTest {
             "This wallet keeps 50 approvals per account and drops the smallest first, so some may be missing.",
             AllowanceCopy.notice(AllowanceNotice.RETENTION_FULL),
         )
-        assertEquals(AllowanceCopy.SCAN_INCOMPLETE, AllowanceCopy.notice(AllowanceNotice.SCAN_INCOMPLETE))
+        assertEquals(AllowanceCopy.scanIncomplete, AllowanceCopy.notice(AllowanceNotice.SCAN_INCOMPLETE))
         assertEquals("3 outstanding", AllowanceCopy.subtitle(3))
         assertTrue(AllowanceCopy.canRevoke(view("1")))
         assertFalse(
