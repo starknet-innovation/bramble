@@ -21,6 +21,8 @@ struct SharedAccountHomeView: View {
     @State private var syncing = false
     @State private var confirmingRemove = false
     @State private var intents: [MultisigIntent] = []
+    /// False until the first read, so the empty line never shows ahead of the list.
+    @State private var intentsLoaded = false
 
     enum Tab: Hashable { case tokens, intents }
 
@@ -156,10 +158,8 @@ struct SharedAccountHomeView: View {
             }
             PillButton("Check for updates", kind: .secondary, icon: .refresh, busy: syncing) { sync(record) }
             StatusLine(text: syncResult, tone: syncFailed ? .danger : .muted)
-            if intents.isEmpty {
-                Text(MultisigTxText.nothingImport).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
-            } else {
-                Eyebrow(text: intentsHeading)
+            if !intents.isEmpty {
+                Eyebrow(text: Self.intentsHeading(intents))
                 MenuGroup {
                     ForEach(intents, id: \.id) { intent in
                         MenuRow(icon: .users, title: intent.summary, value: MultisigTxText.status(intent)) {
@@ -167,6 +167,8 @@ struct SharedAccountHomeView: View {
                         }
                     }
                 }
+            } else if intentsLoaded {
+                Text(MultisigTxText.nothingImport).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
             }
             PillButton(MultisigTxText.importTransaction, kind: .ghost, icon: .chevronRight, small: true) {
                 open(.importIntent(id: record.id))
@@ -177,11 +179,13 @@ struct SharedAccountHomeView: View {
     }
 
     private func loadIntents() async {
-        if tab == .intents { intents = await store.coordination.intents(of: id).filter(isOpen) }
+        guard tab == .intents else { return }
+        intents = await store.coordination.intents(of: id).filter(isOpen)
+        intentsLoaded = true
     }
 
     /// `compactIntentList`'s heading: all stale, some stale, or all awaiting.
-    private var intentsHeading: String {
+    private static func intentsHeading(_ intents: [MultisigIntent]) -> String {
         if intents.allSatisfy({ $0.state == .stale }) { return MultisigTxText.attention }
         return intents.contains { $0.state == .stale } ? MultisigTxText.needingYou : MultisigTxText.waiting
     }
