@@ -216,17 +216,7 @@ final class SwapFlowModel {
             track(plan)
             let started = SendDriver(plan: plan, network: network, transport: rpc)
             driver = started
-            let step = try await started.run(from: .start)
-            guard driver === started else { return }
-            guard case .review = step, let current = plan.currentReview() else {
-                var failure = Self.nodeError
-                if case let .failed(reported) = step { failure = reported }
-                backToEdit(SendFailureText.message(failure))
-                return
-            }
-            swapReview = judged
-            review = current
-            stage = .review
+            if showReview(try await started.run(from: .start), from: started) { swapReview = judged }
         } catch {
             if mine == generation { backToEdit(Self.reason(error)) }
         }
@@ -243,21 +233,32 @@ final class SwapFlowModel {
         (swapReview?.flags.map(\.message) ?? []) + (review.map { SendReviewCopy.risks($0) } ?? [])
     }
 
+    /// Re-probes the endpoints and asks the plan for a new fee estimate.
     func retryFee() async {
         guard let driver, stage == .review else { return }
         await driver.releaseEndpoint()
         stage = .preparing
         do {
-            let step = try await driver.run(from: .retryEstimate)
-            guard self.driver === driver, case .review = step, let current = driver.plan.currentReview() else {
-                backToEdit(SendFailureText.message(Self.nodeError))
-                return
-            }
-            review = current
-            stage = .review
+            showReview(try await driver.run(from: .retryEstimate), from: driver)
         } catch {
-            backToEdit(Self.reason(error))
+            if self.driver === driver { backToEdit(Self.reason(error)) }
         }
+    }
+
+    /// Shows `started`'s review after `step`, or goes back to the edit face with the core's reason
+    /// for a refused step. False, painting nothing, when the user left that plan meanwhile.
+    @discardableResult
+    private func showReview(_ step: SendStep, from started: SendDriver) -> Bool {
+        guard driver === started else { return false }
+        guard case .review = step, let current = started.plan.currentReview() else {
+            var failure = Self.nodeError
+            if case let .failed(reported) = step { failure = reported }
+            backToEdit(SendFailureText.message(failure))
+            return false
+        }
+        review = current
+        stage = .review
+        return true
     }
 
     /// Confirms the reviewed plan; the core re-checks, signs and posts it once.

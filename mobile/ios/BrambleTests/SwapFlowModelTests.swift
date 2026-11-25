@@ -78,6 +78,20 @@ final class SwapFlowModelTests: XCTestCase {
         XCTAssertEqual(row.summary, "Swap 0.01 ETH for ~12.5 STRK via avnu")
     }
 
+    func testAFeeRetryShowsTheCoresReasonForARefusal() async throws {
+        let model = try model()
+        model.amount = "0.01"
+        await model.requestQuote()
+        await model.reviewSwap()
+        XCTAssertEqual(model.stage, .review)
+        node.wrongChain = Set(try sepolia().rpcUrls.compactMap(URL.init(string:)))
+        await model.retryFee()
+        XCTAssertEqual(model.stage, .edit)
+        let note = try XCTUnwrap(model.note)
+        let generic = SendFailureText.message(SwapFlowModel.nodeError)
+        XCTAssertNotEqual(note, generic, "the core's reason, not a generic one")
+    }
+
     func testABuildOffThePinnedRouterIsRefusedBeforeAnythingIsPlanned() async throws {
         avnu.spender = "0x6666666666666666666666666666666666666666666666666666666666666"
         let model = try model()
