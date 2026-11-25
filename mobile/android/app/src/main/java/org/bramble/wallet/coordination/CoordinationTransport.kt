@@ -12,6 +12,7 @@ import okhttp3.WebSocketListener
 import org.bramble.core.ClassDeclaredRead
 import org.bramble.core.MultisigAuthorityRead
 import org.bramble.core.MultisigAuthorityStatus
+import org.bramble.core.MultisigStateRead
 import org.bramble.core.NetworkInfo
 import org.bramble.core.NostrSyncPlan
 import org.bramble.core.RelayPolicy
@@ -41,6 +42,27 @@ internal suspend fun readAuthority(
         var last = MultisigAuthorityRead(info.network, address)
         for (url in info.rpcUrls) {
             val read = MultisigAuthorityRead(info.network, address)
+            drive(post, URL(url), { read.nextRequest() }, read::acceptResponse, read::transportFailed)
+            last = read
+            if (read.status() != MultisigAuthorityStatus.NETWORK_UNAVAILABLE) break
+        }
+        last
+    }
+
+/**
+ * A multisig state read (authority, then nonce, then any status lookups) from [make], asking each
+ * of [info]'s endpoints with a fresh read until one is reachable. [make] is an import's plain read
+ * or the read the core makes for one stored intent (`multisigIntentRead`).
+ */
+internal suspend fun readState(
+    info: NetworkInfo,
+    post: ChainPost,
+    make: () -> MultisigStateRead,
+): MultisigStateRead =
+    withContext(Dispatchers.IO) {
+        var last = make()
+        for (url in info.rpcUrls) {
+            val read = make()
             drive(post, URL(url), { read.nextRequest() }, read::acceptResponse, read::transportFailed)
             last = read
             if (read.status() != MultisigAuthorityStatus.NETWORK_UNAVAILABLE) break

@@ -83,7 +83,7 @@ class NostrMultisigFlowTest {
         r.waitForText("Complete multisig setup", TIMEOUT_MS)
         r.waitForText("Review deployment")
         r.tapDescribed("Back")
-        r.tap("Intents")
+        r.tap("Transactions")
         r.waitForText("Co-signer updates")
         r.snapshot("shared-home")
         r.tap("Stop watching")
