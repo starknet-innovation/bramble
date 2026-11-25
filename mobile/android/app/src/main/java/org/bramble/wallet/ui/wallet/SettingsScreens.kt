@@ -25,6 +25,7 @@ import org.bramble.core.coreInfo
 import org.bramble.core.supportedNetworks
 import org.bramble.wallet.NetworkPreference
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.allowances.AllowanceCopy
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
@@ -73,6 +74,10 @@ fun SettingsHubScreen(
         Eyebrow(SendCopy.settingsThisAccount)
         MenuGroup {
             MenuRow(BrambleIconName.ROCKET, SendCopy.settingsDeployRow) { open(Flow.DEPLOY) }
+        }
+        Eyebrow(AllowanceCopy.SETTINGS_SECTION)
+        MenuGroup {
+            MenuRow(BrambleIconName.COINS, AllowanceCopy.SETTINGS_ROW) { open(Flow.ALLOWANCES) }
         }
         Eyebrow("Preferences")
         MenuGroup {

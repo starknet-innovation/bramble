@@ -8,9 +8,11 @@ plugins {
 // time and never committed. There is no fallback image: a missing source fails the build.
 val onboardingLandscape: File = rootDir.resolve("../../apps/extension/public/brand/onboarding-landscape.webp")
 // The core's extension-parity fixture (CoreBridgeTest) and the coordination UI fixture the Rust
-// suite writes and verifies (NostrMultisigFlowTest), copied into the instrumented-test assets.
+// suite writes and verifies (NostrMultisigFlowTest), and the extension's multisig proposal
+// (MultisigTransactionsTest), copied into the instrumented-test assets.
 val parityFixture: File = rootDir.resolve("../core/tests/fixtures/extension-parity.json")
 val coordinationFixture: File = rootDir.resolve("../core/tests/fixtures/ui-coordination.json")
+val multisigFixture: File = rootDir.resolve("../core/tests/fixtures/extension-multisig-transactions.json")
 val brambleRes = layout.buildDirectory.dir("generated/bramble-res")
 val brambleTestAssets = layout.buildDirectory.dir("generated/bramble-test-assets")
 
@@ -24,7 +26,8 @@ val copyOnboardingLandscape by tasks.registering(Copy::class) {
 val copyParityFixture by tasks.registering(Copy::class) {
     check(parityFixture.isFile) { "missing $parityFixture (run bun run mobile:parity)" }
     check(coordinationFixture.isFile) { "missing $coordinationFixture" }
-    from(parityFixture, coordinationFixture)
+    check(multisigFixture.isFile) { "missing $multisigFixture" }
+    from(parityFixture, coordinationFixture, multisigFixture)
     into(brambleTestAssets)
 }
 

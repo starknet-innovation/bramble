@@ -14,6 +14,8 @@ struct WalletShell: View {
         case tokens, addToken, discoverTokens
         case token(String)
         case privacy
+        /// The allowance manager, or (with one) a listed allowance's revoke.
+        case allowances(AllowanceView?)
     }
 
     @Environment(WalletStore.self) private var store
@@ -124,6 +126,9 @@ struct WalletShell: View {
 
             case .deploy:
                 DeployAccountView()
+
+            case let .allowances(revoking):
+                AllowancesDestination(revoking: revoking) { flows.append(.allowances($0)) } exit: { flows.removeAll() }
 
             case .accounts:
                 AccountsManageView()
