@@ -24,6 +24,12 @@ struct SharedAccountsView: View {
 
     private var records: [MultisigRecord] { store.coordination.multisigs }
 
+    /// `multisig.list.open`: " · N open" while signing intents still need someone.
+    private func openNote(_ record: MultisigRecord) -> String {
+        guard let count = store.coordination.openIntents[record.id], count > 0 else { return "" }
+        return " · \(count) open"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
@@ -46,7 +52,7 @@ struct SharedAccountsView: View {
                             MenuRow(
                                 icon: .wallet,
                                 title: multisigDisplayName(record),
-                                value: multisigConfigLabel(record)
+                                value: multisigConfigLabel(record) + openNote(record)
                             ) {
                                 open(.sharedAccount(id: record.id))
                             }
