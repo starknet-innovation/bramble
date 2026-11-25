@@ -43,14 +43,18 @@ Home action row (opens ETH → STRK) and a token's screen (sells that token, `sw
 
 Strings come from the extension's catalog through `SwapCopy.generated.{swift,kt}`
 (`scripts/mobile-assets/swap-copy.ts`, held by `tests/conformance/mobile-generated.test.ts`). One is
-mobile-only: "Refresh quote", the refresh control's accessible name. Review lines, risk flags and
-refusal reasons are the core's own sentences, shown unedited; the extension maps refusals to
-friendlier copy (`friendly-error-copy.ts`), which mobile does not yet do.
+mobile-only: "Refresh quote", the refresh control's accessible name. Review lines and risk flags
+are the core's own sentences, shown unedited. Refusals are the core's sentences read through the
+extension's friendly copy (`FriendlyError`, [friendly-errors.md](friendly-errors.md)), as the side
+panel's `errorLine`: "swap quote failed" reads "Couldn't fetch a quote. Check your connection and
+try again.", and a refusal with no reviewed sentence ("swap build approved an unexpected spender")
+keeps its words, since it names a security fact.
 
 ## Not done
 
 - **Quote expiry.** Neither the core (`v0.7.0`) nor the extension exposes one. A stale quote fails
-  at the build ("swap build failed", the core's sentence) and the person refreshes.
+  at the build ("avnu couldn't prepare this swap. Get a fresh quote and try again.") and the
+  person refreshes.
 - **Slippage control.** The extension has none ("slippage comes from a fixed control"); mobile
   passes `nil`, the core's 0.5% default.
 - **Token catalog.** The extension's picker also offers verified untracked tokens; mobile lists

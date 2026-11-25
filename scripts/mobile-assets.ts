@@ -20,6 +20,7 @@ import { renderAndroidTokenLogos } from "./mobile-assets/android-token-logos";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { parseCss } from "./mobile-assets/css";
 import { TOAST_SOURCE } from "./mobile-assets/feedback";
+import { renderFriendlyErrors } from "./mobile-assets/friendly-errors";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { MULTISIG_JSON_PATH, renderMultisigConstants } from "./mobile-assets/multisig";
 import { PRIVACY_JSON_PATH, renderPrivacyRouting } from "./mobile-assets/privacy";
@@ -183,6 +184,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],
+    ...renderFriendlyErrors(),
     ...renderVectorAssets(),
     ...renderAndroidTokenLogos(),
   ]);

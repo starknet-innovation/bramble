@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
  * The Swap journey from Home (`swap-ui.ts`, iOS `SwapFlowTests`) on the offline [FixtureNode] and a
  * canned AVNU with wallet-core's `tests/swap.rs` replies (0.01 ETH for 12.5 STRK): the quote, the
  * review in the core's words with the enforced minimum, and nothing written before Confirm swap,
- * which is asserted, never tapped. With AVNU unanswered the quote fails closed in the core's
+ * which is asserted, never tapped. With AVNU unanswered the quote fails closed in the extension's
  * sentence and Review swap stays disabled.
  */
 @RunWith(AndroidJUnit4::class)
@@ -60,7 +60,7 @@ class SwapFlowTest {
     fun unansweredQuoteFailsClosed() {
         val node = FixtureNode(deployed = true, funded = true)
         val r = open(node) { HttpOutcome(0u, null, null, false) }
-        r.waitForText("swap quote failed", timeoutMs = TIMEOUT_MS)
+        r.waitForText("Couldn't fetch a quote. Check your connection and try again.", timeoutMs = TIMEOUT_MS)
         rule.onAllNodes(hasText(SwapCopy.review) and hasClickAction())[0].assertIsNotEnabled()
         assertEquals(0, node.writes.get())
     }

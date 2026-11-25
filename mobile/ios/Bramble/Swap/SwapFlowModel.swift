@@ -36,7 +36,8 @@ final class SwapFlowModel {
     var amount = "" { didSet { if amount != oldValue { invalidate() } } }
     private(set) var quote: SwapQuoteView?
     private(set) var quoting = false
-    /// Why the last quote or build was refused (the core's sentence), or why a review fell back.
+    /// Why the last quote or build was refused (the core's sentence, through the friendly copy), or
+    /// why a review fell back.
     private(set) var note: String?
     private(set) var swapReview: SwapReview?
     private(set) var review: TransferReview?
@@ -171,7 +172,7 @@ final class SwapFlowModel {
     var canReview: Bool { stage == .edit && quote != nil && !insufficient }
 
     /// Asks for a fresh quote of the pair and amount on screen. A reply that lands after an edit
-    /// is dropped; a refusal ends that quote and shows the core's sentence.
+    /// is dropped; a refusal ends that quote and shows the core's sentence through the friendly copy.
     func requestQuote() async {
         invalidate()
         let mine = generation
@@ -354,14 +355,25 @@ final class SwapFlowModel {
 
     nonisolated static let nodeError = SendFailure(code: .nodeError, hash: nil)
 
-    /// The core's refusal sentence, as it wrote it; the lock's own line for a lock.
+    /// What a refused step shows: the core's sentence (`SwapError`'s, for the variants that carry
+    /// none) read through the extension's friendly copy (`FriendlyError`), as the side panel's
+    /// `errorLine`; the lock's own line for a lock.
     nonisolated static func reason(_ error: Error) -> String {
         switch error {
         case let SwapError.Refused(reason):
-            reason
+            FriendlyError.message(reason)
 
         case SwapError.Locked:
             SendFailureText.message(SendFailure(code: .locked, hash: nil))
+
+        case SwapError.NotFound:
+            FriendlyError.message("swap preparation not found")
+
+        case SwapError.UnknownAccount:
+            FriendlyError.message("unknown account")
+
+        case SwapError.Storage:
+            FriendlyError.message("a wallet file could not be read")
 
         default:
             SwapCopy.swapFailed

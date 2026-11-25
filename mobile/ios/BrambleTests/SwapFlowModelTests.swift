@@ -5,7 +5,7 @@ import XCTest
 /// The Swap journey (`swap-ui.ts`) over canned AVNU replies and the canned node, with the values
 /// of wallet-core's `tests/swap.rs` and `extension-swap.jsonl` (0.01 ETH for 12.5 STRK on Sepolia):
 /// the quote, the build judged against the pinned router, the plan to its fee and one write; a
-/// hostile build refused before anything is planned; a failed quote shown in the core's words.
+/// hostile build refused before anything is planned; a failed quote shown in the extension's words.
 /// No reply ever reaches a real endpoint.
 @MainActor
 final class SwapFlowModelTests: XCTestCase {
@@ -85,7 +85,11 @@ final class SwapFlowModelTests: XCTestCase {
         await model.requestQuote()
         await model.reviewSwap()
         XCTAssertEqual(model.stage, .edit)
-        XCTAssertEqual(model.note, "swap build approved an unexpected spender", "the core's sentence, unedited")
+        XCTAssertEqual(
+            model.note,
+            FriendlyError.message("swap build approved an unexpected spender"),
+            "the core's sentence, through the extension's copy"
+        )
         XCTAssertNil(model.quote, "a refusal ends the quote")
         XCTAssertFalse(model.canReview)
         XCTAssertTrue(node.posts.isEmpty, "nothing reached the node")
@@ -97,7 +101,7 @@ final class SwapFlowModelTests: XCTestCase {
         model.amount = "0.01"
         await model.requestQuote()
         XCTAssertNil(model.quote)
-        XCTAssertEqual(model.note, "swap quote failed")
+        XCTAssertEqual(model.note, "Couldn't fetch a quote. Check your connection and try again.")
         XCTAssertFalse(model.canReview)
     }
 

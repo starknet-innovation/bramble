@@ -26,6 +26,7 @@ import org.bramble.core.formatTokenAmount
 import org.bramble.core.parseTokenAmount
 import org.bramble.wallet.RpcClient
 import org.bramble.wallet.RpcPost
+import org.bramble.wallet.errors.friendlyError
 import org.bramble.wallet.portfolio.BoundedHttp
 import org.bramble.wallet.portfolio.PortfolioTransport
 import org.bramble.wallet.send.SendCopy
@@ -126,7 +127,10 @@ class SwapFlowModel(
     var quoting by mutableStateOf(false)
         private set
 
-    /** Why the last quote or build was refused (the core's sentence), or why a review fell back. */
+    /**
+     * Why the last quote or build was refused (the core's sentence, through the friendly copy), or
+     * why a review fell back.
+     */
     var note by mutableStateOf<String?>(null)
         private set
 
@@ -222,7 +226,10 @@ class SwapFlowModel(
         close()
     }
 
-    /** A fresh quote of the pair and amount on screen; a refusal shows the core's sentence. */
+    /**
+     * A fresh quote of the pair and amount on screen; a refusal shows the core's sentence through
+     * the friendly copy.
+     */
     suspend fun requestQuote() {
         close()
         val mine = generation
@@ -404,10 +411,16 @@ private fun statusFailure(status: TxStatus?): String? =
         else -> null
     }
 
-/** The core's refusal sentence, as written; the lock's own line for a lock. */
+/**
+ * What a refused step shows: the core's sentence (`SwapError`'s, for the variants that carry none)
+ * read through the extension's friendly copy ([friendlyError]), as the side panel's `errorLine`;
+ * the lock's own line for a lock.
+ */
 internal fun reason(error: SwapException): String =
     when (error) {
-        is SwapException.Refused -> error.reason
+        is SwapException.Refused -> friendlyError(error.reason)
         is SwapException.Locked -> SendFailureText.message(SendFailure(SendFailureCode.LOCKED, null, null))
-        else -> SwapCopy.swapFailed
+        is SwapException.NotFound -> friendlyError("swap preparation not found")
+        is SwapException.UnknownAccount -> friendlyError("unknown account")
+        is SwapException.Storage -> friendlyError("a wallet file could not be read")
     }
