@@ -31,7 +31,10 @@ The fallback is the caller's `context` sentence, or "Something went wrong. Pleas
 Patterns are JavaScript sources run on ICU (`NSRegularExpression`) and `java.util.regex`. The
 generator turns `/i` into `(?i)`, escapes a bare `[` inside a character class (both engines read it
 as a nested set) and refuses any other flag or `&&`. `\b` and `\w` follow each engine's definition;
-the parity vectors pin the strings the core writes.
+the parity vectors pin the strings the core writes. The ports differ from JavaScript only on
+non-ASCII edges no core message has: a letter such as `é` beside a `\b`, and a trailing U+0085
+or leading U+FEFF, which the native `trim`, `.` and `$` treat differently. A differential run of
+every copy-table and plumbing key, upper- and lowercased, matched on both platforms.
 
 ## What does not go through it
 
