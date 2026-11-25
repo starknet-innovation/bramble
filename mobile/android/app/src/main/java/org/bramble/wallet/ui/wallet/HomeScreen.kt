@@ -57,24 +57,7 @@ fun HomeScreen(
                 .ShieldedHeroLabel(store)
             ReadyKeyNoticeCard(store, moveFunds = actions.send)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-            val active = store.activeRecord
-            ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
-                actions.send()
-            }
-            ActionTile("Swap", BrambleIconName.SHUFFLE, enabled = false, modifier = Modifier.weight(1f)) {}
-            ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = actions.receive)
-            org.bramble.wallet.privacy.ShieldActionTile(
-                org.bramble.core.shieldTile(
-                    store.network,
-                    store.deployment,
-                    store.strkFunded,
-                    store.privacy.reading,
-                ),
-                modifier = Modifier.weight(1f),
-                journey = actions.privacy,
-            )
-        }
+        ActionRow(store, actions)
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -101,11 +84,44 @@ fun HomeScreen(
     }
 }
 
+/** `.action-row`: Send, Swap, Receive and Shield; Send and Swap need an unlocked account. */
+@Composable
+private fun ActionRow(
+    store: WalletStore,
+    actions: HomeActions,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
+        val active = store.activeRecord
+        ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
+            actions.send()
+        }
+        ActionTile(
+            org.bramble.wallet.swap.SwapCopy.homeAction,
+            BrambleIconName.SWAP,
+            enabled = active != null,
+            modifier = Modifier.weight(1f),
+            onClick = actions.swap,
+        )
+        ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = actions.receive)
+        org.bramble.wallet.privacy.ShieldActionTile(
+            org.bramble.core.shieldTile(
+                store.network,
+                store.deployment,
+                store.strkFunded,
+                store.privacy.reading,
+            ),
+            modifier = Modifier.weight(1f),
+            journey = actions.privacy,
+        )
+    }
+}
+
 /**
  * Where Home's controls lead, wired by the shell: the flows it pushes and a token's detail by id.
  *
  * @property receive opens Receive.
  * @property send opens the Send journey (OpenZeppelin accounts only).
+ * @property swap opens the Swap journey.
  * @property privacy opens the privacy journey (every enabled Shield tile).
  * @property openToken opens a tracked token's detail by its token id.
  * @property manageTokens opens the token list (Manage tokens).
@@ -113,6 +129,7 @@ fun HomeScreen(
 data class HomeActions(
     val receive: () -> Unit,
     val send: () -> Unit,
+    val swap: () -> Unit,
     val privacy: () -> Unit,
     val openToken: (String) -> Unit,
     val manageTokens: () -> Unit,

@@ -8,6 +8,9 @@ enum class Flow {
     /** The send journey. */
     SEND,
 
+    /** The swap journey. */
+    SWAP,
+
     /** Account names, receipts, and groups. */
     MANAGE_ACCOUNTS,
 

@@ -43,10 +43,12 @@ import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.FlowHeader
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
+import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.privacy.TokenPrivacySection
 import org.bramble.wallet.send.Receipt
+import org.bramble.wallet.swap.SwapCopy
 import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
@@ -59,7 +61,7 @@ private const val SPARKLINE_HEIGHT = 32.0
  * balance, the token's Send (opening Send on this token, [send] with its address; shown only
  * where the Send journey can carry it), the private half of this token ([TokenPrivacySection],
  * from the core's `tokenDetailPrivacy` over the real deployment state), and the contract receipt.
- * The extension's Swap is not offered: mobile has no swap flow. [tokenId] names a tracked token;
+ * Swap ([swap] with its id) is always offered, as the extension's. [tokenId] names a tracked token;
  * one no longer tracked (a lock, a network switch) returns to the shell.
  */
 @Composable
@@ -68,6 +70,7 @@ fun TokenDetailScreen(
     tokenId: String,
     back: () -> Unit,
     send: (String) -> Unit,
+    swap: (String) -> Unit = {},
     journey: () -> Unit,
 ) {
     val portfolio = store.portfolio
@@ -87,6 +90,7 @@ fun TokenDetailScreen(
             if (store.canSend(token.address)) {
                 PillButton("Send", icon = BrambleIconName.SEND) { send(token.address) }
             }
+            PillButton(SwapCopy.homeAction, kind = PillKind.SECONDARY, icon = BrambleIconName.SWAP) { swap(token.id) }
         }
         ContractSection(store, token)
         Spacer(Modifier.height(BrambleSpace.lg))

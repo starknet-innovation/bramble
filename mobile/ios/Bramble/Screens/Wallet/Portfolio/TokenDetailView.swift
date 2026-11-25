@@ -1,8 +1,8 @@
 import BrambleCore
 import SwiftUI
 
-/// `tokenDetailFlow`: price with the 7-day sparkline, the balance, Send (`tokenActions`; mobile has
-/// no swap flow, so Swap is not offered), the private half, and the contract receipt.
+/// `tokenDetailFlow`: price with the 7-day sparkline, the balance, Send and Swap (`tokenActions`),
+/// the private half, and the contract receipt.
 struct TokenDetailView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -10,6 +10,8 @@ struct TokenDetailView: View {
     let tokenId: String
     /// Opens Send on this token (its address); the recipient is still chosen first.
     var send: (String) -> Void = { _ in /* No action unless the shell wires the send flow. */ }
+    /// Opens Swap selling this token (its id); always offered, as Send.
+    var swap: (String) -> Void = { _ in /* No action unless the shell wires the swap flow. */ }
     /// Opens the privacy journey (Shield, Go private).
     var journey: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
     @State private var points: [Double] = []
@@ -34,6 +36,7 @@ struct TokenDetailView: View {
                     if SendFlowModel.token(token.address, in: store.networkInfo) != nil {
                         PillButton("Send", icon: .send) { send(token.address) }
                     }
+                    PillButton(SwapCopy.homeAction, kind: .secondary, icon: .swap) { swap(token.id) }
                     // The private half of this token (`tokenDetailPrivacy`): amount, retry, actions.
                     TokenPrivacySection(tokenAddress: token.address, journey: journey)
                     contract(token)

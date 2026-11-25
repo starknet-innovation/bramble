@@ -86,12 +86,16 @@ fun WalletShell(store: WalletStore) {
         sendToken = token
         push(Flow.SEND)
     }
+    val openSwap = { token: String? ->
+        sendToken = token
+        push(Flow.SWAP)
+    }
     BackHandler(enabled = flows.isNotEmpty()) { pop() }
 
     val flow = flows.lastOrNull()
     if (flow != null) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
-            FlowScreen(flow, store, FlowArguments(tokenId, sendToken, openSend, showActivity), pop, push)
+            FlowScreen(flow, store, FlowArguments(tokenId, sendToken, openSend, openSwap, showActivity), pop, push)
         }
         return
     }
@@ -108,7 +112,7 @@ fun WalletShell(store: WalletStore) {
         },
     ) {
         WalletHeader(store, openAccounts = { accountsOpen = true })
-        DockScreen(store, push, openSend = { openSend(null) }) { id ->
+        DockScreen(store, push, openSend = { openSend(null) }, openSwap = { openSwap(null) }) { id ->
             tokenId = id
             push(Flow.TOKEN_DETAIL)
         }
@@ -127,14 +131,17 @@ fun WalletShell(store: WalletStore) {
  * What a pushed flow needs beyond the store, since the flow stack holds screens only.
  *
  * @property tokenId the tracked token a [Flow.TOKEN_DETAIL] shows.
- * @property sendToken the token a [Flow.SEND] opens on, or null for STRK.
+ * @property sendToken the token a [Flow.SEND] opens on (its address), or a [Flow.SWAP] sells (its
+ *   tracked id); null opens Send on STRK and Swap on ETH → STRK.
  * @property openSend pushes [Flow.SEND] on a token (a token screen's Send).
+ * @property openSwap pushes [Flow.SWAP] selling a token (a token screen's Swap).
  * @property showActivity closes every flow onto the Activity tab (a receipt's "View in Activity tab").
  */
 private data class FlowArguments(
     val tokenId: String,
     val sendToken: String?,
     val openSend: (String?) -> Unit,
+    val openSwap: (String?) -> Unit,
     val showActivity: () -> Unit,
 )
 
@@ -162,6 +169,15 @@ private fun FlowScreen(
                 viewActivity = arguments.showActivity,
                 openAddressBook = { push(Flow.ADDRESS_BOOK) },
                 manageTokens = { push(Flow.TOKENS) },
+                startToken = arguments.sendToken,
+            )
+        }
+
+        Flow.SWAP -> {
+            org.bramble.wallet.swap.SwapScreen(
+                store,
+                back = pop,
+                viewActivity = arguments.showActivity,
                 startToken = arguments.sendToken,
             )
         }
@@ -232,6 +248,7 @@ private fun PortfolioFlowScreen(
                 arguments.tokenId,
                 back = pop,
                 send = arguments.openSend,
+                swap = arguments.openSwap,
                 journey = { push(Flow.PRIVACY) },
             )
         }
@@ -263,14 +280,15 @@ private fun PortfolioFlowScreen(
 }
 
 /**
- * The dock screen for the selected tab; [openSend] opens the Send journey on STRK, [openToken] a
- * tracked token's detail by id.
+ * The dock screen for the selected tab; [openSend] opens the Send journey on STRK, [openSwap] the
+ * Swap journey on ETH → STRK, [openToken] a tracked token's detail by id.
  */
 @Composable
 private fun DockScreen(
     store: WalletStore,
     push: (Flow) -> Unit,
     openSend: () -> Unit,
+    openSwap: () -> Unit,
     openToken: (String) -> Unit,
 ) {
     when (store.tab) {
@@ -280,6 +298,7 @@ private fun DockScreen(
                 HomeActions(
                     receive = { push(Flow.RECEIVE) },
                     send = openSend,
+                    swap = openSwap,
                     privacy = { push(Flow.PRIVACY) },
                     openToken = openToken,
                     manageTokens = { push(Flow.TOKENS) },

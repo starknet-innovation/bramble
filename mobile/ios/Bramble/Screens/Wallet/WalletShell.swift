@@ -8,6 +8,8 @@ struct WalletShell: View {
         case receive, network, appearance, security, reveal, remove, send, deploy, accounts
         /// Send, opened on one token (its address) from that token's screen.
         case sendToken(String)
+        /// Swap, opened from Home (nil) or selling one tracked token (its id) from that token's screen.
+        case swap(String?)
         case coordination(CoordinationFlow)
         case tokens, addToken, discoverTokens
         case token(String)
@@ -31,6 +33,7 @@ struct WalletShell: View {
                             receive: { flows.append(.receive) },
                             open: { flows.append($0) },
                             send: { openSend(.send) },
+                            swap: { flows.append(.swap(nil)) },
                             privacy: { flows.append(.privacy) }
                         )
 
@@ -78,6 +81,16 @@ struct WalletShell: View {
         flows.append(flow)
     }
 
+    /// A tracked token's screen, with its Send, Swap and privacy journey.
+    private func tokenDetail(_ id: String) -> some View {
+        TokenDetailView(
+            tokenId: id,
+            send: { openSend(.sendToken($0)) },
+            swap: { flows.append(.swap($0)) },
+            journey: { flows.append(.privacy) }
+        )
+    }
+
     /// The screen each pushed flow shows.
     private func destination(_ flow: Flow) -> some View {
         Group {
@@ -106,6 +119,9 @@ struct WalletShell: View {
             case let .sendToken(address):
                 SendFlowView(token: address) { flows.append(.tokens) }
 
+            case let .swap(token):
+                SwapView(token: token)
+
             case .deploy:
                 DeployAccountView()
 
@@ -125,11 +141,7 @@ struct WalletShell: View {
                 DiscoverTokensView()
 
             case let .token(id):
-                TokenDetailView(
-                    tokenId: id,
-                    send: { openSend(.sendToken($0)) },
-                    journey: { flows.append(.privacy) }
-                )
+                tokenDetail(id)
 
             case .privacy:
                 PrivacyJourneyView { flows.append(.network) }
