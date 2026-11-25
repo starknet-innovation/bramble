@@ -116,6 +116,8 @@ export const readAddressAt = (calldata: readonly unknown[], index: number): stri
   if (typeof value !== "string") {
     return "";
   }
+  // Not `canonical(value)` alone: BigInt("") is 0n, so an empty slot would read
+  // as address 0x0 instead of no address.
   return asFelt(value) === null ? value : canonical(value);
 };
 
