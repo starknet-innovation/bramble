@@ -60,8 +60,6 @@ enum MultisigTxText {
 
     static func submitted(_ hash: String) -> String { "Transaction submitted to Starknet: \(hash)" }
 
-    static func thresholdOption(_ value: UInt32, of count: Int) -> String { "\(value) of \(count)" }
-
     /// A list row's supporting text (`compactIntentList`): its state, then its signatures.
     static func status(_ intent: MultisigIntent) -> String {
         let state: String
