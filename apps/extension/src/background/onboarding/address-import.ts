@@ -106,7 +106,7 @@ const matchAtIndex = async (
 
 // Walks the family's ladders index by index, both ladders at each index, so a
 // low index on either is found first. Bounded by the recovery scan's ceiling,
-// which sits far below strkd's reserved agent index; that index is skipped all
+// which sits far below Bramble Companion's reserved agent index; that index is skipped all
 // the same, in case the ceiling ever moves.
 const findOwnerKey = async (
   deps: AddressImportDeps,

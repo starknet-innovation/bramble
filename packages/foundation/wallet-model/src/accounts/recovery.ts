@@ -22,8 +22,8 @@ export const RECOVERY_SCAN_LIMITS = {
 } as const;
 
 /**
- * The hardened account index strkd reserves for its agent accounts: `"AGNT"`
- * in ASCII (#336). strkd derives from the same phrase on the same
+ * The hardened account index Bramble Companion reserves for its agent accounts: `"AGNT"`
+ * in ASCII (#336). Bramble Companion derives from the same phrase on the same
  * `accountIndex` axis, and keeps accounts that AI agents may drive under a
  * permission grant on this branch so they never appear in a mainstream
  * wallet. Bramble never derives, scans, restores, or creates an account here.
@@ -111,7 +111,7 @@ export type RecoveryAccountCandidate = {
 
 /**
  * True for a valid hardened BIP-44 account index this wallet may use. The
- * strkd agent index ({@link RESERVED_AGENT_ACCOUNT_INDEX}) is refused, so a
+ * Bramble Companion agent index ({@link RESERVED_AGENT_ACCOUNT_INDEX}) is refused, so a
  * manual index, a restore selection, or a creation request can never land on
  * it.
  */

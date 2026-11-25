@@ -145,7 +145,7 @@ describe("find-accounts flow", () => {
     expect(flow.app.querySelectorAll('input[data-recovery-kind="import"]').length).toBe(0);
   });
 
-  test("a manual index on strkd's agent branch is refused before any scan (#336)", async () => {
+  test("a manual index on Bramble Companion's agent branch is refused before any scan (#336)", async () => {
     const flow = mount();
     const field = flow.app.querySelector<HTMLInputElement>('input[name="recoveryManualIndex"]');
     if (!field) throw new Error("manual index field missing");
