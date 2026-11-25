@@ -46,9 +46,6 @@ object PublicWallet {
 
 typealias BrambleRule = AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>
 
-/** Steps that wait on a vault write (key derivation), which CI emulators run slowly. */
-private const val VAULT_WRITE_TIMEOUT_MS = 120_000L
-
 /**
  * Steps shared by the flow tests, named after the iOS XCUITest helpers. Compose finders drive
  * Compose UI; secret fields are platform `EditText`s inside `AndroidView`, so they are scrolled
@@ -74,9 +71,18 @@ class Robot(
             rule.waitUntil(timeoutMs) { exists(matcher) }
         } catch (timeout: ComposeTimeoutException) {
             val screen = runCatching { rule.onRoot(useUnmergedTree = false).printToString() }.getOrDefault("")
-            throw AssertionError("${matcher.description} not shown after $timeoutMs ms; screen:\n$screen", timeout)
+            val header = "${matcher.description} not shown after $timeoutMs ms; screen:"
+            throw AssertionError(listOf(header, screen, "threads:", threadDump()).joinToString("\n"), timeout)
         }
     }
+
+    /** Every app thread's stack, so a timeout behind a stuck core call shows what it waits on. */
+    private fun threadDump(): String =
+        Thread
+            .getAllStackTraces()
+            .flatMap { (thread, frames) ->
+                listOf("${thread.name} ${thread.state}") + frames.take(25).map { "    at $it" }
+            }.joinToString("\n")
 
     /**
      * Runs [action] and waits until the store raises the toast [text]. Every toast is recorded as
@@ -206,7 +212,7 @@ class Robot(
     }
 
     fun reviewAndAdd(expectingShort: String?) {
-        waitForText("Review your account", VAULT_WRITE_TIMEOUT_MS)
+        waitForText("Review your account", 20_000)
         if (expectingShort != null) waitForText(expectingShort, 20_000)
         snapshot("review-account")
         tap("Add selected account")
@@ -238,7 +244,7 @@ class Robot(
     fun waitForHome(timeoutMs: Long = 20_000) = waitForText("Tokens", timeoutMs)
 
     fun finishAndCheckHome() {
-        waitForText("You’re all set", VAULT_WRITE_TIMEOUT_MS)
+        waitForText("You’re all set", 20_000)
         snapshot("complete")
         tap("Open Bramble")
         waitForHome()
