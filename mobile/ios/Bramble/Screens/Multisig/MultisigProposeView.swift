@@ -78,6 +78,9 @@ struct MultisigProposeView: View {
     @State private var recipient = ""
     @State private var amount = ""
 
+    /// A decimal pad types "," in some locales; the core reads ".", as Send does.
+    private var decimalAmount: String { amount.replacingOccurrences(of: ",", with: ".") }
+
     var body: some View {
         ProposalScreen(
             title: MultisigTxText.newTransaction,
@@ -87,7 +90,7 @@ struct MultisigProposeView: View {
             let tokens = store.portfolio.tracked.map(\.token)
             let selected = tokenId ?? tokens.first?.id
             let request = selected.map { token in
-                MultisigProposalRequest.transfer(tokenId: token, recipient: recipient, amount: amount.replacingOccurrences(of: ",", with: "."))
+                MultisigProposalRequest.transfer(tokenId: token, recipient: recipient, amount: decimalAmount)
             }
             if tokens.isEmpty {
                 EmptyState(message: MultisigTxText.noTokens)
@@ -100,7 +103,9 @@ struct MultisigProposeView: View {
                 }
             }
             BrambleField(label: MultisigTxText.recipient, placeholder: "0x…", text: $recipient, mono: true)
-            BrambleField(label: MultisigTxText.amountToSend, placeholder: "0", text: $amount, mono: true, keyboard: .decimalPad)
+            BrambleField(
+                label: MultisigTxText.amountToSend, placeholder: "0", text: $amount, mono: true, keyboard: .decimalPad
+            )
             PillButton(
                 control.label(MultisigTxText.reviewTransaction, for: request),
                 icon: .send,
@@ -156,20 +161,24 @@ struct MultisigSignersView: View {
             }
             section(MultisigTxText.addParticipant) {
                 BrambleField(label: MultisigTxText.enterKey, placeholder: "0x…", text: $newKey, mono: true)
-                BrambleField(label: MultisigTxText.approvalsAfterAdding, placeholder: "", text: $addThreshold, keyboard: .numberPad)
+                countField(MultisigTxText.approvalsAfterAdding, $addThreshold)
                 button(MultisigTxText.reviewAddition, add, control).disabled(add == nil || newKey.isEmpty)
             }
             if removing != nil {
                 section(MultisigTxText.reviewRemoval) {
-                    BrambleField(label: MultisigTxText.approvalsAfterRemoval, placeholder: "", text: $removeThreshold, keyboard: .numberPad)
+                    countField(MultisigTxText.approvalsAfterRemoval, $removeThreshold)
                     button(MultisigTxText.reviewRemoval, remove, control).disabled(remove == nil)
                 }
             }
             section("Change approvals required") {
-                BrambleField(label: MultisigTxText.newThreshold, placeholder: "", text: $threshold, keyboard: .numberPad)
+                countField(MultisigTxText.newThreshold, $threshold)
                 button(MultisigTxText.reviewThreshold, change, control).disabled(change == nil)
             }
         }
+    }
+
+    private func countField(_ label: String, _ text: Binding<String>) -> some View {
+        BrambleField(label: label, placeholder: "", text: text, keyboard: .numberPad)
     }
 
     private static func change(_ change: ConfigChange) -> MultisigProposalRequest { .changeSigners(change: change) }
