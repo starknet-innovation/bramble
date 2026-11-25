@@ -4,7 +4,13 @@ import org.bramble.core.AllowanceNotice
 import org.bramble.core.AllowanceSource
 import org.bramble.core.AllowanceView
 import org.bramble.core.NetworkId
+import org.bramble.core.RevokeException
+import org.bramble.core.SendFailure
+import org.bramble.core.SendFailureCode
 import org.bramble.wallet.allowances.AllowanceCopy
+import org.bramble.wallet.allowances.RevokeFlowModel
+import org.bramble.wallet.errors.friendlyError
+import org.bramble.wallet.send.SendFailureText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -65,5 +71,14 @@ class AllowanceCopyTest {
             AllowanceCopy.canRevoke(view("1", source = AllowanceSource.MULTISIG)),
         )
         assertFalse("an unconfirmed contract would be granted", AllowanceCopy.canRevoke(view("1", unconfirmed = true)))
+    }
+
+    @Test
+    fun lockReadsSendsLockLine() {
+        val lockLine = SendFailureText.message(SendFailure(SendFailureCode.LOCKED, null, null))
+        assertEquals(lockLine, RevokeFlowModel.shown(RevokeException.Locked()))
+        assertFalse(lockLine == friendlyError("wallet is locked"))
+        val notFound = RevokeFlowModel.shown(RevokeException.NotFound())
+        assertEquals(friendlyError("allowance not found"), notFound)
     }
 }

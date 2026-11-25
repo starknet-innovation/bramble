@@ -81,11 +81,11 @@ final class RevokeFlowModel {
             _ = await endpoints.drive(revoke, on: network)
             plan = try revoke.plan(feeBalance: feeBalance)
         } catch let error as RevokeError {
-            message = FriendlyError.message(Self.refusal(error))
+            message = Self.shown(error)
             stage = .refused
             return
         } catch {
-            message = FriendlyError.message(Self.refusal(.Locked))
+            message = Self.shown(.Locked)
             stage = .refused
             return
         }
@@ -113,6 +113,14 @@ final class RevokeFlowModel {
     func close() {
         driver?.plan.cancel()
         driver = nil
+    }
+
+    /// What the screen shows for a refusal: Send's lock line for a lock (the extension's lookup
+    /// would read "wallet is locked" as the generic fallback), else the core's sentence through the
+    /// extension's friendly copy.
+    nonisolated static func shown(_ error: RevokeError) -> String {
+        if case .Locked = error { return SendFailureText.message(SendFailure(code: .locked, hash: nil)) }
+        return FriendlyError.message(refusal(error))
     }
 
     /// The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.7.0

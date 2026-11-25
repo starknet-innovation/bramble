@@ -186,6 +186,20 @@ final class AllowanceFlowTests: XCTestCase {
         )
     }
 
+    func testALockedWalletReadsSendsLockLineNotTheGenericOne() async throws {
+        let owner = try ozRecord(core, .sepolia).id
+        try seed([owner])
+        let revoke = try model(view(amount: "1000", id: id(owner)))
+        try core.lock()
+        await revoke.prepare()
+        XCTAssertEqual(revoke.stage, .refused)
+        let lockLine = SendFailureText.message(SendFailure(code: .locked, hash: nil))
+        XCTAssertEqual(revoke.message, lockLine)
+        XCTAssertNotEqual(revoke.message, FriendlyError.message("wallet is locked"))
+        XCTAssertEqual(RevokeFlowModel.shown(.Locked), lockLine)
+        XCTAssertFalse(node.posts.contains(where: \.write))
+    }
+
     func testAnUnansweredListingSaysItIsPartialAndKeepsTheStoredGrant() async throws {
         try seed([ozRecord(core, .sepolia).id])
         chain.unreachable = true

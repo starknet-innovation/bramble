@@ -120,7 +120,7 @@ internal class RevokeFlowModel(
                 links.reads.drive(AllowanceReads(revoke::nextCalls, revoke::accept, revoke::restart), network)
                 withContext(Dispatchers.Default) { revoke.plan(feeBalance) }
             } catch (error: RevokeException) {
-                message = friendlyError(refusal(error))
+                message = shown(error)
                 stage = Stage.REFUSED
                 return
             }
@@ -217,6 +217,18 @@ internal class RevokeFlowModel(
 
     /** The refusal wording, shared with the tests. */
     companion object {
+        /**
+         * What the screen shows for a refusal: Send's lock line for a lock (the extension's lookup
+         * would read "wallet is locked" as the generic fallback), else the core's sentence through
+         * the extension's friendly copy.
+         */
+        fun shown(error: RevokeException): String =
+            if (error is RevokeException.Locked) {
+                SendFailureText.message(SendFailure(SendFailureCode.LOCKED, null, null))
+            } else {
+                friendlyError(refusal(error))
+            }
+
         /**
          * The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.7.0
          * (`send/revoke.rs`), byte for byte. The bindings carry only `Refused`'s sentence (the batch
