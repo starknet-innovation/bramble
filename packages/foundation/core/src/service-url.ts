@@ -136,15 +136,15 @@ export const trimTrailingSlashes = (value: string): string => {
 /**
  * Checks a service endpoint without performing network access: HTTPS, or HTTP
  * on a loopback host, with no credentials or fragment (not even an empty "#"),
- * written in its canonical spelling. That spelling is the URL parser's serialization, which is what a
- * request sends (a bare origin may keep or drop its trailing slash), and it
- * holds no character {@link redactEndpoints} ends a URL at. The parser would
- * otherwise accept a raw spelling it only fixes when it serializes:
- * backslashes, missing or extra slashes, tab, CR and LF anywhere, and
- * whitespace, quotes, angle brackets and backticks it percent-encodes. Such a
- * spelling, if stored and echoed, could leave the tail of an API key outside a
- * redaction. A record an earlier build stored is brought to this rule by
- * {@link normalizeStoredServiceUrl}.
+ * written in its canonical spelling. That spelling is the URL parser's
+ * serialization, which is what a request sends (a bare origin may keep or drop
+ * its trailing slash), and it holds no character {@link redactEndpoints} ends
+ * a URL at. The parser would otherwise accept a raw spelling it only fixes
+ * when it serializes: backslashes, missing or extra slashes, tab, CR and LF
+ * anywhere, and whitespace, quotes, angle brackets and backticks it
+ * percent-encodes. Such a spelling, if stored and echoed, could leave the tail
+ * of an API key outside a redaction. A record an earlier build stored is
+ * brought to this rule by {@link normalizeStoredServiceUrl}.
  */
 export const isServiceUrl = (value: unknown): value is string =>
   isCanonicalFor(value, "https:", "http:");
