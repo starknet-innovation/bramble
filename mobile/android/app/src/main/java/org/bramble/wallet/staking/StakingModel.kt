@@ -150,6 +150,8 @@ class StakingModel internal constructor(
         private set
 
     private var generation = 0
+    private var positionsRead = 0
+    private var directoryRead = 0
 
     /** Edits the paste field, which clears its error. */
     fun paste(text: String) {
@@ -166,10 +168,15 @@ class StakingModel internal constructor(
         }
     }
 
-    /** "Your stakes": Starkscan names the candidates, the chain read verifies each one. */
+    /**
+     * "Your stakes": Starkscan names the candidates, the chain read verifies each one. Only the
+     * newest read lands, so a slow first read cannot overwrite a refresh made after a stake.
+     */
     suspend fun loadPositions() {
+        val read = ++positionsRead
         positions = StakingLoad.Loading
-        positions = runCatching { readPositions() }.getOrElse { StakingLoad.Failed(stakingMessage(it)) }
+        val result = runCatching { readPositions() }.getOrElse { StakingLoad.Failed(stakingMessage(it)) }
+        if (read == positionsRead) positions = result
     }
 
     private suspend fun readPositions(): StakingLoad<StakingView> {
@@ -179,11 +186,18 @@ class StakingModel internal constructor(
         return StakingLoad.Loaded(read.view(clock()))
     }
 
-    /** The directory's first page, or (with [cursor]) the next one appended under it. */
+    /**
+     * The directory's first page, or (with [cursor]) the next one appended under it. A Show more
+     * while a page is loading is ignored, and only the newest read lands, so no page is appended
+     * twice.
+     */
     suspend fun loadDirectory(cursor: String?) {
+        if (cursor != null && loadingMore) return
+        val read = ++directoryRead
         val current = (directory as? StakingLoad.Loaded)?.value
-        if (cursor == null) directory = StakingLoad.Loading else loadingMore = true
-        directory =
+        if (cursor == null) directory = StakingLoad.Loading
+        loadingMore = cursor != null
+        val result =
             runCatching { readDirectory(cursor, current) }.getOrElse { error ->
                 if (cursor != null && current != null) {
                     StakingLoad.Loaded(current.copy(moreError = stakingMessage(error)))
@@ -191,6 +205,8 @@ class StakingModel internal constructor(
                     StakingLoad.Failed(stakingMessage(error))
                 }
             }
+        if (read != directoryRead) return
+        directory = result
         loadingMore = false
     }
 

@@ -83,6 +83,8 @@ final class StakingModel {
     let clock: @Sendable () -> UInt64
     /// Bumped whenever the screen opens or leaves a validator; a read that lands late is dropped.
     private var generation = 0
+    private var positionsRead = 0
+    private var directoryRead = 0
 
     init(
         core: WalletCore,
@@ -121,36 +123,55 @@ final class StakingModel {
         _ = await (stakes, listed)
     }
 
-    /// "Your stakes": Starkscan names the candidates, the chain read verifies each one.
+    /// "Your stakes": Starkscan names the candidates, the chain read verifies each one. Only the
+    /// newest read lands, so a slow first read cannot overwrite a refresh made after a stake.
     func loadPositions() async {
+        positionsRead += 1
+        let read = positionsRead
         positions = .loading
+        let result = await readPositions()
+        if read == positionsRead { positions = result }
+    }
+
+    private func readPositions() async -> Load<StakingView> {
         do {
             guard let request = try core.stakingPositionsRequest(accountId: accountId, tokens: tokens) else {
-                positions = .off
-                return
+                return .off
             }
             let outcome = await transport.perform(request)
             let read = try core.stakingPositions(accountId: accountId, outcome: outcome, tokens: tokens)
             await endpoints.drive(read, on: network)
-            positions = try .loaded(read.view(nowSeconds: clock()))
+            return try .loaded(read.view(nowSeconds: clock()))
         } catch {
-            positions = .failed(StakingText.message(error))
+            return .failed(StakingText.message(error))
         }
     }
 
-    /// The directory's first page, or (with `cursor`) the next one appended under it.
+    /// The directory's first page, or (with `cursor`) the next one appended under it. A Show more
+    /// while a page is loading is ignored, and only the newest read lands, so no page is appended
+    /// twice.
     func loadDirectory(cursor: String?) async {
-        if cursor == nil { directory = .loading } else { loadingMore = true }
-        defer { loadingMore = false }
+        if cursor != nil, loadingMore { return }
+        directoryRead += 1
+        let read = directoryRead
+        let current: Directory? = if case let .loaded(listed) = directory { listed } else { nil }
+        if cursor == nil { directory = .loading }
+        loadingMore = cursor != nil
+        let result = await readDirectory(cursor: cursor, current: current)
+        guard read == directoryRead else { return }
+        directory = result
+        loadingMore = false
+    }
+
+    private func readDirectory(cursor: String?, current: Directory?) async -> Load<Directory> {
         do {
             guard let request = try stakingDirectoryRequest(network: network.network, cursor: cursor) else {
-                directory = .off
-                return
+                return .off
             }
             let outcome = await transport.perform(request)
             let page = try stakingDirectoryView(network: network.network, outcome: outcome, tokens: tokens)
-            var listed = Directory(entries: [], nextCursor: nil)
-            if cursor != nil, case let .loaded(current) = directory { listed = current }
+            var listed = cursor == nil ? Directory(entries: [], nextCursor: nil) : current
+                ?? Directory(entries: [], nextCursor: nil)
             switch page {
             case .incomplete:
                 listed.incomplete = cursor == nil
@@ -162,14 +183,13 @@ final class StakingModel {
                 listed.nextCursor = nextCursor
                 listed.moreError = nil
             }
-            directory = .loaded(listed)
+            return .loaded(listed)
         } catch {
-            if cursor != nil, case var .loaded(current) = directory {
+            if cursor != nil, var current {
                 current.moreError = StakingText.message(error)
-                directory = .loaded(current)
-            } else {
-                directory = .failed(StakingText.message(error))
+                return .loaded(current)
             }
+            return .failed(StakingText.message(error))
         }
     }
 
