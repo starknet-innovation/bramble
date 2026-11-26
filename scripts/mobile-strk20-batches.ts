@@ -21,6 +21,7 @@ import { PARITY_MNEMONIC } from "./mobile-parity";
 import { parityPrivacyAccount } from "./mobile-privacy-wire";
 import { invokeStrk20Batches } from "./mobile-strk20-batches-invoke";
 import { moreStrk20Batches } from "./mobile-strk20-batches-more";
+import { multisigStrk20Batches } from "./mobile-strk20-batches-multisig";
 import type { Signed } from "./mobile-strk20-jobs";
 import { bytesHex, hex, labelledStream, sdkSource } from "./mobile-strk20-primitives";
 
@@ -34,7 +35,7 @@ const POOL_NONCE = "0x2a";
 export type Served = { readonly status: number; readonly body: string };
 /** A reply built from the request it answers (a JSON-RPC reply echoes its id). */
 export type Reply = (request: { readonly id: unknown }) => Served;
-export type Route = "call" | "incoming" | "nonce" | "outgoing" | "prover";
+export type Route = "blockNumber" | "call" | "incoming" | "nonce" | "outgoing" | "prover";
 
 /** One job: which builder the extension uses, its reviewed actions, and its scripted replies. */
 export type Batch = {
@@ -61,6 +62,10 @@ export type Batch = {
   };
   /** Rewrites the account context (a multisig's CallSet signer, held-proof hooks). */
   readonly context?: (base: Strk20PrepareInput, signing: Signed[]) => Strk20PrepareInput;
+  /** Runs before the job (a co-signer's step); its fields are appended to the line. */
+  readonly before?: () => Promise<Readonly<Record<string, unknown>>>;
+  /** A whole line that is not a job (a review, a refusal table). */
+  readonly line?: () => Promise<Readonly<Record<string, unknown>>>;
   /** Fields appended to the line once the job has run. */
   readonly extra?: () => Promise<Readonly<Record<string, unknown>>>;
 };
@@ -126,7 +131,12 @@ export type BatchKit = {
   readonly strk: bigint;
   readonly eth: bigint;
   readonly channelKey: (from: Party, to: Party) => bigint;
-  readonly outgoing: (entries: readonly Out[], total: number, cursor?: unknown) => Reply;
+  readonly outgoing: (
+    entries: readonly Out[],
+    total: number,
+    cursor?: unknown,
+    sender?: Party,
+  ) => Reply;
   readonly incoming: (notes: readonly In[], cursor?: unknown, withChannels?: boolean) => Reply;
   readonly job: (
     id: string,
@@ -141,6 +151,10 @@ export type BatchKit = {
   readonly toB: Out;
   readonly funds: Reply;
   readonly rpc: (result: unknown) => Reply;
+  /** The prover's reply for `actions`, with deposits drawn from `from`. */
+  readonly proved: (actions: readonly Strk20Action[], screening?: boolean, from?: Party) => Reply;
+  /** A party for an address and its viewing key, with the SDK's public key. */
+  readonly partyOf: (address: bigint, viewingKey: bigint) => Party;
 };
 
 /** Computes the world and returns every batch, in fixture order. */
@@ -185,11 +199,12 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     entries: readonly Out[],
     total: number,
     cursor: unknown = { channel_discovery_complete: true, total_n_channels: total },
+    sender: Party = a,
   ): Reply =>
     ok({
       block_ref: PROVING_BLOCK,
       channels: entries.map((entry) => ({
-        channel_key: hex(channelKey(a, entry.to)),
+        channel_key: hex(channelKey(sender, entry.to)),
         ...(entry.created ? {} : { precomputed: true }),
         recipient_addr: hex(entry.to.address),
         recipient_public_key: hex(entry.to.publicKey),
@@ -250,13 +265,13 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     );
   const abi = new starknet.CallData(PrivacyPoolABI);
   // The batch's public token movements, as a pool would emit them, through the pool's own ABI.
-  const serverActions = (actions: readonly Strk20Action[]): string[] => {
+  const serverActions = (actions: readonly Strk20Action[], from: Party): string[] => {
     const span = actions.flatMap((entry) =>
       entry.type === "deposit"
         ? [
             action("TransferFrom", {
               amount: BigInt(entry.amount),
-              from_addr: a.address,
+              from_addr: from.address,
               token: BigInt(entry.token),
             }),
           ]
@@ -274,8 +289,8 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     const compiled = abi.compile("apply_actions", { actions: span, screening: none }).map(hex);
     return compiled.slice(0, -1); // drop the trailing `None` the SDK appends itself
   };
-  const proved = (actions: readonly Strk20Action[], screening = false): Reply => {
-    const span = serverActions(actions);
+  const proved = (actions: readonly Strk20Action[], screening = false, from = a): Reply => {
+    const span = serverActions(actions, from);
     abi.decodeParameters("core::array::Span::<privacy::actions::ServerAction>", span);
     const chainId = STARKNET_NETWORKS.SN_MAIN.chainId;
     return rpc({
@@ -338,6 +353,12 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     incoming,
     job,
     outgoing,
+    partyOf: (address, viewingKey) => ({
+      address,
+      publicKey: derivePublicKey(viewingKey),
+      viewingKey,
+    }),
+    proved,
     rpc,
     self,
     strk,
@@ -398,5 +419,6 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     }),
     ...moreStrk20Batches(kit),
     ...(await invokeStrk20Batches(kit)),
+    ...(await multisigStrk20Batches(kit)),
   ];
 };

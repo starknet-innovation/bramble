@@ -79,6 +79,7 @@ const routeOf = (url: string, body: string): Route | "unscripted" => {
   if (url === config.proverUrl) return "prover";
   const method = (JSON.parse(body || "{}") as { method?: unknown }).method;
   if (url === RPC_URL && method === "starknet_call") return "call";
+  if (url === RPC_URL && method === "starknet_blockNumber") return "blockNumber";
   return url === RPC_URL && method === "starknet_getNonce" ? "nonce" : "unscripted";
 };
 
@@ -104,6 +105,8 @@ const plain = (value: unknown): unknown =>
 
 /** Runs one batch through the extension's proof path and returns its transcript line. */
 const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
+  if (batch.line) return batch.line();
+  const before = batch.before ? await batch.before() : {};
   const routing = batch.config === undefined ? config : batch.config;
   if (!config || !routing) throw new Error("mainnet STRK20 config missing");
   const account = batch.account ?? (await jobAccount());
@@ -231,7 +234,7 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
   const unused = Object.entries(queues).filter(([, left]) => left.length > 0);
   if (unscripted.length > 0 || unused.length > 0) {
     throw new Error(
-      `${batch.id}: unscripted ${unscripted.map((r) => r.url).join(", ")}; unused ${unused.map(([route]) => route).join(", ")}`,
+      `${batch.id}: unscripted ${unscripted.map((r) => r.url).join(", ")}; unused ${unused.map(([route]) => route).join(", ")}; outcome ${JSON.stringify(outcome).slice(0, 400)}; routes ${requests.map((r) => r.route).join(",")}`,
     );
   }
   const created = sdkSteps["createProofInvocation"] as
@@ -279,6 +282,7 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
     },
     retries: pauses,
     outcome,
+    ...before,
     ...(batch.extra ? await batch.extra() : {}),
   };
 };
