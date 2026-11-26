@@ -65,16 +65,26 @@ folder builds to exactly that hash), account
 - **Cost.** An SLH-signed transaction costs about 32M L2 gas, under 1 STRK on Sepolia.
   Signing takes 2–3 s in the Python reference.
 
+## Inside SNIP-36 proofs
+
+STRK20 private transfers check the user's signature inside a client-side SNIP-36 proof, where
+the 100M validation cap does not apply. [`snip36/`](snip36/README.md) runs the same pattern with
+SLH-DSA: BLAKE2s and standard FIPS 205 SHAKE both verify inside StarkWare's virtual OS on
+Sepolia (651k and 15.8M steps to prove, against 297k for today's ECDSA). Generating the proofs
+needs a 96 GB prover machine, so proving times are still to measure.
+
 ## Layout
 
 | Path | Contents |
 |---|---|
 | `crates/bench_interface` | Verifier trait and Starknet validation-limit constants |
 | `crates/slh_dsa_blake2s_128s` | Cairo verifier, fixtures and tests |
-| `contracts` | `SlhDsaBlake2s128sAccount` and the shared account flow |
+| `crates/slh_dsa_shake_128s` | Standard FIPS 205 SLH-DSA-SHAKE-128s verifier (~397M L2 gas) |
+| `contracts` | `SlhDsaBlake2s128sAccount`, `SlhDsaShake128sAccount`, the shared account flow, and the SNIP-36 harness |
 | `scripts` | FIPS 205 reference and the fixture generator |
-| `signer` | Key generation and signing (Python) |
+| `signer` | Key generation and signing (Python), BLAKE2s and SHAKE |
 | `sepolia` | End-to-end Sepolia script |
+| `snip36` | SLH-DSA checked inside SNIP-36 proofs, as STRK20 private transfers would ([README](snip36/README.md)) |
 
 ## Reproduce
 
@@ -83,7 +93,7 @@ Needs Scarb 2.22.0, Starknet Foundry 0.64.1 and universal-sierra-compiler 2.11.0
 
 ```bash
 scarb build
-snforge test --workspace          # 17 tests
+snforge test --workspace          # 34 tests
 
 python3 -I signer/slh_signer.py keygen --key my-slh-key.json
 cd sepolia && npm install

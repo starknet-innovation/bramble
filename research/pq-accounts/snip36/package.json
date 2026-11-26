@@ -1,0 +1,8 @@
+{
+  "name": "pq-accounts-snip36",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "starknet": "10.8.0"
+  }
+}

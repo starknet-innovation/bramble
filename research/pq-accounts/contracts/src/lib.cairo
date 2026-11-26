@@ -9,4 +9,5 @@
 //! scheme); `utils` holds the shared account interfaces and the execution/validation flow.
 
 pub mod accounts;
+pub mod snip36;
 pub mod utils;
