@@ -16,6 +16,11 @@ and `core/tests/fixtures/extension-parity.json`) come from the extension's TypeS
 Never edit them by hand: run `bun run mobile:assets` or `bun run mobile:parity` from the repo
 root. `bun run check` fails when they drift.
 
+`core/tests/fixtures/extension-ledger.jsonl` is recorded by hand with `bun run mobile:ledger`
+against the Starknet app under Speculos. It needs Docker and `bun run vendor:ledger-app nanosp`
+(on Apple Silicon Docker runs the image as `linux/amd64`). wallet-core's `ledger_parity.rs`
+replays it; nothing here checks it for drift.
+
 ## Linting
 
 Swift and Kotlin are linted strictly by pinned tools: SwiftLint 0.65.1, ktlint 1.8.0 (official

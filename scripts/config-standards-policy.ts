@@ -206,6 +206,8 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   format: "biome check --write .",
   // Regenerate the mobile wallet's single-sourced tokens/networks and its extension-parity vectors.
   "mobile:assets": "bun run scripts/generate-mobile-assets.ts",
+  // Manual: needs Docker and the vendored Nano S+ app; never a gate.
+  "mobile:ledger": "bun run scripts/mobile-ledger-speculos.ts",
   "mobile:parity": "bun run scripts/generate-mobile-parity-vectors.ts",
   // Pinned strict SwiftLint/ktlint/detekt (mobile/scripts/lint-tools.sh). Kept out of `check`:
   // it needs macOS and a JDK, and `check` must pass on Linux CI and machines without them.

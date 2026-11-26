@@ -3,8 +3,8 @@
  * (wallet-core `ledger::{DeviceSigning, KeyEnumeration}`, `Plan::with_device`,
  * `ledger_account_candidates`), recorded against the real Starknet app under Speculos.
  *
- * Every APDU goes through the extension's own stack: the shipped `newStarknetClient` (the pinned
- * `@ledgerhq/hw-app-starknet` 3.0.2 over hw-transport's `send`) and `@bramble/ledger-protocol`'s
+ * Every APDU goes through the extension's own stack: the shipped `newStarknetClient` (the
+ * pinned `@ledgerhq/hw-app-starknet` over hw-transport's `send`) and `@bramble/ledger-protocol`'s
  * `client.ts` for its outcome. A recording transport sits where WebHID would and forwards each
  * APDU to Speculos (`tests/e2e/ledger/speculos.ts`); on-device approval and rejection are driven
  * through Speculos's REST API with the E2E suite's `device-actions.ts`. Each line carries the
@@ -27,6 +27,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import {
+  BRAMBLE_LEDGER_STARKNET_APP_MIN as APP_MIN,
   assertLedgerAppReady,
   type LedgerDeviceClient,
   ledgerPublicKeyX,
@@ -59,6 +60,8 @@ import { PARITY_MESSAGE_HASH, PARITY_MNEMONIC } from "./mobile-parity";
 export const LEDGER_PARITY_FIXTURE_PATH = "mobile/core/tests/fixtures/extension-ledger.jsonl";
 
 const MODEL = "nanosp";
+/** The pinned library's own version, so the header cannot drift from the lockfile. */
+const STARKNET_LIBRARY_VERSION: string = require("@ledgerhq/hw-app-starknet/package.json").version;
 const API_PORT = 5000;
 const APDU_PORT = 9999;
 
@@ -173,19 +176,25 @@ const main = async (): Promise<void> => {
     const screen = new SpeculosScreen(endpoints);
     await enableBlindSigning(screen, MODEL);
 
-    /** Runs `flow` over a fresh recording client; returns its APDUs and outcome. */
+    /**
+     * Runs `flow` over a fresh recording client; returns its APDUs and outcome. Throws when the
+     * outcome is not `expect` (`"ok"` or a refusal code), so a broken run never writes a fixture.
+     */
     const record = async <T>(
       flow: (client: LedgerDeviceClient) => Promise<T>,
+      expect: "ok" | LedgerRejection["code"],
       answer: (apdu: Uint8Array) => Promise<Uint8Array> = (bytes) => apdu.exchange(bytes),
     ) => {
       const transport = new RecordingTransport(answer);
       const client = newStarknetClient(transport) as LedgerDeviceClient;
-      let outcome: object;
+      let outcome: { status: string; code?: string };
       try {
         outcome = { status: "ok", ...(await flow(client)) };
       } catch (error) {
         outcome = outcomeOf(error);
       }
+      const got = outcome.status === "ok" ? "ok" : outcome.code;
+      if (got !== expect) throw new Error(`expected ${expect}, got ${JSON.stringify(outcome)}`);
       return { exchanges: transport.log, outcome };
     };
 
@@ -193,13 +202,13 @@ const main = async (): Promise<void> => {
       {
         app: {
           elfSha256: LEDGER_APP_BINARIES[MODEL].sha256,
-          library: "@ledgerhq/hw-app-starknet 3.0.2",
+          library: `@ledgerhq/hw-app-starknet ${STARKNET_LIBRARY_VERSION}`,
           model: MODEL,
           name: "Starknet",
           revision: APP_STARKNET_REVISION,
           version: APP_STARKNET_VERSION,
         },
-        appMinimum: "2.4.0",
+        appMinimum: `${APP_MIN.major}.${APP_MIN.minor}.${APP_MIN.patch}`,
         block: "header",
         seed: "PARITY_MNEMONIC (the published parity phrase)",
         speculosImage: SPECULOS_IMAGE,
@@ -214,24 +223,28 @@ const main = async (): Promise<void> => {
       block: "version",
       name: "the device's app",
       recorded: true,
-      ...(await record(version)),
+      ...(await record(version, "ok")),
     });
     // Speculos runs 2.4.3, so the refusal is the extension's gate over a reply written here.
     lines.push({
       block: "version",
       name: "an app below the minimum (reply written by the generator)",
       recorded: false,
-      ...(await record(version, async () => Uint8Array.from([2, 3, 9, 0x90, 0x00]))),
+      ...(await record(version, "app-below-minimum", async () =>
+        Uint8Array.from([2, 3, 9, 0x90, 0x00]),
+      )),
     });
 
     const keys = new Map<string, string>();
     for (const scheme of ["LedgerW", "argentx"] as const) {
       for (const accountIndex of [0, 1]) {
         const path = ledgerAccountPath(accountIndex, scheme);
-        const read = await record(async (client) => ({
-          publicKeyX: await ledgerPublicKeyX(client, path),
-        }));
-        keys.set(`${scheme}/${accountIndex}`, (read.outcome as { publicKeyX: string }).publicKeyX);
+        let publicKeyX = "";
+        const read = await record(async (client) => {
+          publicKeyX = await ledgerPublicKeyX(client, path);
+          return { publicKeyX };
+        }, "ok");
+        keys.set(`${scheme}/${accountIndex}`, publicKeyX);
         lines.push({
           accountIndex,
           block: "publicKey",
@@ -249,20 +262,25 @@ const main = async (): Promise<void> => {
       accountIndex: number,
       hash: string,
       device: "approve" | "reject" | "none",
+      expect: "ok" | LedgerRejection["code"],
       storedAt = `${scheme}/${accountIndex}`,
     ) => {
       const path = ledgerAccountPath(accountIndex, scheme);
-      const storedPublicKeyX = keys.get(storedAt) ?? "";
+      const storedPublicKeyX = keys.get(storedAt);
+      if (storedPublicKeyX === undefined) throw new Error(`no public key read for ${storedAt}`);
       const flow = async (client: LedgerDeviceClient) => {
         await assertLedgerAppReady(client);
         if (!sameFelt(await ledgerPublicKeyX(client, path), storedPublicKeyX)) {
           throw new LedgerRejection("wrong-device");
         }
         const signing = ledgerSignHashOnDevice(client, path, hash);
+        // Handled here so a screen-driver failure surfaces instead of a stray rejection.
+        signing.catch(() => {});
         if (device === "approve") await approveHashReview(screen, MODEL);
         if (device === "reject") await rejectHashReview(screen, MODEL);
         const signature = await signing;
         const verified = verifyStarkSignature({ hash, publicKeyX: storedPublicKeyX, signature });
+        if (!verified) throw new Error(`${name}: the device's signature does not verify`);
         return { ...signature, verified };
       };
       lines.push({
@@ -273,15 +291,24 @@ const main = async (): Promise<void> => {
         path,
         scheme,
         storedPublicKeyX,
-        ...(await record(flow)),
+        ...(await record(flow, expect)),
       });
     };
-    await sign("approved", "LedgerW", 0, PARITY_MESSAGE_HASH, "approve");
-    await sign("approved at Ready's scheme", "argentx", 0, PARITY_MESSAGE_HASH, "approve");
-    await sign("rejected on the device", "LedgerW", 0, PARITY_MESSAGE_HASH, "reject");
-    await sign("another key at the path", "LedgerW", 0, PARITY_MESSAGE_HASH, "none", "LedgerW/1");
-    await sign("plan deployment", "LedgerW", 0, PLAN_DEPLOY_HASH, "approve");
-    await sign("plan transfer", "LedgerW", 0, PLAN_INVOKE_HASH, "approve");
+    const refused = "rejected-or-blind-signing-off";
+    await sign("approved", "LedgerW", 0, PARITY_MESSAGE_HASH, "approve", "ok");
+    await sign("approved at Ready's scheme", "argentx", 0, PARITY_MESSAGE_HASH, "approve", "ok");
+    await sign("rejected on the device", "LedgerW", 0, PARITY_MESSAGE_HASH, "reject", refused);
+    await sign(
+      "another key at the path",
+      "LedgerW",
+      0,
+      PARITY_MESSAGE_HASH,
+      "none",
+      "wrong-device",
+      "LedgerW/1",
+    );
+    await sign("plan deployment", "LedgerW", 0, PLAN_DEPLOY_HASH, "approve", "ok");
+    await sign("plan transfer", "LedgerW", 0, PLAN_INVOKE_HASH, "approve", "ok");
 
     const kms = createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
     for (const [scheme, accountContractType] of [
@@ -293,7 +320,7 @@ const main = async (): Promise<void> => {
         await assertLedgerAppReady(client);
         entries = await enumerateLedgerPubKeys(client, 0, 5, "verified", scheme);
         return { entries };
-      });
+      }, "ok");
       const accounts = await deriveLedgerAccountRefs(kms, {
         accountContractType,
         eip2645application: scheme,
