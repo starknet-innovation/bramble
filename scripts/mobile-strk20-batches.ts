@@ -18,6 +18,7 @@ import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/network
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { PARITY_MNEMONIC } from "./mobile-parity";
 import { parityPrivacyAccount } from "./mobile-privacy-wire";
+import { moreStrk20Batches } from "./mobile-strk20-batches-more";
 import { bytesHex, hex, labelledStream, sdkSource } from "./mobile-strk20-primitives";
 
 /** The block every batch proves at; discovery pages carry it as `block_ref`. */
@@ -27,9 +28,9 @@ const BLOCK_HASH = "0xb10c";
 const POOL_NONCE = "0x2a";
 
 /** One reply as served: HTTP status and exact body text. */
-type Served = { readonly status: number; readonly body: string };
+export type Served = { readonly status: number; readonly body: string };
 /** A reply built from the request it answers (a JSON-RPC reply echoes its id). */
-type Reply = (request: { readonly id: unknown }) => Served;
+export type Reply = (request: { readonly id: unknown }) => Served;
 export type Route = "incoming" | "nonce" | "outgoing" | "prover";
 
 /** One job: which builder the extension uses, its reviewed actions, and its scripted replies. */
@@ -40,7 +41,11 @@ export type Batch = {
   readonly script: Readonly<Partial<Record<Route, readonly Reply[]>>>;
 };
 
-type Party = { readonly address: bigint; readonly viewingKey: bigint; readonly publicKey: bigint };
+export type Party = {
+  readonly address: bigint;
+  readonly viewingKey: bigint;
+  readonly publicKey: bigint;
+};
 type Hashes = {
   compute_channel_key: (a: bigint, k: bigint, b: bigint, p: bigint) => bigint;
   compute_note_id: (ck: bigint, token: bigint, index: number) => bigint;
@@ -77,6 +82,42 @@ const rpcError =
     status: 200,
   });
 
+/** A channel in an `outgoing_state` reply; `tokens` overrides the single STRK `last`. */
+export type Out = {
+  to: Party;
+  created: boolean;
+  last?: number | null;
+  tokens?: readonly (readonly [bigint, number | null])[];
+};
+/** A note in an `incoming_state` reply, to the job's account; STRK unless `token` is set. */
+export type In = { from: Party; index: number; amount: bigint; token?: bigint };
+const saltLabel = (note: In): string =>
+  note.token === undefined ? `salt-${note.index}` : `salt-${hex(note.token)}-${note.index}`;
+
+/** The world's helpers, handed to the later batches. */
+export type BatchKit = {
+  readonly a: Party;
+  readonly b: Party;
+  readonly c: Party;
+  readonly strk: bigint;
+  readonly eth: bigint;
+  readonly channelKey: (from: Party, to: Party) => bigint;
+  readonly outgoing: (entries: readonly Out[], total: number, cursor?: unknown) => Reply;
+  readonly incoming: (notes: readonly In[], cursor?: unknown, withChannels?: boolean) => Reply;
+  readonly job: (
+    id: string,
+    builder: Batch["builder"],
+    actions: readonly Strk20Action[],
+    script: Batch["script"],
+  ) => Batch;
+  readonly deposit: (amount: string, recipient?: Party, of?: string) => Strk20Action;
+  readonly transfer: (amount: string, to: Party, of?: string) => Strk20Action;
+  readonly withdraw: (amount: string, of?: string) => Strk20Action;
+  readonly self: Out;
+  readonly toB: Out;
+  readonly funds: Reply;
+};
+
 /** Computes the world and returns every batch, in fixture order. */
 export const strk20Batches = async (): Promise<readonly Batch[]> => {
   const { derivePublicKey } = await sdkSource<{ derivePublicKey: (k: bigint) => bigint }>(
@@ -105,6 +146,9 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     return { address: BigInt(address), publicKey: derivePublicKey(key), viewingKey: key };
   };
   const [a, b, c] = [await party(0), await party(1), await party(2)];
+  const ethToken = DEFAULT_TOKENS.find((t) => t.networkId === "SN_MAIN" && t.symbol === "ETH");
+  if (!ethToken) throw new Error("mainnet ETH missing");
+  const eth = BigInt(ethToken.address);
   const strkToken = DEFAULT_TOKENS.find((t) => t.networkId === "SN_MAIN" && t.symbol === "STRK");
   if (!strkToken) throw new Error("mainnet STRK missing");
   const strk = BigInt(strkToken.address);
@@ -112,8 +156,11 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
   const channelKey = (from: Party, to: Party): bigint =>
     hashes.compute_channel_key(from.address, from.viewingKey, to.address, to.publicKey);
 
-  type Out = { to: Party; created: boolean; last?: number | null };
-  const outgoing = (entries: readonly Out[], total: number): Reply =>
+  const outgoing = (
+    entries: readonly Out[],
+    total: number,
+    cursor: unknown = { channel_discovery_complete: true, total_n_channels: total },
+  ): Reply =>
     ok({
       block_ref: PROVING_BLOCK,
       channels: entries.map((entry) => ({
@@ -122,35 +169,50 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
         recipient_addr: hex(entry.to.address),
         recipient_public_key: hex(entry.to.publicKey),
       })),
-      cursor: { channel_discovery_complete: true, total_n_channels: total },
+      cursor,
       subchannels: entries
-        .filter((entry) => entry.created && entry.last !== undefined)
-        .map((entry) => ({
-          last_note_index: entry.last,
-          recipient_addr: hex(entry.to.address),
-          token: hex(strk),
-        })),
+        .filter((entry) => entry.created && (entry.last !== undefined || entry.tokens))
+        .flatMap((entry) =>
+          (entry.tokens ?? [[strk, entry.last ?? null] as const]).map(([token, last]) => ({
+            last_note_index: last,
+            recipient_addr: hex(entry.to.address),
+            token: hex(token),
+          })),
+        ),
     });
-  type In = { from: Party; index: number; amount: bigint };
-  const incoming = (notes: readonly In[]): Reply => {
+  const incoming = (
+    notes: readonly In[],
+    cursor: unknown = { channel_discovery_complete: true },
+    withChannels = true,
+  ): Reply => {
     const senders = [...new Set(notes.map((note) => note.from))];
+    const pairs = [
+      ...new Map(
+        notes.map((note) => [`${note.from.address}:${note.token ?? strk}`, note] as const),
+      ).values(),
+    ];
     return ok({
       block_ref: PROVING_BLOCK,
-      channels: senders.map((from) => ({
+      channels: (withChannels ? senders : []).map((from) => ({
         channel_key: hex(channelKey(from, a)),
         sender_addr: hex(from.address),
       })),
-      cursor: { channel_discovery_complete: true },
+      cursor,
       notes: notes.map((note) => ({
         amount: note.amount.toString(),
         block_number: PROVING_BLOCK - 100,
         index: note.index,
-        note_id: hex(hashes.compute_note_id(channelKey(note.from, a), strk, note.index)),
-        salt: BigInt(`0x${bytesHex(labelledStream(`salt-${note.index}`, 15))}`).toString(),
+        note_id: hex(
+          hashes.compute_note_id(channelKey(note.from, a), note.token ?? strk, note.index),
+        ),
+        salt: BigInt(`0x${bytesHex(labelledStream(saltLabel(note), 15))}`).toString(),
         sender_addr: hex(note.from.address),
-        token: hex(strk),
+        token: hex(note.token ?? strk),
       })),
-      subchannels: senders.map((from) => ({ sender_addr: hex(from.address), token: hex(strk) })),
+      subchannels: pairs.map((note) => ({
+        sender_addr: hex(note.from.address),
+        token: hex(note.token ?? strk),
+      })),
     });
   };
 
@@ -170,7 +232,7 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
             action("TransferFrom", {
               amount: BigInt(entry.amount),
               from_addr: a.address,
-              token: strk,
+              token: BigInt(entry.token),
             }),
           ]
         : entry.type === "withdraw"
@@ -178,7 +240,7 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
               action("TransferTo", {
                 amount: BigInt(entry.amount),
                 to_addr: BigInt(entry.recipient),
-                token: strk,
+                token: BigInt(entry.token),
               }),
             ]
           : [],
@@ -214,18 +276,18 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
   };
 
   const token = hex(strk);
-  const deposit = (amount: string, recipient?: Party): Strk20Action => ({
+  const deposit = (amount: string, recipient?: Party, of = token): Strk20Action => ({
     amount,
-    token,
+    token: of,
     type: "deposit",
     ...(recipient ? { recipient: hex(recipient.address) } : {}),
   });
-  const transfer = (amount: string, to: Party): Strk20Action =>
-    ({ amount, recipient: hex(to.address), token, type: "transfer" }) as Strk20Action;
-  const withdraw = (amount: string): Strk20Action => ({
+  const transfer = (amount: string, to: Party, of = token): Strk20Action =>
+    ({ amount, recipient: hex(to.address), token: of, type: "transfer" }) as Strk20Action;
+  const withdraw = (amount: string, of = token): Strk20Action => ({
     amount,
     recipient: hex(a.address),
-    token,
+    token: of,
     type: "withdraw",
   });
   const self = { created: true, last: 1, to: a };
@@ -240,6 +302,23 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
   const shield = [deposit("5000000000000000000")];
   const funds = incoming([{ amount: 10_000_000_000_000_000_000n, from: b, index: 0 }]);
 
+  const kit: BatchKit = {
+    a,
+    b,
+    c,
+    channelKey,
+    deposit,
+    eth,
+    funds,
+    incoming,
+    job,
+    outgoing,
+    self,
+    strk,
+    toB,
+    transfer,
+    withdraw,
+  };
   return [
     job("register", "registration", [], { outgoing: [outgoing([], 0)] }),
     job("activate-shield", "activate", shield, { outgoing: [outgoing([], 0)] }),
@@ -291,5 +370,6 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
       outgoing: [outgoing([self], 1)],
       prover: [proved(shield, true)],
     }),
+    ...moreStrk20Batches(kit),
   ];
 };
