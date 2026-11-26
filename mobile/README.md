@@ -55,6 +55,13 @@ Android core build plus `./gradlew :app:testDebugUnitTest`, then `android-device
 instrumented suite on an API 35 x86_64 emulator on Linux with the core the `android` job built. The
 iOS UI tests (`BrambleUITests`) stay local.
 
+To keep runs short: draft PRs run only the Linux `core` job, and the macOS jobs start when the PR is
+marked ready for review. A PR touching only `mobile/ios` or only `mobile/android` skips the other
+platform. CI builds just the simulator and x86_64 slices (`BRAMBLE_IOS_TARGETS`,
+`BRAMBLE_ANDROID_ABIS`) and caches them by their inputs, so a run whose `mobile/core` and build
+scripts are unchanged skips the Rust build. SwiftLint's analyzer rules run on pushes only, so run
+`swift-analyze` (above) before pushing Swift changes.
+
 ## Rust core
 
 The core's code and its Rust tests (unit, lifecycle, extension parity, and the opt-in mainnet and

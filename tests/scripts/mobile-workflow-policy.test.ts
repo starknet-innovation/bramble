@@ -39,8 +39,10 @@ describe("mobile workflow policy", () => {
   const cases = [
     {
       name: "rejects the self-hosted runner",
-      search: "  lint:\n    runs-on: macos-15",
-      replacement: "  lint:\n    runs-on: codebuild-gha-runner-mc-wallet",
+      search:
+        "  ios:\n    needs: scope\n    if: needs.scope.outputs.ios == 'true'\n    runs-on: macos-15",
+      replacement:
+        "  ios:\n    needs: scope\n    if: needs.scope.outputs.ios == 'true'\n    runs-on: codebuild-gha-runner-mc-wallet",
       failure: `${PATH} must run on ubuntu-latest or macos-15, not \`codebuild-gha-runner-mc-wallet\``,
     },
     {
