@@ -208,12 +208,14 @@ final class DappRequestSink {
         summary == "OutsideExecution" || summary.hasPrefix("OutsideExecution · ")
     }
 
-    /// `json` re-indented one value per line, its text untouched: it is never parsed, so no number
-    /// or key order can change between what is shown and what is signed.
+    /// `json` re-indented one value per line: it is never parsed, so no number or key order can
+    /// change between what is shown and what is signed. String contents are copied verbatim; only
+    /// whitespace outside strings moves. It walks Unicode scalars, not `Character`s: a combining
+    /// mark after a quote would otherwise fuse with it and desync the string tracking.
     static func indented(_ json: String) -> String {
-        var out = "", depth = 0, inString = false, escaped = false
-        func newline() { out += "\n" + String(repeating: "  ", count: depth) }
-        for char in json {
+        var out = String.UnicodeScalarView(), depth = 0, inString = false, escaped = false
+        func newline() { out.append(contentsOf: ("\n" + String(repeating: "  ", count: depth)).unicodeScalars) }
+        for char in json.unicodeScalars {
             if inString {
                 out.append(char)
                 if escaped {
@@ -245,7 +247,7 @@ final class DappRequestSink {
                 newline()
 
             case ":":
-                out += ": "
+                out.append(contentsOf: ": ".unicodeScalars)
 
             case " ", "\n", "\r", "\t":
                 break
@@ -254,7 +256,7 @@ final class DappRequestSink {
                 out.append(char)
             }
         }
-        return out
+        return String(out)
     }
 
     /// A site warning in the extension's words (`insight-messages.ts`).
