@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountRecord
 import org.bramble.core.GaslessFeeException
 import org.bramble.core.GaslessFeeInterface
 import org.bramble.core.GaslessOffer
@@ -101,10 +102,11 @@ class GaslessDriver(
         fee: GaslessFeeInterface,
         offer: GaslessOffer,
         prices: PriceView?,
+        account: AccountRecord? = null,
     ): Outcome {
         var used: DeviceSigning? = null
         try {
-            return submitting(fee, offer, prices) { used = it }
+            return submitting(fee, offer, prices, account) { used = it }
         } finally {
             used?.finish()
         }
@@ -114,6 +116,7 @@ class GaslessDriver(
         fee: GaslessFeeInterface,
         offer: GaslessOffer,
         prices: PriceView?,
+        account: AccountRecord?,
         using: (DeviceSigning) -> Unit,
     ): Outcome =
         try {
@@ -138,7 +141,7 @@ class GaslessDriver(
                     }
 
                     is GaslessSubmitStep.Device, is GaslessSubmitStep.DeviceRetry -> {
-                        val next = device(fee, current, using)
+                        val next = device(fee, current, account, using)
                         step = next ?: current
                         outcome = CANCELLED.takeIf { next == null }
                     }
@@ -160,20 +163,19 @@ class GaslessDriver(
     private suspend fun device(
         fee: GaslessFeeInterface,
         step: GaslessSubmitStep,
+        account: AccountRecord?,
         using: (DeviceSigning) -> Unit,
     ): GaslessSubmitStep? {
         val ledger = (signer ?: LedgerSigner.shared)?.also(using)
         val reply =
             when (step) {
                 is GaslessSubmitStep.Device -> {
-                    ledger?.exchange(step.apdu)
+                    ledger?.exchange(step.apdu, account)
                 }
 
                 is GaslessSubmitStep.DeviceRetry -> {
                     StepReply.RetryDevice.takeIf {
-                        ledger?.refused(
-                            step.reason,
-                        ) == true
+                        ledger?.refused(step.reason, account) == true
                     }
                 }
 

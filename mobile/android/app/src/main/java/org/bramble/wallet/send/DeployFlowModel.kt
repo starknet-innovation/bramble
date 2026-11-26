@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountRecord
 import org.bramble.core.DeploymentState
 import org.bramble.core.FeeAmount
 import org.bramble.core.NetworkInfo
@@ -32,8 +33,8 @@ import org.bramble.wallet.RpcPost
 class DeployFlowModel(
     private val core: WalletCore,
     private val network: NetworkInfo,
-    /** The account record the core deploys (an OpenZeppelin record; the core refuses others). */
-    private val accountId: String,
+    /** The record the core deploys (OpenZeppelin; the core refuses others), shown as the Ledger's signer. */
+    private val account: AccountRecord,
     /** How the plan's bytes move: HTTPS in the app, an offline fixture node in tests. */
     private val transport: RpcPost = RpcClient.https,
     /** Registers each new plan with the store, which cancels it on lock. */
@@ -116,7 +117,7 @@ class DeployFlowModel(
         // Locked, or a record the core will not deploy: nothing was prepared.
         val plan = prepare() ?: return failQuote()
         track(plan)
-        val started = SendDriver(plan, network, transport).also { driver = it }
+        val started = SendDriver(plan, network, transport, account).also { driver = it }
         val step = advance(started, StepReply.Start)
         // A plan closed while estimating (dismissal, a lock) reports nothing.
         if (driver !== started) return
@@ -183,7 +184,7 @@ class DeployFlowModel(
     /** A new deployment plan from the core, or null when it refuses (locked, or not deployable). */
     private suspend fun prepare(): TransferPlan? =
         try {
-            withContext(Dispatchers.Default) { core.prepareDeployment(accountId) }
+            withContext(Dispatchers.Default) { core.prepareDeployment(account.id) }
         } catch (ignored: SendException) {
             null
         }

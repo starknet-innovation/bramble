@@ -20,7 +20,7 @@ import org.bramble.wallet.send.SendDriver
  */
 fun WalletStore.makeDeployModel(): DeployFlowModel? {
     val account = activeRecord ?: return null
-    return DeployFlowModel(walletCore, networkInfo, account.id, rpc.transport) { plans += it }
+    return DeployFlowModel(walletCore, networkInfo, account, rpc.transport) { plans += it }
 }
 
 /**

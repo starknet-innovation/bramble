@@ -2,6 +2,8 @@ package org.bramble.wallet.send
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import org.bramble.core.AccountFamily
+import org.bramble.core.AccountRecord
 import org.bramble.core.GaslessFeeException
 import org.bramble.core.GaslessFeeInterface
 import org.bramble.core.GaslessOffer
@@ -11,6 +13,7 @@ import org.bramble.core.GaslessSubmitStep
 import org.bramble.core.HttpMethod
 import org.bramble.core.HttpOutcome
 import org.bramble.core.HttpRequest
+import org.bramble.core.NetworkId
 import org.bramble.core.PriceView
 import org.bramble.core.StepReply
 import org.bramble.wallet.ledger.DeviceSigning
@@ -105,9 +108,20 @@ class GaslessDriverTest {
         private val answers = ArrayDeque(again)
         var finished = 0
 
-        override suspend fun exchange(apdu: ByteArray): StepReply = StepReply.Device(OKAY)
+        val accounts = mutableListOf<AccountRecord?>()
 
-        override suspend fun refused(reason: String): Boolean = answers.removeFirstOrNull() ?: false
+        override suspend fun exchange(
+            apdu: ByteArray,
+            account: AccountRecord?,
+        ): StepReply {
+            accounts += account
+            return StepReply.Device(OKAY)
+        }
+
+        override suspend fun refused(
+            reason: String,
+            account: AccountRecord?,
+        ): Boolean = answers.removeFirstOrNull() ?: false
 
         override fun finish() {
             finished += 1
@@ -131,7 +145,8 @@ class GaslessDriverTest {
                         ),
                 )
             val signer = Signer(listOf(true))
-            val outcome = GaslessDriver(transport, signer = signer).submit(fee, offer, null)
+            val outcome = GaslessDriver(transport, signer = signer).submit(fee, offer, null, SIGNER)
+            assertEquals("the Ledger sheet names the reviewed plan's account", listOf(SIGNER, SIGNER), signer.accounts)
             assertEquals(GaslessDriver.Outcome.Submitted(HASH, null), outcome)
             val answer = StepReply.Device(OKAY)
             assertEquals(listOf(answer, StepReply.RetryDevice, answer), fee.deviceReplies)
@@ -245,5 +260,26 @@ class GaslessDriverTest {
     private companion object {
         const val HASH = "0x7a1ce5"
         val OKAY = byteArrayOf(0x90.toByte(), 0)
+        val SIGNER =
+            AccountRecord(
+                id = "SN_SEPOLIA:0x2",
+                network = NetworkId.SEPOLIA,
+                family = AccountFamily.OPEN_ZEPPELIN,
+                classHash = "0x1",
+                accountIndex = 2u,
+                address = "0x2",
+                publicKey = "0x3",
+                deploymentSalt = null,
+                label = null,
+                displayName = "Account 3",
+                shortAddress = "0x2",
+                typeLabel = null,
+                authorizationShape = "stark-pair",
+                groupId = null,
+                active = false,
+                hidden = false,
+                imported = false,
+                ledger = true,
+            )
     }
 }

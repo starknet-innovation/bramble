@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountRecord
 import org.bramble.core.NetworkInfo
 import org.bramble.core.PriceView
 import org.bramble.core.SendException
@@ -46,8 +47,8 @@ import org.bramble.wallet.send.reviewRisks
 class SwapFlowModel(
     private val core: WalletCore,
     private val network: NetworkInfo,
-    /** The vault record the core signs for. */
-    private val accountId: String,
+    /** The vault record the core signs for, shown as the Ledger's signer. */
+    private val account: AccountRecord,
     private val preferences: TokenPreferences,
     /** Base units per tracked token id, from the portfolio's loaded balances. */
     private val balances: Map<String, String>,
@@ -241,7 +242,7 @@ class SwapFlowModel(
         quoting = true
         try {
             val started =
-                withContext(Dispatchers.Default) { core.prepareSwap(accountId, from.id, to.id, text, preferences) }
+                withContext(Dispatchers.Default) { core.prepareSwap(account.id, from.id, to.id, text, preferences) }
             val outcome = http.perform(started.quoteRequest())
             val judged = withContext(Dispatchers.Default) { started.acceptQuote(outcome, prices) }
             // Checked after the last suspension, so a reply judged across an edit is dropped too.
@@ -279,7 +280,7 @@ class SwapFlowModel(
         swapReview = judged
         swap = null
         track(plan)
-        val started = SendDriver(plan, network, rpc).also { driver = it }
+        val started = SendDriver(plan, network, rpc, account).also { driver = it }
         showReview(started, StepReply.Start)
     }
 

@@ -24,9 +24,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.SecureFlagPolicy
+import org.bramble.core.AccountRecord
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleRadius
@@ -93,12 +95,34 @@ fun LedgerSignSheet(store: WalletStore) {
                 style = textStyle(BrambleTypeScale.title, BrambleWeight.semibold),
                 modifier = Modifier.semantics { heading() },
             )
+            signer.account?.let { SignerLine(store, it) }
             SignContent(store, signer, stage)
+            StatusLine(LedgerSignCopy.connectNote(stage))
             if (stage is LedgerSignStage.Refused) {
                 PillButton(LedgerSignCopy.TRY_AGAIN, kind = PillKind.SECONDARY) { signer.retry() }
             }
             PillButton(LedgerSignCopy.CANCEL, kind = PillKind.SECONDARY) { signer.cancel() }
         }
+    }
+}
+
+/** `signerLine`: "Signing with", the 6…4 address with its copy control, and the Ledger index. */
+@Composable
+private fun SignerLine(
+    store: WalletStore,
+    account: AccountRecord,
+) {
+    val skin = LocalSkin.current
+    val caption = textStyle(BrambleTypeScale.caption)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = LedgerSignCopy.signer(account) },
+    ) {
+        Text(LedgerSignCopy.SIGNING_WITH, color = skin.muted, style = caption)
+        Text(account.shortAddress, style = textStyle(BrambleTypeScale.caption, mono = true))
+        CopyButton(store, account.address, LedgerSignCopy.COPY_ADDRESS)
+        if (account.ledger) Text(LedgerSignCopy.account(account.accountIndex), color = skin.muted, style = caption)
     }
 }
 

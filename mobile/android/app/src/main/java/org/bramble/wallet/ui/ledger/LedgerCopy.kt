@@ -1,5 +1,6 @@
 package org.bramble.wallet.ui.ledger
 
+import org.bramble.core.AccountRecord
 import org.bramble.wallet.ledger.LedgerBluetooth
 import org.bramble.wallet.ledger.LedgerConnectModel
 import org.bramble.wallet.ledger.LedgerRoute
@@ -91,6 +92,15 @@ object LedgerSignCopy {
     /** The hash's copy control. */
     const val COPY_HASH = "Copy transaction hash"
 
+    /** Before the signing account's address. */
+    const val SIGNING_WITH = "Signing with"
+
+    /** The signing account's copy control. */
+    const val COPY_ADDRESS = "Copy signing account address"
+
+    /** Under the connect stages: nothing has been signed or sent while the Ledger is found. */
+    const val PAUSED = "The transaction is safely paused."
+
     /** Hex digits per group, as the extension renders the hash for comparison. */
     private const val HASH_GROUP = 4
 
@@ -102,6 +112,25 @@ object LedgerSignCopy {
             LedgerSignStage.Checking -> "Verifying the right account"
             is LedgerSignStage.Confirming -> "Approve on your Ledger"
             is LedgerSignStage.Refused -> "Ledger needs attention"
+        }
+
+    /** `ledgerSign.account`: the account's [index] on the Ledger. */
+    fun account(index: UInt): String = "Account $index"
+
+    /**
+     * The signer line as one sentence (its accessibility text): "Signing with 0x1234…abcd ·
+     * Account 0"; the index only for a Ledger record.
+     */
+    fun signer(account: AccountRecord): String {
+        val index = if (account.ledger) " · " + account(account.accountIndex) else ""
+        return "$SIGNING_WITH ${account.shortAddress}$index"
+    }
+
+    /** The line under the connect stages; null once a Ledger is connecting. */
+    fun connectNote(stage: LedgerSignStage): String? =
+        when (stage) {
+            is LedgerSignStage.Bluetooth, LedgerSignStage.Scanning -> PAUSED
+            else -> null
         }
 
     /** `0x` and the 64 digits in groups of four; the copied value stays unbroken. */

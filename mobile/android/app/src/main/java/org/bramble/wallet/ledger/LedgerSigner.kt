@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CompletableDeferred
+import org.bramble.core.AccountRecord
 import org.bramble.core.StepReply
 import org.bramble.core.TransportFailure
 import org.bramble.wallet.errors.friendlyError
@@ -12,12 +13,19 @@ import org.bramble.wallet.errors.friendlyError
 interface DeviceSigning {
     /**
      * The plan's reply to [apdu] (`StepReply.Device` or `DeviceFailure`), connecting first when no
-     * device is connected; null once the person cancelled.
+     * device is connected; null once the person cancelled. [account] is the record the plan was
+     * built for, shown as the signer; null shows none.
      */
-    suspend fun exchange(apdu: ByteArray): StepReply?
+    suspend fun exchange(
+        apdu: ByteArray,
+        account: AccountRecord?,
+    ): StepReply?
 
     /** Shows the core's refusal [reason] and waits: true to try again, false when cancelled. */
-    suspend fun refused(reason: String): Boolean
+    suspend fun refused(
+        reason: String,
+        account: AccountRecord?,
+    ): Boolean
 
     /** The plan left the device: close the link and the sheet. */
     fun finish()
@@ -95,14 +103,22 @@ class LedgerSigner(
     var devices: List<LedgerDevice> by mutableStateOf(emptyList())
         private set
 
+    /** The account the plan was built for, given by the code that built it; null shows no signer. */
+    var account: AccountRecord? by mutableStateOf(null)
+        private set
+
     private var device: LedgerExchanging? = null
     private var known: LedgerDevice? = null
     private var picking: CompletableDeferred<LedgerDevice?>? = null
     private var deciding: CompletableDeferred<Boolean>? = null
     private var cancelled = false
 
-    override suspend fun exchange(apdu: ByteArray): StepReply? {
+    override suspend fun exchange(
+        apdu: ByteArray,
+        account: AccountRecord?,
+    ): StepReply? {
         if (stage == LedgerSignStage.Idle) cancelled = false
+        this.account = account
         if (!cancelled && device == null) device = connect()
         val connected = device.takeUnless { cancelled }
         val outcome =
@@ -123,8 +139,12 @@ class LedgerSigner(
         }
     }
 
-    override suspend fun refused(reason: String): Boolean {
+    override suspend fun refused(
+        reason: String,
+        account: AccountRecord?,
+    ): Boolean {
         if (cancelled) return false
+        this.account = account
         if (reason == WRONG_DEVICE) {
             // Another Ledger is needed: the next attempt lists them again.
             device?.close()
@@ -187,6 +207,7 @@ class LedgerSigner(
         deciding?.complete(false)
         deciding = null
         stage = LedgerSignStage.Idle
+        account = null
     }
 
     /** The session's Ledger first; else the list until the person picks one or cancels. */

@@ -137,7 +137,9 @@ class StakingActionModel internal constructor(
                 return
             }
         store.plans += plan
-        val started = SendDriver(plan, model.network, store.rpc.transport).also { driver = it }
+        // The record whose id `prepareStaking` was given above, matched exactly; none shows no signer.
+        val account = store.allRecords.firstOrNull { it.id == model.accountId }
+        val started = SendDriver(plan, model.network, store.rpc.transport, account).also { driver = it }
         show(advance(started, StepReply.Start))
     }
 

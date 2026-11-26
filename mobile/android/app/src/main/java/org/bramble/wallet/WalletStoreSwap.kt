@@ -19,7 +19,7 @@ fun WalletStore.makeSwapModel(startToken: String? = null): SwapFlowModel? {
     return SwapFlowModel(
         walletCore,
         networkInfo,
-        account.id,
+        account,
         portfolio.preferences,
         held,
         portfolio.priceView,

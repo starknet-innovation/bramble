@@ -5,6 +5,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.bramble.core.AccountFamily
+import org.bramble.core.AccountRecord
 import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
 import org.bramble.core.NoHandle
@@ -16,6 +18,7 @@ import org.bramble.core.TransferPlan
 import org.bramble.core.TransportFailure
 import org.bramble.wallet.errors.FriendlyErrorRules
 import org.bramble.wallet.send.SendDriver
+import org.bramble.wallet.ui.ledger.LedgerSignCopy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -37,17 +40,38 @@ class LedgerSignerTest {
     fun approvedIsSignedAndBroadcast() =
         runBlocking {
             var shown: LedgerSignStage? = null
+            var signerShown: AccountRecord? = null
             val rig =
                 Rig { device ->
-                    device.onSend =
-                        { if (LedgerSigner.shownHash(it) != null) shown = rig().signer.stage }
+                    device.onSend = {
+                        if (LedgerSigner.shownHash(it) != null) {
+                            shown = rig().signer.stage
+                            signerShown = rig().signer.account
+                        }
+                    }
                 }
             val signing = async(Dispatchers.Default) { rig.driver.run(StepReply.Confirm) }
             rig.pick(ledger)
             assertEquals(SendStep.Broadcast(TRANSFER_HASH), signing.await())
             assertEquals("the device shows the hash it signs", LedgerSignStage.Confirming(TRANSFER_HASH), shown)
+            assertEquals("the signer is the plan's account, not the active one", PLAN_ACCOUNT, signerShown)
+            assertEquals("Signing with 0x0231…ab4d · Account 0", LedgerSignCopy.signer(PLAN_ACCOUNT))
+            assertEquals(null, rig.signer.account)
             assertEquals(LedgerSignStage.Idle, rig.signer.stage)
             assertTrue("the link closes when the send ends", rig.made.single().closed)
+        }
+
+    @Test
+    fun connectStageSaysPaused() =
+        runBlocking {
+            val rig = Rig()
+            val signing = async(Dispatchers.Default) { rig.driver.run(StepReply.Confirm) }
+            until { rig.signer.stage == LedgerSignStage.Scanning }
+            assertEquals("The transaction is safely paused.", LedgerSignCopy.connectNote(rig.signer.stage))
+            assertEquals(PLAN_ACCOUNT, rig.signer.account)
+            assertEquals(null, LedgerSignCopy.connectNote(LedgerSignStage.Checking))
+            rig.signer.cancel()
+            assertEquals(CANCELLED, signing.await())
         }
 
     @Test
@@ -156,7 +180,7 @@ class LedgerSignerTest {
                 ReplayDevice(recordedExchanges()).also(configure).also { made += it }
             }
         val plan = ScriptedPlan(key)
-        val driver = SendDriver(plan, NETWORK, { _, _, _ -> error("no RPC") }, signer)
+        val driver = SendDriver(plan, NETWORK, { _, _, _ -> error("no RPC") }, PLAN_ACCOUNT, signer)
 
         init {
             current = this
@@ -267,6 +291,29 @@ class LedgerSignerTest {
         const val OTHER_KEY = "0x33c4127080fab3f30bcac5837c9c352da3a9d74e79a57b779a379719d655dee"
         const val TRANSFER_HASH = "0x051899a4f58db1d9dd67bd2887ce37adfcbdd41c1163b49c345143e20184cdcd"
         val NETWORK = NetworkInfo(NetworkId.SEPOLIA, "0x534e5f5345504f4c4941", "", "Sepolia", emptyList(), emptyList())
+
+        /** The account the plan is built for: a Ledger record that is not the active one. */
+        val PLAN_ACCOUNT =
+            AccountRecord(
+                "SN_SEPOLIA:0x231",
+                NetworkId.SEPOLIA,
+                AccountFamily.OPEN_ZEPPELIN,
+                "0x1",
+                0u,
+                "0x0231000000000000000000000000000000000000000000000000000000ab4d",
+                KEY,
+                null,
+                null,
+                "Account 1",
+                "0x0231…ab4d",
+                null,
+                "stark-pair",
+                null,
+                active = false,
+                hidden = false,
+                imported = false,
+                ledger = true,
+            )
         val CANCELLED = SendStep.Failed(SendFailure(SendFailureCode.SIGNING_FAILED, null, null))
         val VERSION_APDU = hex("5a00000000")
         val SIGN_HASH_APDU = hex("5a02010020" + TRANSFER_HASH.removePrefix("0x"))

@@ -3,6 +3,7 @@ package org.bramble.wallet.send
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountRecord
 import org.bramble.core.NetworkInfo
 import org.bramble.core.RpcPurpose
 import org.bramble.core.SendFailure
@@ -37,6 +38,11 @@ class SendDriver(
     network: NetworkInfo,
     /** How each step's bytes move: [RpcClient.https] unless a test passes a fixture node. */
     transport: RpcPost = RpcClient.https,
+    /**
+     * The record the caller built [plan] for, shown on the Ledger sheet as the signer; null shows
+     * none. Never pass any other record.
+     */
+    private val account: AccountRecord? = null,
     /** The Ledger a device step goes to; null is the app's ([LedgerSigner.shared]). */
     private val signer: DeviceSigning? = null,
 ) {
@@ -97,8 +103,8 @@ class SendDriver(
     ): StepReply? {
         val ledger = (signer ?: LedgerSigner.shared)?.also(using)
         return when (step) {
-            is SendStep.Device -> ledger?.exchange(step.apdu)
-            is SendStep.DeviceRetry -> StepReply.RetryDevice.takeIf { ledger?.refused(step.reason) == true }
+            is SendStep.Device -> ledger?.exchange(step.apdu, account)
+            is SendStep.DeviceRetry -> StepReply.RetryDevice.takeIf { ledger?.refused(step.reason, account) == true }
             else -> null
         }
     }
