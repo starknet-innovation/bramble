@@ -12,6 +12,7 @@ import org.bramble.core.HttpMethod
 import org.bramble.core.HttpOutcome
 import org.bramble.core.HttpRequest
 import org.bramble.core.PriceView
+import org.bramble.core.StepReply
 import org.bramble.wallet.portfolio.PortfolioTransport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -81,6 +82,12 @@ class GaslessDriverTest {
             replies += outcome
             return (submits.removeFirstOrNull() ?: { throw GaslessFeeException.NotFound() })()
         }
+
+        /** The driver never reaches a device: it stops at `Device`. */
+        override fun advanceDevice(
+            reply: StepReply,
+            nowMs: ULong,
+        ): GaslessSubmitStep = throw GaslessFeeException.NotFound()
     }
 
     private fun post() = GaslessPost(request, 0u)

@@ -104,14 +104,19 @@ final class NostrMultisigBridgeTests: XCTestCase {
         }
         XCTAssertEqual(close, #"["CLOSE","mcw-1"]"#)
         plan.relayEnded(relay: 1)
-        let outcome = try core.coordinationSyncFinish(plan: plan)
+        let tokens = TokenPreferences(persisted: nil)
+        guard case let .done(outcome) = try core.coordinationSyncOpen(plan: plan, tokens: tokens) else {
+            XCTFail("nothing received means nothing to read")
+            return
+        }
         XCTAssertEqual(outcome.received, 0)
         XCTAssertEqual(outcome.imported, 0)
+        XCTAssertEqual(outcome.intentIds, [])
 
         let silent = try core.coordinationSyncBegin(multisigId: record.id, now: 1_750_000_100)
         silent.relayEnded(relay: 0)
         silent.relayEnded(relay: 1)
-        XCTAssertThrowsError(try core.coordinationSyncFinish(plan: silent)) { error in
+        XCTAssertThrowsError(try core.coordinationSyncOpen(plan: silent, tokens: tokens)) { error in
             guard case .Coordination = error as? CoreError else { return XCTFail("every relay failing is unavailable") }
         }
     }

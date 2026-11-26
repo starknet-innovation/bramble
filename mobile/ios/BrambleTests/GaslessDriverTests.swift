@@ -160,4 +160,9 @@ private final class ScriptedFee: GaslessFeeProtocol, @unchecked Sendable {
         guard !submitSteps.isEmpty else { throw GaslessFeeError.NotFound }
         return try submitSteps.removeFirst()()
     }
+
+    /// The driver never reaches a device: it stops at `.device`.
+    func advanceDevice(reply _: StepReply, nowMs _: UInt64) throws -> GaslessSubmitStep {
+        throw GaslessFeeError.NotFound
+    }
 }

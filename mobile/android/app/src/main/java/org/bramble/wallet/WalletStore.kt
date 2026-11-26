@@ -137,7 +137,7 @@ class WalletStore(
     val busy: Boolean get() = calls.busy
 
     /** The in-app browser's dapp requests over this wallet (P16); its cards outlive the screen. */
-    internal val dappRequests: DappRequestSink by lazy { DappRequestSink(core) }
+    internal val dappRequests: DappRequestSink by lazy { DappRequestSink(core, portfolio.preferences) }
 
     /**
      * Words of a just-created wallet, or of one whose backup is still pending (revealed through

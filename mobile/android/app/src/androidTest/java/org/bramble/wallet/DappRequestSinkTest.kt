@@ -82,7 +82,7 @@ class DappRequestSinkTest {
     }
 
     @Test
-    fun leftPageDeniesItsCard() {
+    fun leftPageWithdrawsItsCard() {
         val (sink, account) = sink()
         held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
         val card = sink.cards.single()
@@ -93,6 +93,26 @@ class DappRequestSinkTest {
         assertTrue(sink.approve(card, account.id).isEmpty())
         val accounts = now(sink.answer(request("mc_accounts"), NetworkId.MAINNET))
         assertEquals(0, accounts.getJSONObject("result").getJSONArray("accounts").length())
+    }
+
+    /** A connected site's typed data has no screen yet: declined at once, never a connect card (as iOS). */
+    @Test
+    fun typedDataDeclinedForNow() {
+        val (sink, account) = sink()
+        held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
+        sink.approve(sink.cards.single(), account.id)
+
+        val params =
+            listOf(
+                """{"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},""",
+                """"message":{"content":"hello"},"primaryType":"Mail",""",
+                """"types":{"Mail":[{"name":"content","type":"felt"}],""",
+                """"StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},""",
+                """{"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}""",
+            ).joinToString("")
+        val reply = now(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
+        assertEquals(113, reply.getJSONObject("error").getInt("code"))
+        assertTrue(sink.cards.isEmpty())
     }
 
     @Test

@@ -4,11 +4,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.bramble.core.CoreException
+import org.bramble.core.DappCard
 import org.bramble.core.DappReply
 import org.bramble.core.DappSession
 import org.bramble.core.DappSettled
 import org.bramble.core.NetworkId
 import org.bramble.core.SiteWarning
+import org.bramble.core.TokenPreferences
 import org.bramble.core.WalletCore
 import org.bramble.wallet.portfolio.BoundedHttp
 import org.bramble.wallet.portfolio.PortfolioTransport
@@ -16,20 +18,17 @@ import org.json.JSONObject
 
 /**
  * Where every admitted dapp request lands (P16), and the only code that calls wallet-core's
- * `DappSession`, as iOS `DappRequestSink`. Its shapes are still moving (a generic deny, a card
- * kind, typed-data approval), so nothing outside this class names them: the browser sees reply
- * JSON and [ConnectCard]s.
+ * `DappSession`, as iOS `DappRequestSink`, so nothing outside this class names its shapes: the
+ * browser sees reply JSON and [ConnectCard]s.
  *
- * wallet-core #158 and #161 change it: `DappSession(wallet, tokenPreferences)`, `deny(id, nowMs)` in
- * place of `denyConnect`, a `card` (Connect | SignTypedData) on `DappApproval`, and
- * `approveSignTypedData`. Only this class and its `DappApproval` → [ConnectCard] mapping move then.
- *
- * The core answers connect and the passive reads around it, and refuses every other method until
- * its review lands; nothing here signs. A connect is held as a card until the person approves it
- * with an account, denies it, or it expires. Main thread only.
+ * The core answers connect and the passive reads around it. It also holds a typed-data signature
+ * as a card, but the app has no screen for one yet, so such a card is declined at once; nothing
+ * here signs. A connect is held as a card until the person approves it with an account, denies
+ * it, or it expires. Main thread only.
  */
 class DappRequestSink(
     core: WalletCore,
+    tokens: TokenPreferences = TokenPreferences(null),
     private val http: PortfolioTransport = BoundedHttp,
     private val now: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
@@ -63,7 +62,7 @@ class DappRequestSink(
         val json: String,
     )
 
-    private val session = DappSession(core)
+    private val session = DappSession(core, tokens)
     private val pageIds = mutableMapOf<ULong, String>()
 
     /** The card each held request waits on, by request number. */
@@ -103,10 +102,18 @@ class DappRequestSink(
             }
 
             is DappReply.Pending -> {
-                pageIds[requestId] = request.id
-                heldCards[requestId] = reply.approvalId
-                reload()
-                Answer.Held(requestId)
+                if (isConnect(reply.approvalId)) {
+                    pageIds[requestId] = request.id
+                    heldCards[requestId] = reply.approvalId
+                    reload()
+                    Answer.Held(requestId)
+                } else {
+                    val settled = session.deny(reply.approvalId, now()).firstOrNull { it.requestId == requestId }
+                    Answer.Now(
+                        settled?.let { json(request.id, it.reply) }
+                            ?: errorJson(request.id, USER_REFUSED, USER_REFUSED_MESSAGE, null),
+                    )
+                }
             }
 
             else -> {
@@ -124,7 +131,7 @@ class DappRequestSink(
     /** The person declined [card]. */
     fun deny(card: ConnectCard): List<Settled> {
         deniedAt[card.origin] = now()
-        return finish(session.denyConnect(card.id, now()))
+        return finish(session.deny(card.id, now()))
     }
 
     /** Requests whose cards expired, answered as declined. Call it on a timer. */
@@ -138,17 +145,19 @@ class DappRequestSink(
     }
 
     /**
-     * The page that asked is gone (a new page, or the screen closed): each card its requests wait on
-     * is denied, so a stale card can never be approved. Its waiters are gone with the page, so the
-     * refusal reaches no one.
+     * The page that asked is gone (a new page, or the screen closed): its requests are withdrawn, and
+     * a card no request waits on any more goes with them, so a stale card can never be approved.
      */
     fun pageGone() {
-        val cards = heldCards.values.toSet()
+        session.withdraw(heldCards.keys.toList())
         heldCards.clear()
         pageIds.clear()
-        cards.forEach { session.denyConnect(it, now()) }
         reload()
     }
+
+    /** Whether [approvalId] is a connection card, the only kind this app shows. */
+    private fun isConnect(approvalId: String): Boolean =
+        session.pendingApprovals(now()).firstOrNull { it.approvalId == approvalId }?.card is DappCard.Connect
 
     private fun finish(settled: List<DappSettled>): List<Settled> {
         reload()
@@ -160,7 +169,7 @@ class DappRequestSink(
 
     private fun reload() {
         cards =
-            session.pendingApprovals(now()).map {
+            session.pendingApprovals(now()).filter { it.card is DappCard.Connect }.map {
                 ConnectCard(it.approvalId, it.origin, it.blocked, it.warnings.map(::warningCopy))
             }
     }
