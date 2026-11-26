@@ -10,6 +10,8 @@ import org.bramble.core.GaslessOffer
 import org.bramble.core.GaslessOfferStep
 import org.bramble.core.GaslessSubmitStep
 import org.bramble.core.PriceView
+import org.bramble.core.SendFailure
+import org.bramble.core.SendFailureCode
 import org.bramble.wallet.portfolio.BoundedHttp
 import org.bramble.wallet.portfolio.PortfolioTransport
 
@@ -114,6 +116,14 @@ class GaslessDriver(
                         // The core posts again only if the wallet is still unlocked after the pause.
                         pause(current.delayMs)
                         step = core { fee.resume() }
+                    }
+
+                    is GaslessSubmitStep.Device, is GaslessSubmitStep.DeviceRetry -> {
+                        // Mobile signs on no device (P8): a Ledger account's gasless send ends here, unsigned.
+                        outcome =
+                            Outcome.Refused(
+                                SendFailureText.message(SendFailure(SendFailureCode.SIGNING_FAILED, null, null)),
+                            )
                     }
                 }
             }

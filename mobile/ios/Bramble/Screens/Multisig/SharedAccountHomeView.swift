@@ -3,8 +3,7 @@ import SwiftUI
 
 /// `multisig-home` (`journeys/multisig/multisig-portfolio.ts`): the shared account's actions and
 /// notes, then Tokens and Transactions. Transactions lists the open signing intents and imports
-/// one; "Co-signer updates" syncs gift wraps, whose trusted packages are still held, not imported
-/// (wallet-core v0.9.0 imports a package only by paste, docs/multisig-transactions.md).
+/// one; "Co-signer updates" syncs gift wraps and imports every trusted package they carry.
 struct SharedAccountHomeView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -197,10 +196,17 @@ struct SharedAccountHomeView: View {
             do {
                 let outcome = try await store.coordination.sync(record.id)
                 syncFailed = false
-                syncResult = outcome.held == 0
-                    ? "No new co-signer updates"
-                    : "\(outcome.held) co-signer update\(outcome.held == 1 ? "" : "s") received. "
-                    + "Open them after the next Bramble update."
+                syncResult = switch outcome.imported {
+                case 0:
+                    "No new co-signer updates"
+
+                case 1:
+                    "1 signing intent updated"
+
+                default:
+                    "\(outcome.imported) signing intents updated. Review them in Intents"
+                }
+                await loadIntents()
             } catch CoreError.Locked {
                 syncFailed = true
                 syncResult = "The wallet is locked"

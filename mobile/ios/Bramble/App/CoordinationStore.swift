@@ -193,20 +193,36 @@ final class CoordinationStore {
         return saved == nil ? "Coordination relay reset" : "Coordination relay saved"
     }
 
-    /// One "Check for updates": the core plans, the transport moves frames, the core judges.
+    /// One "Check for updates": the core plans, the transport moves frames, the core judges, then
+    /// imports each trusted package against the fresh multisig read it asks for.
     func sync(_ multisigId: String) async throws -> CoordinationSyncOutcome {
-        let walletCore = core, relayTransport = relays
+        let walletCore = core, relayTransport = relays, chain = rpc
+        let network = wallet.networkInfo, tokens = wallet.portfolio.preferences
         let now = UInt64(Date().timeIntervalSince1970)
         let task = Task.detached(priority: .userInitiated) { () throws -> CoordinationSyncOutcome in
             let plan = try walletCore.coordinationSyncBegin(multisigId: multisigId, now: now)
             let policy = try walletCore.relayPolicy()
             await relayTransport.sync(plan, policy: policy)
             try Task.checkCancellation()
-            return try walletCore.coordinationSyncFinish(plan: plan)
+            var step = try walletCore.coordinationSyncOpen(plan: plan, tokens: tokens)
+            while true {
+                switch step {
+                case let .done(outcome):
+                    return outcome
+
+                case let .read(read):
+                    // The core binds the import to this read, so every endpoint drives the same one.
+                    _ = try await ChainReads.multisig(on: network, via: chain) { read } status: { $0.status() }
+                    try Task.checkCancellation()
+                    step = try walletCore.coordinationSyncImport(plan: plan, read: read)
+                }
+            }
         }
         syncTask = task
         defer { syncTask = nil }
-        return try await task.value
+        let outcome = try await task.value
+        if outcome.imported > 0 { await refresh() }
+        return outcome
     }
 
     /// STRK and ETH balances of a shared account, through the existing balance reader. Throws when

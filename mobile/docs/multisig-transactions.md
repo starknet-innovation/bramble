@@ -1,7 +1,7 @@
 # Multisig transactions on mobile (M18)
 
-Status: implemented on `mobile/m18-multisig-tx` (2026-11-25), on wallet-core `v0.9.0` (X1,
-wallet-core #111, and its settle, #115). Scope: propose, co-sign, submit and change signers for a
+Status: implemented on `mobile/m18-multisig-tx` (2026-11-25), on wallet-core `v0.10.0` (X1,
+wallet-core #111, its settle, #115, and sync import, #167). Scope: propose, co-sign, submit and change signers for a
 saved, deployed Argent (Ready) Multisig 0.2 account, plus importing a co-signer's package. Setup,
 deployment and the relay are `nostr-multisig.md`.
 
@@ -20,6 +20,7 @@ built in app code.
 | Co-sign | `multisig_intent_read(intent_id, now_ms)`, then `sign_multisig_intent(intent_id, signer_account_id, state)` | `sign` |
 | Submit | `multisig_intent_read`, then `submit_multisig_intent(intent_id, state)` → `MultisigSubmission` | `submit` |
 | Import | `MultisigStateRead::new(network, address)`, then `import_multisig_intent(package, state, tokens)` | `importIntent` |
+| Sync | `coordination_sync_open(plan, tokens)`, then `coordination_sync_import(plan, read)` after driving each `CoordinationSyncStep::Read` until `Done` | `sync` |
 | Card review | `MultisigAuthorityRead` of `MultisigIntent.sender`, then `multisig_intent_review(intent_id, tokens, read)` → `MultisigIntentReview` (wallet-core #146, `v0.9.0`) | `review` |
 
 iOS: `App/CoordinationStore+Transactions.swift`, `Screens/Multisig/MultisigProposeView.swift`
@@ -108,10 +109,8 @@ failed read leaves the intent submitted, and the next list reads it again.
 
 ## 5. Not in M18
 
-- Relay sync still holds trusted packages without importing them (`imported` is still 0 at `v0.9.0`).
-  A co-signer pastes the package into Import.
 - Advanced contract calls, replace-signer, and re-pricing a stale version.
-- Decoding a signer change on the card (threshold before and after, resulting signers). `v0.9.0`
+- Decoding a signer change on the card (threshold before and after, resulting signers). `v0.10.0`
   exports a stored intent's review (`multisigIntentReview`); the apps do not adopt it yet.
 
 ## 6. Tests

@@ -3,16 +3,13 @@ import Foundation
 import Observation
 
 /// Where every admitted dapp request lands (P16), and the only code that calls wallet-core's
-/// `DappSession`. Its shapes are still moving (a generic deny, a card kind, typed-data approval),
-/// so nothing outside this class names them: the browser sees reply JSON and `ConnectCard`s.
+/// `DappSession`, so nothing outside this class names its shapes: the browser sees reply JSON and
+/// `ConnectCard`s.
 ///
-/// wallet-core #158 and #161 change it: `DappSession(wallet:tokenPreferences:)`, `deny(id, nowMs)` in
-/// place of `denyConnect`, a `card` (Connect | SignTypedData) on `DappApproval`, and
-/// `approveSignTypedData`. Only this class and its `DappApproval` → `ConnectCard` mapping move then.
-///
-/// The core answers connect and the passive reads around it, and refuses every other method until
-/// its review lands; nothing here signs. A connect is held as a card until the person approves it
-/// with an account, denies it, or it expires. The phishing feed is refreshed when the sink starts
+/// The core answers connect and the passive reads around it. It also holds a typed-data signature
+/// as a card, but the app has no screen for one yet, so such a card is declined at once; nothing
+/// here signs. A connect is held as a card until the person approves it with an account, denies
+/// it, or it expires. The phishing feed is refreshed when the sink starts
 /// and on the browser's timer, as the core asks of a host.
 @MainActor
 @Observable
@@ -62,10 +59,11 @@ final class DappRequestSink {
 
     init(
         core: WalletCore,
+        tokens: TokenPreferences = TokenPreferences(persisted: nil),
         http: PortfolioTransport = BoundedHttp.shared,
         now: @escaping () -> Double = { Date().timeIntervalSince1970 * DappRequestSink.millisecondsPerSecond }
     ) {
-        session = DappSession(wallet: core)
+        session = DappSession(wallet: core, tokens: tokens)
         self.http = http
         self.now = now
     }
@@ -92,6 +90,13 @@ final class DappRequestSink {
             return .now(Self.json(id: request.id, error: Self.unknownError))
         }
         if case let .pending(approvalId) = reply {
+            if !isConnect(approvalId) {
+                let settled = session.deny(approvalId: approvalId, nowMs: now())
+                guard let answer = settled.first(where: { $0.requestId == requestId })?.reply else {
+                    return .now(Self.json(id: request.id, error: Self.userRefused))
+                }
+                return .now(Self.json(id: request.id, reply: answer))
+            }
             pageIds[requestId] = request.id
             heldCards[requestId] = approvalId
             reload()
@@ -108,7 +113,7 @@ final class DappRequestSink {
     /// The person declined `card`.
     func deny(_ card: ConnectCard) -> [Settled] {
         deniedAt[card.origin] = now()
-        return finish(session.denyConnect(approvalId: card.id, nowMs: now()))
+        return finish(session.deny(approvalId: card.id, nowMs: now()))
     }
 
     /// Requests whose cards expired, answered as declined. Call it on a timer.
@@ -124,15 +129,21 @@ final class DappRequestSink {
         reload()
     }
 
-    /// The page that asked is gone (a new commit, or the screen closed): each card its requests
-    /// wait on is denied, so a stale card can never be approved. Its waiters are gone with the
-    /// page, so the refusal reaches no one.
+    /// The page that asked is gone (a new commit, or the screen closed): its requests are withdrawn,
+    /// and a card no request waits on any more goes with them, so a stale card can never be approved.
     func pageGone() {
-        let stale = Set(heldCards.values)
+        session.withdraw(requestIds: Array(heldCards.keys))
         heldCards = [:]
         pageIds = [:]
-        for approvalId in stale { _ = session.denyConnect(approvalId: approvalId, nowMs: now()) }
         reload()
+    }
+
+    /// Whether `approvalId` is a connection card, the only kind this app shows.
+    private func isConnect(_ approvalId: String) -> Bool {
+        guard let card = session.pendingApprovals(nowMs: now()).first(where: { $0.approvalId == approvalId })?.card
+        else { return false }
+        if case .connect = card { return true }
+        return false
     }
 
     private func finish(_ settled: [DappSettled]) -> [Settled] {
@@ -145,8 +156,9 @@ final class DappRequestSink {
     }
 
     private func reload() {
-        cards = session.pendingApprovals(nowMs: now()).map { approval in
-            ConnectCard(
+        cards = session.pendingApprovals(nowMs: now()).compactMap { approval in
+            guard case .connect = approval.card else { return nil }
+            return ConnectCard(
                 id: approval.approvalId,
                 origin: approval.origin,
                 blocked: approval.blocked,

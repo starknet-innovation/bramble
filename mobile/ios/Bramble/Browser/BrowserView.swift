@@ -58,7 +58,8 @@ struct BrowserView: View {
         }
         .onChange(of: store.network, initial: true) { bridge?.shown = store.network }
         .task {
-            let started = BrowserBridge(sink: DappRequestSink(core: store.core), shown: store.network) { url in
+            let sink = DappRequestSink(core: store.core, tokens: store.portfolio.preferences)
+            let started = BrowserBridge(sink: sink, shown: store.network) { url in
                 input = url.absoluteString
             }
             bridge = started

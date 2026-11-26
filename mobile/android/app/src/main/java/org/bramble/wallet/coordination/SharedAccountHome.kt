@@ -247,7 +247,8 @@ private fun Intents(
         PillButton("Check for updates", kind = PillKind.SECONDARY, icon = BrambleIconName.REFRESH, busy = syncing) {
             scope.launch {
                 syncing = true
-                val outcome = runCatching { store.coordination.sync(record.id) }
+                val outcome = runCatching { store.coordination.sync(record.id, store.portfolio.preferences) }
+                intents = store.coordination.intents(record.id).filter(::isOpen)
                 syncing = false
                 failed = outcome.isFailure
                 result = syncMessage(outcome)
@@ -286,11 +287,10 @@ private fun intentsHeading(intents: List<MultisigIntent>): String =
 private fun syncMessage(outcome: Result<org.bramble.core.CoordinationSyncOutcome>): String =
     outcome.fold(
         {
-            if (it.held == 0u) {
-                "No new co-signer updates"
-            } else {
-                "${it.held} co-signer update${if (it.held == 1u) "" else "s"} received. " +
-                    "Open them after the next Bramble update."
+            when (it.imported) {
+                0u -> "No new co-signer updates"
+                1u -> "1 signing intent updated"
+                else -> "${it.imported} signing intents updated. Review them in Intents"
             }
         },
         {

@@ -78,7 +78,7 @@ final class DappRequestSinkTests: XCTestCase {
         XCTAssertEqual((try object(json)["result"] as? [String: Any])?["accounts"] as? [String], [])
     }
 
-    func testALeftPageDeniesItsCard() throws {
+    func testALeftPageWithdrawsItsCard() throws {
         let (core, account) = try wallet()
         let sink = DappRequestSink(core: core, http: NoNetwork())
         _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
@@ -126,6 +126,29 @@ final class DappRequestSinkTests: XCTestCase {
             }
             XCTAssertNotNil(try object(json)["error"], method)
         }
+        XCTAssertTrue(sink.cards.isEmpty)
+    }
+
+    /// The core queues a connected site's typed data as a sign card, which this app has no screen
+    /// for yet: it is declined at once, never shown as a connect card.
+    func testTypedDataIsDeclinedUntilItHasAScreen() throws {
+        let (core, account) = try wallet()
+        let sink = DappRequestSink(core: core, http: NoNetwork())
+        _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
+        _ = sink.approve(try XCTUnwrap(sink.cards.first), accountId: account.id)
+
+        let params = #"""
+        {"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},
+        "message":{"content":"hello"},"primaryType":"Mail","types":{"Mail":[{"name":"content","type":"felt"}],
+        "StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},
+        {"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}
+        """#
+        let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: params)
+        guard case let .now(json) = sink.answer(sign, shown: .mainnet) else {
+            XCTFail("typed data must not be held")
+            return
+        }
+        XCTAssertEqual((try object(json)["error"] as? [String: Any])?["code"] as? Int, 113)
         XCTAssertTrue(sink.cards.isEmpty)
     }
 

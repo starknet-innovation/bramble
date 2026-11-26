@@ -72,6 +72,10 @@ struct GaslessDriver: Sendable {
                     // The core posts again only if the wallet is still unlocked after the pause.
                     try await pause(delayMs)
                     step = try fee.resume()
+
+                case .device, .deviceRetry:
+                    // Mobile signs on no device (P8): a Ledger account's gasless send ends here, unsigned.
+                    return .refused(SendFailureText.message(SendFailure(code: .signingFailed, hash: nil)))
                 }
             }
         } catch let error as GaslessFeeError {

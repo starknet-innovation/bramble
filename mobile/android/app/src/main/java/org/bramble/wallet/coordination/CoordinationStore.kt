@@ -12,10 +12,12 @@ import kotlinx.coroutines.withContext
 import org.bramble.core.ArgentMultisigConfig
 import org.bramble.core.Contact
 import org.bramble.core.CoordinationSyncOutcome
+import org.bramble.core.CoordinationSyncStep
 import org.bramble.core.MultisigAuthorityStatus
 import org.bramble.core.MultisigRecord
 import org.bramble.core.NetworkInfo
 import org.bramble.core.RelayPolicy
+import org.bramble.core.TokenPreferences
 import org.bramble.core.WalletCore
 import org.bramble.wallet.BuildConfig
 import org.bramble.wallet.RpcClient
@@ -205,10 +207,17 @@ class CoordinationStore(
         return if (saved == null) "Coordination relay reset" else "Coordination relay saved"
     }
 
-    /** One "Check for updates": the core plans and judges; this only moves frames. */
-    suspend fun sync(multisigId: String): CoordinationSyncOutcome =
+    /**
+     * One "Check for updates": the core plans and judges; this only moves frames, then drives the
+     * fresh multisig read the core asks for before each trusted package it imports.
+     */
+    suspend fun sync(
+        multisigId: String,
+        tokens: TokenPreferences,
+    ): CoordinationSyncOutcome =
         coroutineScope {
             val now = (System.currentTimeMillis() / MILLIS_PER_SECOND).toULong()
+            val info = network()
             val job =
                 async(Dispatchers.IO) {
                     val plan = core.coordinationSyncBegin(multisigId, now)
@@ -221,11 +230,18 @@ class CoordinationStore(
                             ->
                             async { runRelay(plan, index.toUInt(), url, policy) }
                         }.awaitAll()
-                    core.coordinationSyncFinish(plan)
+                    var step = core.coordinationSyncOpen(plan, tokens)
+                    while (step is CoordinationSyncStep.Read) {
+                        // The core binds the import to this read, so every endpoint drives the same one.
+                        val read = step.read
+                        readState(info, chainPost) { read }
+                        step = core.coordinationSyncImport(plan, read)
+                    }
+                    (step as CoordinationSyncStep.Done).outcome
                 }
             syncJob = job
             try {
-                job.await()
+                job.await().also { if (it.imported > 0u) refresh() }
             } finally {
                 syncJob = null
             }
