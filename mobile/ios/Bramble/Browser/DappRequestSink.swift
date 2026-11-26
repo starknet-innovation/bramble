@@ -6,6 +6,10 @@ import Observation
 /// `DappSession`. Its shapes are still moving (a generic deny, a card kind, typed-data approval),
 /// so nothing outside this class names them: the browser sees reply JSON and `ConnectCard`s.
 ///
+/// wallet-core #158 and #161 change it: `DappSession(wallet:tokenPreferences:)`, `deny(id, nowMs)` in
+/// place of `denyConnect`, a `card` (Connect | SignTypedData) on `DappApproval`, and
+/// `approveSignTypedData`. Only this class and its `DappApproval` → `ConnectCard` mapping move then.
+///
 /// The core answers connect and the passive reads around it, and refuses every other method until
 /// its review lands; nothing here signs. A connect is held as a card until the person approves it
 /// with an account, denies it, or it expires. The phishing feed is refreshed when the sink starts
