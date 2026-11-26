@@ -60,11 +60,8 @@ class CoreBridgeTest {
             assertEquals(vector.getString("address"), account.address)
             assertEquals(vector.getString("classHash"), account.classHash)
             assertEquals(vector.getString("publicKeyX"), account.publicKey)
-            // Signing is by account record, never by index.
-            val signature = core.signHashForAccount(account.id, fixture.getString("messageHash"))
-            assertEquals(vector.getString("publicKeyX"), signature.publicKey)
-            assertEquals(vector.getString("signatureR"), signature.r)
-            assertEquals(vector.getString("signatureS"), signature.s)
+            // The fixture's signatures are held in wallet-core's Rust tests: since v0.9.0 the core
+            // signs no raw hash across FFI (wallet-core #127).
         }
     }
 
@@ -73,10 +70,9 @@ class CoreBridgeTest {
         val core = core()
         val phrase = core.createWallet("a strong password", 12u)
         assertEquals(12, phrase.words.size)
-        val account = core.activeAccount()!!
         core.lock()
         assertEquals(WalletStatus.LOCKED, core.status())
-        assertThrows(CoreException.Locked::class.java) { core.signHashForAccount(account.id, "0x1") }
+        assertThrows(CoreException.Locked::class.java) { core.nostrPublicKey() }
         assertThrows(CoreException.WrongPassword::class.java) { core.unlock("wrong password") }
     }
 

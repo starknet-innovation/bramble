@@ -18,6 +18,7 @@ import org.bramble.core.TokenPreferences
 import org.bramble.core.WalletCore
 import org.bramble.core.stakingDirectoryRequest
 import org.bramble.core.stakingDirectoryView
+import org.bramble.core.supportedNetworks
 import org.bramble.core.validateRecipient
 import org.bramble.wallet.portfolio.PortfolioReads
 
@@ -92,6 +93,10 @@ internal suspend fun PortfolioReads.drive(
         answered
     }
 }
+
+/** [network] with only its bundled endpoints (`supportedNetworks`), for a stake's check read. */
+internal fun bundledNetwork(network: NetworkInfo): NetworkInfo =
+    supportedNetworks().firstOrNull { it.network == network.network } ?: network
 
 /** [StakingChainRead]'s steps. */
 internal fun StakingChainRead.steps() = StakingSteps(::nextCalls, ::accept, ::restart)

@@ -364,6 +364,11 @@ class SendFlowModel(
                 fail(step.failure)
             }
 
+            is SendStep.Device, is SendStep.DeviceRetry -> {
+                // Mobile signs on no device (P8), so a Ledger account's step ends here, unsigned.
+                fail(SendFailure(SendFailureCode.SIGNING_FAILED, null, null))
+            }
+
             else -> {
                 // Rpc and Wait steps never reach here: the driver handles them.
             }

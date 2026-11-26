@@ -47,10 +47,8 @@ final class CoreBridgeTests: XCTestCase {
             )
             XCTAssertEqual(account.address, vector.address)
             XCTAssertEqual(account.publicKey, vector.publicKeyX)
-            // Signing is by account record, never by index (docs/accounts.md §2.7).
-            let signature = try core.signHashForAccount(accountId: account.id, messageHash: fixture.messageHash)
-            XCTAssertEqual(signature.r, vector.signatureR)
-            XCTAssertEqual(signature.s, vector.signatureS)
+            // The fixture's signatures are held in wallet-core's Rust tests: since v0.9.0 the core
+            // signs no raw hash across FFI (wallet-core #127).
         }
     }
 
@@ -83,10 +81,9 @@ final class CoreBridgeTests: XCTestCase {
         let core = try core()
         let phrase = try core.createWallet(password: "a strong password", wordCount: 12)
         XCTAssertEqual(phrase.words.count, 12)
-        let id = try XCTUnwrap(try core.activeAccount()).id
         core.lock()
         XCTAssertEqual(core.status(), .locked)
-        XCTAssertThrowsError(try core.signHashForAccount(accountId: id, messageHash: "0x1")) { error in
+        XCTAssertThrowsError(try core.nostrPublicKey()) { error in
             guard case .Locked = error as? CoreError else { return XCTFail("expected Locked, got \(error)") }
         }
         XCTAssertThrowsError(try core.unlock(password: "wrong password")) { error in

@@ -367,6 +367,10 @@ final class SendFlowModel {
         case let .failed(failure):
             fail(with: failure)
 
+        case .device, .deviceRetry:
+            // Mobile signs on no device (P8), so a Ledger account's step ends here, unsigned.
+            fail(with: SendFailure(code: .signingFailed, hash: nil))
+
         case .rpc, .wait:
             break
         }

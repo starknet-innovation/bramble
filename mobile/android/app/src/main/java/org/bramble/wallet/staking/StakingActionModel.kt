@@ -122,6 +122,11 @@ class StakingActionModel internal constructor(
                     }
                 val steps = StakingSteps(preparation::nextCalls, preparation::accept, preparation::restart)
                 model.reads.drive(steps, model.network)
+                // A stake's check read (wallet-core #131): the same pool, read again from the bundled
+                // endpoints only, never the RPC override, so no one node chooses the pool.
+                val check =
+                    StakingSteps(preparation::checkNextCalls, preparation::checkAccept, preparation::checkRestart)
+                model.reads.drive(check, bundledNetwork(model.network))
                 val feeBalance = store.portfolio.rawBalances(model.network)["STRK"]
                 val staking = withContext(Dispatchers.Default) { preparation.plan(model.clock(), feeBalance) }
                 sentence = staking.review
