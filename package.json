@@ -36,6 +36,7 @@
     "dev:session": "bun run tests/e2e/dev-session.ts",
     "format": "biome check --write .",
     "mobile:assets": "bun run scripts/generate-mobile-assets.ts",
+    "mobile:ledger": "bun run scripts/mobile-ledger-speculos.ts",
     "mobile:lint": "bash mobile/scripts/lint.sh all",
     "mobile:parity": "bun run scripts/generate-mobile-parity-vectors.ts",
     "package:extension": "bun run scripts/package-extension.ts",
