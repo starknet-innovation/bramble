@@ -46,11 +46,14 @@ import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.SecretKind
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.hasRecoveryPhrase
 import org.bramble.wallet.networkName
 import org.bramble.wallet.saveLabel
 import org.bramble.wallet.select
 import org.bramble.wallet.toggleMember
 import org.bramble.wallet.ui.CopyButton
+import org.bramble.wallet.ui.ledger.LedgerAddAccountFlow
+import org.bramble.wallet.ui.ledger.LedgerCopy
 import org.bramble.wallet.updateGroup
 import org.bramble.wallet.visibleRecords
 
@@ -255,12 +258,13 @@ private fun GroupFields(
 }
 
 /** Where the Add account chooser is: its own options, or one of the import screens. */
-private enum class AddStage { ADD, IMPORT_CHOOSER, IMPORT_KEY }
+private enum class AddStage { ADD, LEDGER, IMPORT_CHOOSER, IMPORT_KEY }
 
 /**
- * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account", a multisig
- * through the Ready Multisig gateway when [multisig] is given, and "Import an existing account",
- * which leads to [ImportAccountChooser] and [ImportKeyForm]; Ledger is hidden.
+ * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account" (not in a
+ * Ledger-only wallet, which has no phrase), "Ledger account", a multisig through the Ready
+ * Multisig gateway when [multisig] is given, and "Import an existing account", which leads to
+ * [ImportAccountChooser] and [ImportKeyForm].
  */
 @Composable
 fun AddAccountChooser(
@@ -272,7 +276,11 @@ fun AddAccountChooser(
     var stage by remember { mutableStateOf(AddStage.ADD) }
     when (stage) {
         AddStage.ADD -> {
-            AddOptions(store, close, added, multisig) { stage = AddStage.IMPORT_CHOOSER }
+            AddOptions(store, close, added, multisig) { stage = it }
+        }
+
+        AddStage.LEDGER -> {
+            LedgerAddAccountFlow(store, back = { stage = AddStage.ADD }, added = added)
         }
 
         AddStage.IMPORT_CHOOSER -> {
@@ -291,24 +299,27 @@ private fun AddOptions(
     close: () -> Unit,
     added: () -> Unit,
     multisig: (() -> Unit)?,
-    importExisting: () -> Unit,
+    open: (AddStage) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         FlowHeader("Add a new account", network = store.networkLabel, back = close)
-        OptionCard(
-            BrambleIconName.WALLET,
-            "Regular account",
-            "Create the next account from this wallet’s recovery phrase.",
-            enabled = !store.busy,
-        ) {
-            // The store's scope: closing the chooser mid-call must not skip the reload and toast
-            // after the core has added the account.
-            store.appScope.launch {
-                runCatching { store.addRegularAccount() }
-                    .onSuccess { added() }
-                    .onFailure(store::showError)
+        if (store.hasRecoveryPhrase) {
+            OptionCard(
+                BrambleIconName.WALLET,
+                "Regular account",
+                "Create the next account from this wallet’s recovery phrase.",
+                enabled = !store.busy,
+            ) {
+                // The store's scope: closing the chooser mid-call must not skip the reload and
+                // toast after the core has added the account.
+                store.appScope.launch {
+                    runCatching { store.addRegularAccount() }
+                        .onSuccess { added() }
+                        .onFailure(store::showError)
+                }
             }
         }
+        OptionCard(BrambleIconName.SHIELD, "Ledger account", LedgerCopy.OPTION_DETAIL) { open(AddStage.LEDGER) }
         if (multisig != null) {
             OptionCard(
                 BrambleIconName.USERS,
@@ -321,7 +332,6 @@ private fun AddOptions(
             BrambleIconName.LINK,
             "Import an existing account",
             "Bring accounts you already own: a recovery phrase or a private key.",
-            onClick = importExisting,
-        )
+        ) { open(AddStage.IMPORT_CHOOSER) }
     }
 }

@@ -17,20 +17,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
+import org.bramble.core.LedgerAccountRequest
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.confirmBackup
 import org.bramble.wallet.create
+import org.bramble.wallet.createLedgerWallet
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleMotion
 import org.bramble.wallet.design.brambleTween
 import org.bramble.wallet.finishOnboarding
 import org.bramble.wallet.importWallet
 import org.bramble.wallet.revealPendingBackup
+import org.bramble.wallet.ui.ledger.LedgerOnboardingStep
 
 private enum class Step {
     WELCOME,
     IMPORT_METHOD,
     RECOVERY_PHRASE,
+    LEDGER,
     PASSPHRASE,
     REVIEW_ACCOUNT,
     FIND_ACCOUNTS,
@@ -47,6 +51,7 @@ private data class StepActions(
     val replace: (Step) -> Unit,
     val choose: (OnboardingPath) -> Unit,
     val phraseEntered: (String) -> Unit,
+    val ledgerPicked: (List<LedgerAccountRequest>) -> Unit,
     val passphraseAccepted: suspend (String) -> Unit,
     /** Runs [body] in the flow's scope; a failure is shown as the store's error toast. */
     val launch: (suspend () -> Unit) -> Unit,
@@ -57,6 +62,7 @@ private data class StepActions(
  *
  *   create: welcome → passphrase → review account → save phrase → confirm backup → all set
  *   import: welcome → method → recovery phrase → passphrase → find your accounts → all set
+ *   Ledger: welcome → method → connect and pick → passphrase → all set
  *
  * The vault is written when the passphrase is accepted; after that the stack is replaced, so
  * neither the back control nor the system back gesture returns past it. An imported vault stays
@@ -80,6 +86,8 @@ fun OnboardingFlow(
     var forward by remember { mutableStateOf(true) }
     // Typed on the recovery step, handed to the core at the passphrase step, then cleared.
     var importedPhrase by remember { mutableStateOf("") }
+    // The Ledger accounts picked on the connect step (public keys only), created at the passphrase.
+    var ledgerRequests by remember { mutableStateOf(emptyList<LedgerAccountRequest>()) }
 
     fun push(step: Step) {
         forward = true
@@ -103,8 +111,13 @@ fun OnboardingFlow(
             replace = ::replace,
             choose = { path = it },
             phraseEntered = { importedPhrase = it },
+            ledgerPicked = { ledgerRequests = it },
             passphraseAccepted = { passphrase ->
-                writeVault(store, path, passphrase, importedPhrase) { importedPhrase = "" }
+                if (path == OnboardingPath.LEDGER) {
+                    store.createLedgerWallet(passphrase, ledgerRequests)
+                } else {
+                    writeVault(store, path, passphrase, importedPhrase) { importedPhrase = "" }
+                }
                 replace(stepAfterVault(path))
             },
             launch = { body -> scope.launch { runCatching { body() }.onFailure(store::showError) } },
@@ -168,7 +181,11 @@ private fun firstStep(
 
 /** Where the flow goes once the vault is written; the stack is replaced so back cannot undo it. */
 private fun stepAfterVault(path: OnboardingPath): Step =
-    if (path == OnboardingPath.CREATE) Step.REVIEW_ACCOUNT else Step.FIND_ACCOUNTS
+    when (path) {
+        OnboardingPath.CREATE -> Step.REVIEW_ACCOUNT
+        OnboardingPath.RECOVER -> Step.FIND_ACCOUNTS
+        OnboardingPath.LEDGER -> Step.COMPLETE
+    }
 
 /**
  * One step of [OnboardingFlow]; [path] is the branch chosen at the welcome step, and [finish]
@@ -196,18 +213,8 @@ private fun StepContent(
             )
         }
 
-        Step.IMPORT_METHOD -> {
-            ImportMethodStep(back = actions.pop, recoveryPhrase = { actions.push(Step.RECOVERY_PHRASE) })
-        }
-
-        Step.RECOVERY_PHRASE -> {
-            RecoveryPhraseStep(
-                back = actions.pop,
-                onPaste = { store.showNotice(BrambleCopy.clipboardCleared) },
-            ) { phrase ->
-                actions.phraseEntered(phrase)
-                actions.push(Step.PASSPHRASE)
-            }
+        Step.IMPORT_METHOD, Step.RECOVERY_PHRASE, Step.LEDGER -> {
+            ImportStep(step, store, actions)
         }
 
         Step.PASSPHRASE -> {
@@ -244,6 +251,48 @@ private fun StepContent(
 
         Step.COMPLETE -> {
             CompleteStep(finish)
+        }
+    }
+}
+
+/** The steps between "Add an existing wallet" and the passphrase: the method, a phrase or a Ledger. */
+@Composable
+private fun ImportStep(
+    step: Step,
+    store: WalletStore,
+    actions: StepActions,
+) {
+    when (step) {
+        Step.IMPORT_METHOD -> {
+            ImportMethodStep(
+                back = actions.pop,
+                recoveryPhrase = { actions.push(Step.RECOVERY_PHRASE) },
+                ledger = {
+                    actions.choose(OnboardingPath.LEDGER)
+                    actions.push(Step.LEDGER)
+                },
+            )
+        }
+
+        Step.LEDGER -> {
+            LedgerOnboardingStep(store, back = actions.pop) { requests ->
+                actions.ledgerPicked(requests)
+                actions.push(Step.PASSPHRASE)
+            }
+        }
+
+        Step.RECOVERY_PHRASE -> {
+            RecoveryPhraseStep(
+                back = actions.pop,
+                onPaste = { store.showNotice(BrambleCopy.clipboardCleared) },
+            ) { phrase ->
+                actions.phraseEntered(phrase)
+                actions.push(Step.PASSPHRASE)
+            }
+        }
+
+        else -> {
+            // Every other step is StepContent's.
         }
     }
 }

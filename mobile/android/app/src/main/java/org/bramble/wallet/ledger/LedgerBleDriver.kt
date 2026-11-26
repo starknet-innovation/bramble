@@ -77,7 +77,7 @@ sealed interface LedgerExchange {
  */
 class LedgerBleDriver(
     private val link: LedgerLink,
-) {
+) : LedgerExchanging {
     private val setup = ledgerBleLink()
     private val busy = Mutex()
     private var frameSize: UInt? = null
@@ -100,6 +100,11 @@ class LedgerBleDriver(
         }
         return outcome
     }
+
+    override suspend fun send(apdu: ByteArray): LedgerExchange = exchange(apdu)
+
+    /** Ends the link; later exchanges fail as [TransportFailure.DISCONNECTED]. */
+    override fun close() = link.close()
 
     private suspend fun attempt(
         apdu: ByteArray,

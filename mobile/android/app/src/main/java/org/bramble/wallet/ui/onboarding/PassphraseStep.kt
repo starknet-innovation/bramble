@@ -96,7 +96,7 @@ fun PassphraseStep(
         },
         cta = {
             PillButton(
-                if (path == OnboardingPath.CREATE) "Continue" else "Find your accounts",
+                if (path == OnboardingPath.RECOVER) "Find your accounts" else "Continue",
                 busy = store.busy,
                 enabled = ready,
             ) {
