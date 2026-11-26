@@ -33,6 +33,8 @@ import org.bramble.wallet.design.MenuGroup
 import org.bramble.wallet.design.MenuRow
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.staking.StakingCopy
+import org.bramble.wallet.stakingAvailable
 import org.bramble.wallet.strkFunded
 
 /**
@@ -81,6 +83,12 @@ fun HomeScreen(
                         .PrivacyRetryRow(store)
                 }
         }
+        // Where the core's staking policy is on (Mainnet): the extension's Staking tab.
+        if (store.stakingAvailable) {
+            MenuGroup {
+                MenuRow(BrambleIconName.TRENDING_UP, StakingCopy.title, onClick = actions.staking)
+            }
+        }
     }
 }
 
@@ -125,6 +133,7 @@ private fun ActionRow(
  * @property privacy opens the privacy journey (every enabled Shield tile).
  * @property openToken opens a tracked token's detail by its token id.
  * @property manageTokens opens the token list (Manage tokens).
+ * @property staking opens staking, offered only where the core's policy has it on.
  */
 data class HomeActions(
     val receive: () -> Unit,
@@ -133,6 +142,7 @@ data class HomeActions(
     val privacy: () -> Unit,
     val openToken: (String) -> Unit,
     val manageTokens: () -> Unit,
+    val staking: () -> Unit = {},
 )
 
 /** A disabled action tile's opacity. */

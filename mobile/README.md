@@ -175,6 +175,12 @@ TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" \
   xcodebuild … -only-testing:BrambleTests/MainnetSendTests test
 ```
 
+## Staking
+
+Mainnet only, as the core's `STAKING_POLICY` decides: the validator directory, "Your stakes", a
+validator's pools, and stake, claim, unstake, cancel and withdraw through the Send plan. Design and
+tests: [docs/staking.md](docs/staking.md).
+
 ## Private balances
 
 Read-only STRK20 privacy (viewing key derived in the core, discovery through the privacy service,

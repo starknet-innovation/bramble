@@ -108,6 +108,9 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/nostr-multisig-parity.json
         buildPhase: resources
+      # The extension's staking wire, replayed by StakingModelTests (M21).
+      - path: ../core/tests/fixtures/extension-staking.jsonl
+        buildPhase: resources
       - path: ../core/tests/fixtures/portfolio-parity.jsonl
         buildPhase: resources
       # The allowance fixture's `unlimited` block (AllowanceFlowTests).

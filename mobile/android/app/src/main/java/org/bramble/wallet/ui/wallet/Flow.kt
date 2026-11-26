@@ -58,4 +58,7 @@ enum class Flow {
 
     /** The allowance manager and its revoke, from Settings' "Token allowances" row. */
     ALLOWANCES,
+
+    /** Staking (M21), offered only where the core's policy allows it. */
+    STAKING,
 }

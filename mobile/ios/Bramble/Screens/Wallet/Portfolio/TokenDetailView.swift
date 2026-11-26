@@ -14,6 +14,8 @@ struct TokenDetailView: View {
     var swap: (String) -> Void = { _ in /* No action unless the shell wires the swap flow. */ }
     /// Opens the privacy journey (Shield, Go private).
     var journey: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
+    /// Opens staking: offered for STRK only, where the core's policy has staking on.
+    var stake: () -> Void = { /* No action unless the shell wires staking. */ }
     @State private var points: [Double] = []
 
     /// Stroke width of the price sparkline.
@@ -37,6 +39,9 @@ struct TokenDetailView: View {
                         PillButton("Send", icon: .send) { send(token.address) }
                     }
                     PillButton(SwapCopy.homeAction, kind: .secondary, icon: .swap) { swap(token.id) }
+                    if canStake(token) {
+                        PillButton(StakingCopy.actionStake, kind: .secondary, icon: .trendingUp, action: stake)
+                    }
                     // The private half of this token (`tokenDetailPrivacy`): amount, retry, actions.
                     TokenPrivacySection(tokenAddress: token.address, journey: journey)
                     contract(token)
@@ -45,6 +50,15 @@ struct TokenDetailView: View {
                 .task(id: token.id) { points = await portfolio.chart(for: token) }
             }
         }
+    }
+
+    /// STRK by address, never by symbol; the staking screen does its own on-chain check either way.
+    /// STRK only: the extension's `canStakeToken` also offers a token its loaded staking rows list,
+    /// and this screen has no staking rows loaded.
+    private func canStake(_ token: TokenConfig) -> Bool {
+        let strk = store.networkInfo.tokens.first { $0.symbol == "STRK" }
+            .flatMap { validateRecipient(input: $0.address) }
+        return store.stakingAvailable && strk != nil && validateRecipient(input: token.address) == strk
     }
 
     private func price(_ token: TokenConfig, portfolio: PortfolioStore) -> some View {

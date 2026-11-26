@@ -39,6 +39,12 @@ import {
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
 import {
+  renderKotlinStakingCopy,
+  renderSwiftStakingCopy,
+  STAKING_COPY_KOTLIN_PATH,
+  STAKING_COPY_SWIFT_PATH,
+} from "./mobile-assets/staking-copy";
+import {
   renderKotlinSwapCopy,
   renderSwiftSwapCopy,
   SWAP_COPY_KOTLIN_PATH,
@@ -178,6 +184,8 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [POLICY_JSON_PATH, renderPolicyJson()],
     [SWIFT_COPY_PATH, renderSwiftCopy()],
     [KOTLIN_COPY_PATH, renderKotlinCopy()],
+    [STAKING_COPY_SWIFT_PATH, renderSwiftStakingCopy()],
+    [STAKING_COPY_KOTLIN_PATH, renderKotlinStakingCopy()],
     [SWAP_COPY_SWIFT_PATH, renderSwiftSwapCopy()],
     [SWAP_COPY_KOTLIN_PATH, renderKotlinSwapCopy()],
     [RPC_FIXTURES_PATH, renderRpcFixtures()],

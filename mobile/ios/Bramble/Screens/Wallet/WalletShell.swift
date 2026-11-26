@@ -16,6 +16,8 @@ struct WalletShell: View {
         case privacy
         /// The allowance manager, or (with one) a listed allowance's revoke.
         case allowances(AllowanceView?)
+        /// Staking (M21), offered only where the core's policy allows it.
+        case staking
     }
 
     @Environment(WalletStore.self) private var store
@@ -83,13 +85,14 @@ struct WalletShell: View {
         flows.append(flow)
     }
 
-    /// A tracked token's screen, with its Send, Swap and privacy journey.
+    /// A tracked token's screen, with its Send, Swap, privacy and staking entries.
     private func tokenDetail(_ id: String) -> some View {
         TokenDetailView(
             tokenId: id,
             send: { openSend(.sendToken($0)) },
             swap: { flows.append(.swap($0)) },
-            journey: { flows.append(.privacy) }
+            journey: { flows.append(.privacy) },
+            stake: { flows.append(.staking) }
         )
     }
 
@@ -150,6 +153,9 @@ struct WalletShell: View {
 
             case .privacy:
                 PrivacyJourneyView { flows.append(.network) }
+
+            case .staking:
+                StakingScreen()
             }
         }
     }
