@@ -84,16 +84,16 @@ enum MultisigTxText {
     /// transaction from the composer rather than re-pricing a stale one, so a stale card says it is
     /// out of date and, when fully signed, offers the unchanged-fee retry only. `signers` is the
     /// card's review (`MultisigIntentReview.hasFreshAuthority`): `.changed`, which a review that
-    /// could not be read also is, offers nothing to sign or submit, as the extension's card;
-    /// `.reading` offers nothing yet.
+    /// could not be read also is, offers nothing to sign or submit, only the current signers, as the
+    /// extension's card; `.reading` offers nothing yet.
     static func action(
         _ intent: MultisigIntent,
         canSign: Bool,
         holdsSigner: Bool,
-        signers: SignerCheck = .match
+        signers: SignerCheck
     ) -> (IntentAction, String?) {
         if isOpen(intent), signers != .match {
-            return (.nothing, signers == .changed ? MultisigCopy.noteSignersChanged : nil)
+            return signers == .changed ? (.reviewSigners, MultisigCopy.noteSignersChanged) : (.nothing, nil)
         }
         switch intent.state {
         case .ready:
@@ -120,6 +120,25 @@ enum MultisigTxText {
 
         case .submitted, .accepted, .rejected:
             return (.nothing, "Nothing left to do here.")
+        }
+    }
+
+    /// The card's label (`intentCard`'s kicker): a fee-updated version of an attempt that went
+    /// stale, or a stale one; nil for an ordinary reviewed transaction, which the screen's title
+    /// already names.
+    static func kicker(_ intent: MultisigIntent, among intents: [MultisigIntent]) -> String? {
+        if isFeeReplacement(intent, among: intents) { return MultisigCopy.cardFeeUpdated }
+        return intent.state == .stale ? MultisigCopy.staleLabel : nil
+    }
+
+    /// `isFeeReplacementIntent`: an open intent whose exact action a stale one of the same multisig
+    /// already froze (`sameAction`). The core stores calls, nonce and signer GUIDs canonical, so
+    /// plain equality is the extension's felt comparison.
+    static func isFeeReplacement(_ intent: MultisigIntent, among intents: [MultisigIntent]) -> Bool {
+        [.collecting, .ready].contains(intent.state) && intents.contains { stale in
+            stale.state == .stale && stale.id != intent.id && stale.multisigId == intent.multisigId
+                && stale.threshold == intent.threshold && stale.signerGuids == intent.signerGuids
+                && stale.nonce == intent.nonce && stale.calls == intent.calls
         }
     }
 
@@ -176,4 +195,4 @@ enum SignerCheck: Equatable {
 }
 
 /// The one action an intent card offers.
-enum IntentAction: Equatable { case sign, submit, retryUnchangedFee, copyPackage, nothing }
+enum IntentAction: Equatable { case sign, submit, retryUnchangedFee, copyPackage, reviewSigners, nothing }

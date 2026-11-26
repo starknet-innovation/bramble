@@ -2,8 +2,8 @@ import BrambleCore
 import SwiftUI
 
 /// One frozen signing intent (`intentCard` in `multisig-views.ts`): the core's summary, each call's
-/// summary, the risk panel, its signatures and maximum fee, the exact calls, and the one action its
-/// state allows. Every refusal is the core's; a stale or already-sent intent is never signed or
+/// summary, the risk panel, its cost, the exact identity and calls, and the one action its state
+/// allows. Every refusal is the core's; a stale or already-sent intent is never signed or
 /// sent again here, and one whose signers no longer match the chain is neither signed nor sent.
 struct MultisigIntentView: View {
     @Environment(WalletStore.self) private var store
@@ -41,6 +41,7 @@ struct MultisigIntentView: View {
 struct IntentCard: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
+    @Environment(\.openCoordinationFlow) private var open
     let intent: MultisigIntent
     let changed: (MultisigIntent) -> Void
     @State private var signer: String?
@@ -51,6 +52,8 @@ struct IntentCard: View {
     /// The core's review, read when the card shows and again whenever the intent changes.
     @State private var review: MultisigIntentReview?
     @State private var reviewed = false
+    /// The multisig's stored intents, read with the review, to tell a fee-updated version apart.
+    @State private var siblings: [MultisigIntent] = []
 
     var body: some View {
         let available = store.coordination.availableSigners(for: intent)
@@ -62,20 +65,25 @@ struct IntentCard: View {
         )
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             VStack(alignment: .leading, spacing: BrambleSpace.sm) {
-                Text(intent.summary).brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
-                if intent.state == .stale {
-                    Text("Out of date").brambleText(BrambleTypeScale.caption).foregroundStyle(skin.danger)
+                if let kicker = MultisigTxText.kicker(intent, among: siblings) {
+                    Text(kicker).brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
+                        .foregroundStyle(intent.state == .stale ? skin.danger : skin.muted)
                 }
+                Text(intent.summary).brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
                 ForEach(Array((review?.calls ?? []).enumerated()), id: \.offset) { _, call in
                     Text(call.summary).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
                 }
-                facts
             }
             .padding(BrambleSpace.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
             if reviewed, isOpen(intent) {
                 SendRisksPanel(messages: MultisigTxText.risks(review))
             }
+            Eyebrow(text: MultisigCopy.cardCost)
+            facts
+                .padding(BrambleSpace.lg)
+                .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
             if let hash = intent.broadcastTransactionHash {
                 KeyValueRow(label: MultisigTxText.submittedKicker, value: hash, copyLabel: MultisigTxText.copyHash)
             }
@@ -99,9 +107,11 @@ struct IntentCard: View {
         .task(id: intent) {
             reviewed = false
             let read = await store.coordination.review(intent)
+            let stored = await store.coordination.storedIntents(of: intent.multisigId)
             // A newer intent cancelled this read; its own task lands instead.
             guard !Task.isCancelled else { return }
             review = read
+            siblings = stored
             reviewed = true
         }
     }
@@ -134,6 +144,9 @@ struct IntentCard: View {
         case .retryUnchangedFee:
             PillButton(MultisigTxText.tryUnchangedFee, kind: .secondary, busy: busy) { submit() }
 
+        case .reviewSigners:
+            PillButton(MultisigCopy.actionReviewSigners, kind: .secondary) { open(.signers(id: intent.multisigId)) }
+
         case .copyPackage, .nothing:
             EmptyView()
         }
@@ -154,7 +167,11 @@ struct IntentCard: View {
                 value: intent.sender,
                 copyLabel: MultisigCopy.technicalCopySender
             )
+            if let chainId {
+                KeyValueRow(label: MultisigCopy.technicalChainId, value: nil, copyLabel: "", status: chainId)
+            }
             KeyValueRow(label: MultisigTxText.nonce, value: nil, copyLabel: "", status: intent.nonce)
+            KeyValueRow(label: MultisigCopy.technicalCalls, value: nil, copyLabel: "", status: "\(intent.calls.count)")
             ForEach(Array(intent.calls.enumerated()), id: \.offset) { index, call in
                 VStack(alignment: .leading, spacing: BrambleSpace.xs) {
                     Text("Call \(index + 1) · \(call.entrypoint)")
@@ -167,6 +184,12 @@ struct IntentCard: View {
                 .textSelection(.enabled)
             }
         }
+    }
+
+    /// The multisig's chain: the core freezes every intent against its network's verified chain id.
+    private var chainId: String? {
+        let network = store.coordination.multisigs.first { $0.id == intent.multisigId }?.network
+        return supportedNetworks().first { $0.network == network }?.chainId
     }
 
     private func chosen(_ available: [AccountRecord]) -> String? {

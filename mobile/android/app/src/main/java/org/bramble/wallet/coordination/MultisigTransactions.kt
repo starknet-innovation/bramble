@@ -36,7 +36,8 @@ suspend fun CoordinationStore.intents(multisigId: String): List<MultisigIntent> 
     return if (settled) storedIntents(multisigId) else listed
 }
 
-private suspend fun CoordinationStore.storedIntents(multisigId: String): List<MultisigIntent> =
+/** The stored intents as they are, with no settle read: the card tells a fee-updated version apart. */
+internal suspend fun CoordinationStore.storedIntents(multisigId: String): List<MultisigIntent> =
     runCatching { work { core.multisigIntents(multisigId) } }.getOrDefault(emptyList())
 
 /**

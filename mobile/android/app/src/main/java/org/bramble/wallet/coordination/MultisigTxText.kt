@@ -10,7 +10,7 @@ import org.bramble.core.argentSignerGuid
 import org.bramble.wallet.send.SendCopy
 
 /** The one action an intent card offers. */
-internal enum class IntentAction { SIGN, SUBMIT, RETRY_UNCHANGED_FEE, COPY_PACKAGE, NONE }
+internal enum class IntentAction { SIGN, SUBMIT, RETRY_UNCHANGED_FEE, COPY_PACKAGE, REVIEW_SIGNERS, NONE }
 
 /**
  * The extension's words for multisig transactions (`i18n/messages/multisig*.ts`,
@@ -44,7 +44,6 @@ internal object MultisigTxText {
     const val NEEDING_YOU = "Transactions needing you"
     const val GONE = "This transaction is no longer available."
     const val REVIEWED = "Reviewed transaction"
-    const val OUT_OF_DATE = "Out of date"
     const val SIGN = "Sign reviewed transaction"
     const val SUBMIT = "Submit transaction"
     const val TRY_UNCHANGED_FEE = "Try unchanged fee again"
@@ -103,17 +102,23 @@ internal object MultisigTxText {
      * transaction from the composer rather than re-pricing a stale one, so a stale card says it is
      * out of date and, when fully signed, offers the unchanged-fee retry only. [fresh] is the card's
      * review (`MultisigIntentReview.hasFreshAuthority`): false, or a review that could not be read,
-     * offers nothing to sign or submit, as the extension's card; null (still reading) offers nothing
-     * yet.
+     * offers nothing to sign or submit, only the current signers, as the extension's card; null
+     * (still reading) offers nothing yet.
      */
     fun action(
         intent: MultisigIntent,
         canSign: Boolean,
         holdsSigner: Boolean,
-        fresh: Boolean? = true,
+        fresh: Boolean?,
     ): Pair<IntentAction, String?> =
         if (isOpen(intent) && fresh != true) {
-            IntentAction.NONE to if (fresh == false) MultisigCopy.noteSignersChanged else null
+            if (fresh ==
+                false
+            ) {
+                IntentAction.REVIEW_SIGNERS to MultisigCopy.noteSignersChanged
+            } else {
+                IntentAction.NONE to null
+            }
         } else {
             stateAction(intent, canSign, holdsSigner)
         }
@@ -208,3 +213,38 @@ fun holdsSigner(
 /** Collecting, ready and stale intents still need someone; the rest are done or on chain. */
 fun isOpen(intent: MultisigIntent): Boolean =
     intent.state == IntentState.COLLECTING || intent.state == IntentState.READY || intent.state == IntentState.STALE
+
+/**
+ * The card's label (`intentCard`'s kicker): a fee-updated version of an attempt that went
+ * stale, or a stale one; null for an ordinary reviewed transaction, which the page title
+ * already names.
+ */
+internal fun intentKicker(
+    intent: MultisigIntent,
+    among: List<MultisigIntent>,
+): String? =
+    when {
+        isFeeReplacement(intent, among) -> MultisigCopy.cardFeeUpdated
+        intent.state == IntentState.STALE -> MultisigCopy.staleLabel
+        else -> null
+    }
+
+/**
+ * `isFeeReplacementIntent`: an open intent whose exact action a stale one of the same multisig
+ * already froze (`sameAction`). The core stores calls, nonce and signer GUIDs canonical, so
+ * plain equality is the extension's felt comparison.
+ */
+private fun isFeeReplacement(
+    intent: MultisigIntent,
+    among: List<MultisigIntent>,
+): Boolean =
+    (intent.state == IntentState.COLLECTING || intent.state == IntentState.READY) &&
+        among.any { stale ->
+            stale.state == IntentState.STALE &&
+                stale.id != intent.id &&
+                stale.multisigId == intent.multisigId &&
+                stale.threshold == intent.threshold &&
+                stale.signerGuids == intent.signerGuids &&
+                stale.nonce == intent.nonce &&
+                stale.calls == intent.calls
+        }

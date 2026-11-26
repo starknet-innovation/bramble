@@ -1,6 +1,7 @@
 /**
- * The extension's multisig intent-card copy (`review.multisig.card.*`, `review.multisig.technical.*`
- * and the signers-changed note in `review-steps-multisig.ts`), rendered for the mobile intent card
+ * The extension's multisig intent-card copy (`review.multisig.card.*`, `review.multisig.technical.*`,
+ * the signers-changed note, the review-signers action and the stale label in
+ * `review-steps-multisig.ts`), rendered for the mobile intent card
  * so neither app restates a signing sentence. These are approval/review text pinned by
  * `tests/i18n/review-pins.ts`; `{signed}` and `{threshold}` are filled in by the apps exactly as
  * the side panel's `t()` fills them.
@@ -20,7 +21,11 @@ export const MULTISIG_COPY_KOTLIN_PATH =
   "mobile/android/app/src/main/java/org/bramble/wallet/coordination/MultisigCopy.generated.kt";
 
 const PREFIXES = ["review.multisig.card.", "review.multisig.technical."] as const;
-const SINGLES = ["review.multisig.note.signersChanged"] as const;
+const SINGLES = [
+  "review.multisig.action.reviewSigners",
+  "review.multisig.note.signersChanged",
+  "review.multisig.stale.label",
+] as const;
 
 // `review.multisig.card.signersChanged` → `cardSignersChanged`.
 const camel = (key: string): string =>

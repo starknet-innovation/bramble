@@ -26,7 +26,8 @@ extension CoordinationStore {
         return settled ? await storedIntents(of: multisigId) : listed
     }
 
-    private func storedIntents(of multisigId: String) async -> [MultisigIntent] {
+    /// The stored intents as they are, with no settle read: the card tells a fee-updated version apart.
+    func storedIntents(of multisigId: String) async -> [MultisigIntent] {
         let walletCore = core
         return (try? await work { try walletCore.multisigIntents(multisigId: multisigId) }) ?? []
     }

@@ -15,15 +15,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.bramble.core.AccountRecord
 import org.bramble.core.IntentState
 import org.bramble.core.MultisigIntent
 import org.bramble.core.MultisigIntentReview
 import org.bramble.core.TokenPreferences
+import org.bramble.core.supportedNetworks
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleRadius
@@ -47,12 +50,13 @@ import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
 // One signing intent's card (M18), port of the iOS `MultisigIntentView.swift`: the core's summary
-// and facts, each call's summary, the risk panel, the one action its state allows, and the exact
-// calls.
+// and facts, each call's summary, the risk panel, its cost, the one action its state allows, and
+// the exact identity and calls.
 
 /**
- * The intent's card: the core's summary, each call's summary, the risk panel, its signatures and
- * maximum fee, the one action its state allows, and the exact calls. The core's review is read
+ * The intent's card: the core's summary, each call's summary, the risk panel, its cost, the one
+ * action its state allows, and the exact identity and calls. It opens the current signers
+ * ([LocalMultisigOpen]) when they no longer match the intent. The core's review is read
  * when the card shows and whenever the intent changes; until it says the chain's signers still
  * match, nothing is signed or submitted. A refusal may mark the intent stale, so it is reread
  * either way.
@@ -69,9 +73,16 @@ internal fun IntentCard(
     var failed by remember { mutableStateOf(false) }
     var review by remember { mutableStateOf<MultisigIntentReview?>(null) }
     var reviewed by remember { mutableStateOf(false) }
+    // The multisig's stored intents, read with the review, to tell a fee-updated version apart.
+    var siblings by remember { mutableStateOf(emptyList<MultisigIntent>()) }
     LaunchedEffect(intent) {
         reviewed = false
-        review = store.coordination.review(intent, store.portfolio.preferences)
+        val read = store.coordination.review(intent, store.portfolio.preferences)
+        val stored = store.coordination.storedIntents(intent.multisigId)
+        // A newer intent cancelled this read; its own effect lands instead.
+        ensureActive()
+        review = read
+        siblings = stored
         reviewed = true
     }
     val run = { body: suspend () -> String ->
@@ -93,20 +104,22 @@ internal fun IntentCard(
             busy = false
         }
     }
-    IntentFacts(store, intent, review)
+    IntentFacts(store, intent, review, intentKicker(intent, siblings))
     if (reviewed && isOpen(intent)) RisksPanel(MultisigTxText.risks(review))
+    IntentCost(intent)
     val fresh = if (reviewed) review?.hasFreshAuthority == true else null
     IntentActions(store, intent, busy, fresh) { body -> run(body) }
     StatusLine(result, if (failed) StatusTone.DANGER else StatusTone.POSITIVE)
     IntentTechnical(store, intent)
 }
 
-/** The summary panel with each call's summary, and the hash once it was sent. */
+/** The summary panel under its label, with each call's summary, and the hash once it was sent. */
 @Composable
 private fun IntentFacts(
     store: WalletStore,
     intent: MultisigIntent,
     review: MultisigIntentReview?,
+    kicker: String?,
 ) {
     val skin = LocalSkin.current
     Column(
@@ -116,19 +129,38 @@ private fun IntentFacts(
             .padding(BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
     ) {
-        Text(intent.summary, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.bold))
-        if (intent.state == IntentState.STALE) {
-            Text(MultisigTxText.OUT_OF_DATE, color = skin.danger, style = textStyle(BrambleTypeScale.caption))
+        kicker?.let {
+            Text(
+                it,
+                color = if (intent.state == IntentState.STALE) skin.danger else skin.muted,
+                style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
+            )
         }
+        Text(intent.summary, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.bold))
         review?.calls?.forEach { Caption(it.summary) }
-        Fact(MultisigTxText.SIGNATURES, MultisigTxText.signatureCount(intent))
-        intent.maxFee?.let { Fact(MultisigTxText.MAX_FEE, it.display) }
     }
     intent.broadcastTransactionHash?.let { hash ->
         Row {
             Caption(MultisigTxText.SUBMITTED_KICKER + " · " + shortAddress(hash))
             CopyButton(store, hash, MultisigTxText.COPY_HASH)
         }
+    }
+}
+
+/** "Cost": the most the signed bounds authorise, and the signatures collected. */
+@Composable
+private fun IntentCost(intent: MultisigIntent) {
+    val skin = LocalSkin.current
+    Eyebrow(MultisigCopy.cardCost)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(skin.panel, RoundedCornerShape(BrambleRadius.lg))
+            .padding(BrambleSpace.lg),
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+    ) {
+        intent.maxFee?.let { Fact(MultisigTxText.MAX_FEE, it.display) }
+        Fact(MultisigTxText.SIGNATURES, MultisigTxText.signatureCount(intent))
     }
 }
 
@@ -142,6 +174,7 @@ private fun IntentActions(
     run: (suspend () -> String) -> Unit,
 ) {
     var signer by remember { mutableStateOf<String?>(null) }
+    val open = LocalMultisigOpen.current
     val available = availableSigners(intent, store.records)
     val chosen = available.firstOrNull { it.id == signer }?.id ?: available.firstOrNull()?.id
     val (action, note) =
@@ -169,9 +202,15 @@ private fun IntentActions(
             PillButton(MultisigTxText.TRY_UNCHANGED_FEE, kind = PillKind.SECONDARY, busy = busy, onClick = submit)
         }
 
+        IntentAction.REVIEW_SIGNERS -> {
+            PillButton(MultisigCopy.actionReviewSigners, kind = PillKind.SECONDARY) {
+                open(MultisigFlow.Signers(intent.multisigId))
+            }
+        }
+
         IntentAction.COPY_PACKAGE, IntentAction.NONE -> {}
     }
-    if (intent.state == IntentState.COLLECTING || intent.state == IntentState.READY) {
+    if (intent.state in listOf(IntentState.COLLECTING, IntentState.READY)) {
         CopyPackage(store, intent, primary = action == IntentAction.COPY_PACKAGE)
     }
 }
@@ -205,7 +244,7 @@ private fun CopyPackage(
     }
 }
 
-/** "Technical details": the hash, the sender, the nonce, and each frozen call. */
+/** "Technical details": the hash, the sender, the chain, the nonce, the call count and each frozen call. */
 @Composable
 private fun IntentTechnical(
     store: WalletStore,
@@ -219,7 +258,9 @@ private fun IntentTechnical(
             Fact(MultisigCopy.technicalSender, shortAddress(intent.sender), Modifier.weight(1f))
             CopyButton(store, intent.sender, MultisigCopy.technicalCopySender)
         }
+        chainId(store, intent)?.let { Fact(MultisigCopy.technicalChainId, it) }
         Fact(MultisigTxText.NONCE, intent.nonce)
+        Fact(MultisigCopy.technicalCalls, intent.calls.size.toString())
         intent.calls.forEachIndexed { index, call ->
             Text(
                 "Call ${index + 1} · ${call.entrypoint}",
@@ -245,6 +286,21 @@ private fun Fact(
         Text(value, color = skin.text, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
     }
 }
+
+/** The multisig's chain: the core freezes every intent against its network's verified chain id. */
+private fun chainId(
+    store: WalletStore,
+    intent: MultisigIntent,
+): String? {
+    val network =
+        store.coordination.multisigs
+            .firstOrNull { it.id == intent.multisigId }
+            ?.network
+    return supportedNetworks().firstOrNull { it.network == network }?.chainId
+}
+
+/** Pushes a multisig screen onto the stack hosting the card; outside one there is nowhere to go. */
+internal val LocalMultisigOpen = staticCompositionLocalOf<(MultisigFlow) -> Unit> { {} }
 
 /**
  * The intent card's review (`multisigIntentReview`, the extension's `intentCard`): each frozen

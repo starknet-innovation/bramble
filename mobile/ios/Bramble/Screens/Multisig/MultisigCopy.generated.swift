@@ -3,6 +3,7 @@
 /// The extension's multisig intent-card copy (`review-steps-multisig.ts`); placeholders are
 /// filled by the app.
 enum MultisigCopy {
+    static let actionReviewSigners = "Review current signers"
     static let cardCost = "Cost"
     static let cardFeeUpdated = "Fee-updated transaction"
     static let cardMaxFee = "Maximum network fee"
@@ -11,6 +12,7 @@ enum MultisigCopy {
     static let cardSignatures = "Signatures"
     static let cardSignersChanged = "The on-chain signers no longer match this transaction. Signing and submission are disabled."
     static let noteSignersChanged = "The signers changed since this transaction was frozen. Signing and submission stay blocked."
+    static let staleLabel = "Out of date"
     static let technicalCalls = "Calls"
     static let technicalChainId = "Chain ID"
     static let technicalClassHash = "Class hash"

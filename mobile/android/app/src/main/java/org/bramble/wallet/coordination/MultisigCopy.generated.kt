@@ -3,6 +3,7 @@ package org.bramble.wallet.coordination
 
 /** The extension's multisig intent-card copy (`review-steps-multisig.ts`); placeholders are filled by the app. */
 object MultisigCopy {
+    const val actionReviewSigners = "Review current signers"
     const val cardCost = "Cost"
     const val cardFeeUpdated = "Fee-updated transaction"
     const val cardMaxFee = "Maximum network fee"
@@ -11,6 +12,7 @@ object MultisigCopy {
     const val cardSignatures = "Signatures"
     const val cardSignersChanged = "The on-chain signers no longer match this transaction. Signing and submission are disabled."
     const val noteSignersChanged = "The signers changed since this transaction was frozen. Signing and submission stay blocked."
+    const val staleLabel = "Out of date"
     const val technicalCalls = "Calls"
     const val technicalChainId = "Chain ID"
     const val technicalClassHash = "Class hash"

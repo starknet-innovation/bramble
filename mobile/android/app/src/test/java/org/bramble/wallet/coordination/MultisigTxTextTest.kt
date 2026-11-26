@@ -44,8 +44,11 @@ class MultisigTxTextTest {
     @Test
     fun collectingSignsOrShares() {
         val collecting = intent(IntentState.COLLECTING, 1)
-        assertEquals(IntentAction.SIGN to null, MultisigTxText.action(collecting, canSign = true, holdsSigner = true))
-        val (action, note) = MultisigTxText.action(collecting, canSign = false, holdsSigner = true)
+        assertEquals(
+            IntentAction.SIGN to null,
+            MultisigTxText.action(collecting, canSign = true, holdsSigner = true, fresh = true),
+        )
+        val (action, note) = MultisigTxText.action(collecting, canSign = false, holdsSigner = true, fresh = true)
         assertEquals(IntentAction.COPY_PACKAGE, action)
         assertEquals("This wallet has already signed. Share the package to collect the remaining signature.", note)
         assertEquals("Awaiting signatures · 1 of 2", MultisigTxText.status(collecting))
@@ -54,7 +57,10 @@ class MultisigTxTextTest {
     @Test
     fun readySubmits() {
         val ready = intent(IntentState.READY, 2)
-        assertEquals(IntentAction.SUBMIT, MultisigTxText.action(ready, canSign = false, holdsSigner = true).first)
+        assertEquals(
+            IntentAction.SUBMIT,
+            MultisigTxText.action(ready, canSign = false, holdsSigner = true, fresh = true).first,
+        )
         assertEquals("Ready to submit · 2 of 2", MultisigTxText.status(ready))
     }
 
@@ -62,7 +68,7 @@ class MultisigTxTextTest {
     @Test
     fun staleNeverSigns() {
         val moved = intent(IntentState.STALE, 1, StaleReason.NONCE)
-        val (action, note) = MultisigTxText.action(moved, canSign = true, holdsSigner = true)
+        val (action, note) = MultisigTxText.action(moved, canSign = true, holdsSigner = true, fresh = true)
         assertEquals(IntentAction.NONE, action)
         assertEquals(
             "This may already have been sent by another signer. " +
@@ -71,7 +77,7 @@ class MultisigTxTextTest {
         )
         assertEquals("Out of date · needs review · 1 of 2", MultisigTxText.status(moved))
         val refused = intent(IntentState.STALE, 2, StaleReason.FEE)
-        val (retry, lead) = MultisigTxText.action(refused, canSign = true, holdsSigner = true)
+        val (retry, lead) = MultisigTxText.action(refused, canSign = true, holdsSigner = true, fresh = true)
         assertEquals(IntentAction.RETRY_UNCHANGED_FEE, retry)
         assertTrue(lead!!.startsWith("The network refused this version"))
         assertTrue(isOpen(refused))
@@ -106,10 +112,25 @@ class MultisigTxTextTest {
         assertEquals(listOf(MultisigCopy.cardSignersChanged), MultisigTxText.risks(null))
         for (state in listOf(IntentState.COLLECTING, IntentState.READY, IntentState.STALE)) {
             val (action, note) = MultisigTxText.action(intent(state, 2), true, true, fresh = false)
-            assertEquals(IntentAction.NONE, action)
+            assertEquals(IntentAction.REVIEW_SIGNERS, action)
             assertEquals(MultisigCopy.noteSignersChanged, note)
             assertEquals(IntentAction.NONE to null, MultisigTxText.action(intent(state, 2), true, true, fresh = null))
         }
+    }
+
+    /**
+     * The card's label: an open intent whose exact action a stale one froze is the fee-updated
+     * version; a stale one is out of date; any other intent is the page title's alone.
+     */
+    @Test
+    fun aFeeRetryIsFeeUpdated() {
+        val stale = intent(IntentState.STALE, 0)
+        val retry = stale.copy(id = "retry", state = IntentState.COLLECTING)
+        val all = listOf(stale, retry)
+        assertEquals(MultisigCopy.cardFeeUpdated, intentKicker(retry, all))
+        assertEquals(MultisigCopy.staleLabel, intentKicker(stale, all))
+        assertEquals(null, intentKicker(retry, listOf(retry)))
+        assertEquals("a new nonce is a new action", null, intentKicker(retry.copy(nonce = "0x6"), all))
     }
 
     @Test

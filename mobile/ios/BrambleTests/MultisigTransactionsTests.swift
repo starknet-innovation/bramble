@@ -121,7 +121,7 @@ final class MultisigTransactionsTests: XCTestCase {
         }
         XCTAssertEqual(intent.state, .ready)
         XCTAssertEqual(intent.package, wallet.proposal["readyPackage"] as? String)
-        XCTAssertEqual(MultisigTxText.action(intent, canSign: false, holdsSigner: true).0, .submit)
+        XCTAssertEqual(MultisigTxText.action(intent, canSign: false, holdsSigner: true, signers: .match).0, .submit)
 
         let read = try await intentRead(wallet, intent.id)
         let submission = try wallet.core.submitMultisigIntent(intentId: intent.id, state: read)
@@ -178,7 +178,7 @@ final class MultisigTransactionsTests: XCTestCase {
         XCTAssertEqual(stale.state, .stale)
         XCTAssertEqual(stale.staleReason, .nonce)
         XCTAssertTrue(isOpen(stale))
-        let (action, note) = MultisigTxText.action(stale, canSign: true, holdsSigner: true)
+        let (action, note) = MultisigTxText.action(stale, canSign: true, holdsSigner: true, signers: .match)
         XCTAssertEqual(action, .nothing)
         XCTAssertEqual(
             note,
@@ -193,10 +193,20 @@ final class MultisigTransactionsTests: XCTestCase {
             MultisigTxError(again).errorDescription,
             "This may already have been sent by another signer. Press again to send it anyway."
         )
-        guard case .proposed = try await propose(wallet, confirmResend: true) else {
+        guard case .proposed(let resent) = try await propose(wallet, confirmResend: true) else {
             XCTFail("the confirmed resend is proposed")
             return
         }
+        // The resend reads the moved nonce, so it is a new action, not a fee-updated version.
+        let stored = try wallet.stored()
+        let resend = try XCTUnwrap(stored.first { $0.id == resent })
+        XCTAssertNil(MultisigTxText.kicker(resend, among: stored), "a new attempt is the screen's title")
+        XCTAssertEqual(MultisigTxText.kicker(stale, among: stored), MultisigCopy.staleLabel)
+        // The same frozen action at the same nonce (a fee retry) is the fee-updated version.
+        var retry = stale
+        retry.id = "retry"
+        retry.state = .collecting
+        XCTAssertEqual(MultisigTxText.kicker(retry, among: stored + [retry]), MultisigCopy.cardFeeUpdated)
         XCTAssertEqual(wallet.node.writes, 0, "proposing never writes")
     }
 
@@ -260,7 +270,7 @@ extension MultisigTransactionsTests {
             "The on-chain signers no longer match this transaction. Signing and submission are disabled."
         )
         let (action, note) = MultisigTxText.action(intent, canSign: true, holdsSigner: true, signers: .changed)
-        XCTAssertEqual(action, .nothing)
+        XCTAssertEqual(action, .reviewSigners)
         XCTAssertEqual(note, MultisigCopy.noteSignersChanged)
 
         // Unread (still reading) offers nothing yet; unreadable says the signers are unproven.
