@@ -78,6 +78,23 @@ final class DappRequestSinkTests: XCTestCase {
         XCTAssertEqual((try object(json)["result"] as? [String: Any])?["accounts"] as? [String], [])
     }
 
+    func testALeftPageDeniesItsCard() throws {
+        let (core, account) = try wallet()
+        let sink = DappRequestSink(core: core, http: NoNetwork())
+        _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
+        let card = try XCTUnwrap(sink.cards.first)
+
+        sink.pageGone()
+        XCTAssertTrue(sink.cards.isEmpty)
+        // The core holds no card either, and the stale one can no longer be approved.
+        XCTAssertTrue(sink.approve(card, accountId: account.id).isEmpty)
+        guard case let .now(json) = sink.answer(request("mc_accounts"), shown: .mainnet) else {
+            XCTFail("a passive read is answered at once")
+            return
+        }
+        XCTAssertEqual((try object(json)["result"] as? [String: Any])?["accounts"] as? [String], [])
+    }
+
     func testSigningIsRefusedWithoutACard() throws {
         let (core, _) = try wallet()
         let sink = DappRequestSink(core: core, http: NoNetwork())

@@ -47,6 +47,8 @@ final class DappRequestSink {
     @ObservationIgnored private let http: PortfolioTransport
     @ObservationIgnored private let now: () -> Double
     @ObservationIgnored private var pageIds: [UInt64: String] = [:]
+    /// The card each held request waits on, by request number.
+    @ObservationIgnored private var heldCards: [UInt64: String] = [:]
     @ObservationIgnored private var lastRequestId: UInt64 = 0
 
     init(
@@ -76,8 +78,9 @@ final class DappRequestSink {
         } catch {
             return .now(Self.json(id: request.id, error: Self.unknownError))
         }
-        if case .pending = reply {
+        if case let .pending(approvalId) = reply {
             pageIds[requestId] = request.id
+            heldCards[requestId] = approvalId
             reload()
             return .held(requestId)
         }
@@ -107,9 +110,21 @@ final class DappRequestSink {
         reload()
     }
 
+    /// The page that asked is gone (a new commit, or the screen closed): each card its requests
+    /// wait on is denied, so a stale card can never be approved. Its waiters are gone with the
+    /// page, so the refusal reaches no one.
+    func pageGone() {
+        let stale = Set(heldCards.values)
+        heldCards = [:]
+        pageIds = [:]
+        for approvalId in stale { _ = session.denyConnect(approvalId: approvalId, nowMs: now()) }
+        reload()
+    }
+
     private func finish(_ settled: [DappSettled]) -> [Settled] {
         reload()
         return settled.compactMap { item in
+            heldCards[item.requestId] = nil
             guard let id = pageIds.removeValue(forKey: item.requestId) else { return nil }
             return Settled(requestId: item.requestId, json: Self.json(id: id, reply: item.reply))
         }

@@ -80,6 +80,20 @@ class DappRequestSinkTest {
     }
 
     @Test
+    fun leftPageDeniesItsCard() {
+        val (sink, account) = sink()
+        held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
+        val card = sink.cards.single()
+
+        sink.pageGone()
+        assertTrue(sink.cards.isEmpty())
+        // The core holds no card either, and the stale one can no longer be approved.
+        assertTrue(sink.approve(card, account.id).isEmpty())
+        val accounts = now(sink.answer(request("mc_accounts"), NetworkId.MAINNET))
+        assertEquals(0, accounts.getJSONObject("result").getJSONArray("accounts").length())
+    }
+
+    @Test
     fun signingIsRefusedWithoutACard() {
         val (sink, _) = sink()
         listOf("wallet_addInvokeTransaction", "wallet_signTypedData").forEach { method ->

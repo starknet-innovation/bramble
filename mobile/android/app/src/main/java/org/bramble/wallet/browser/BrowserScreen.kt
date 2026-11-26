@@ -206,6 +206,7 @@ private class BrowserBridge(
     /** Ends the page and clears what the web stored, so nothing outlives the screen. */
     fun detach(view: WebView) {
         held.clear()
+        sink.pageGone()
         WebViewCompat.removeWebMessageListener(view, BRIDGE_NAME)
         view.stopLoading()
         view.clearCache(true)
@@ -238,6 +239,7 @@ private class BrowserBridge(
     ) {
         // A new document: no held reply may reach it.
         held.clear()
+        sink.pageGone()
     }
 
     override fun doUpdateVisitedHistory(

@@ -237,8 +237,10 @@ final class BrowserBridge: NSObject, WKScriptMessageHandlerWithReply, WKNavigati
         deliver(sink.deny(card))
     }
 
-    /// Lets go of every held reply: WebKit needs each answered once, and the page is gone.
+    /// The page is gone: its cards are denied, and every held reply is let go (WebKit needs each
+    /// answered once).
     func release() {
+        sink.pageGone()
         let replies = held.values
         held = [:]
         for reply in replies { reply(nil, Self.refused) }

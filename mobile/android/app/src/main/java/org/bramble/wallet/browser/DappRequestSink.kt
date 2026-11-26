@@ -65,6 +65,9 @@ class DappRequestSink(
 
     private val session = DappSession(core)
     private val pageIds = mutableMapOf<ULong, String>()
+
+    /** The card each held request waits on, by request number. */
+    private val heldCards = mutableMapOf<ULong, String>()
     private var lastRequestId: ULong = 0u
 
     /** The connection cards waiting, oldest first. */
@@ -94,6 +97,7 @@ class DappRequestSink(
 
             is DappReply.Pending -> {
                 pageIds[requestId] = request.id
+                heldCards[requestId] = reply.approvalId
                 reload()
                 Answer.Held(requestId)
             }
@@ -123,8 +127,22 @@ class DappRequestSink(
         reload()
     }
 
+    /**
+     * The page that asked is gone (a new page, or the screen closed): each card its requests wait on
+     * is denied, so a stale card can never be approved. Its waiters are gone with the page, so the
+     * refusal reaches no one.
+     */
+    fun pageGone() {
+        val cards = heldCards.values.toSet()
+        heldCards.clear()
+        pageIds.clear()
+        cards.forEach { session.denyConnect(it, now()) }
+        reload()
+    }
+
     private fun finish(settled: List<DappSettled>): List<Settled> {
         reload()
+        settled.forEach { heldCards.remove(it.requestId) }
         return settled.mapNotNull { item ->
             pageIds.remove(item.requestId)?.let { Settled(item.requestId, json(it, item.reply)) }
         }
