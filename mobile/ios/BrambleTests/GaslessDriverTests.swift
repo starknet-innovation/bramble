@@ -72,7 +72,11 @@ final class GaslessDriverTests: XCTestCase {
 
     func testACancelledChoiceStopsAtThePauseAsUnknown() async {
         let transport = ScriptedTransport()
-        let fee = ScriptedFee { .post(post: GaslessPost(request: Self.request, delayMs: 60_000)) }
+        // Labelled: a bare trailing closure would bind to `resumed`, not `chosen`.
+        let fee = ScriptedFee(
+            chosen: { .post(post: GaslessPost(request: Self.request, delayMs: 60_000)) },
+            submitSteps: []
+        )
         let task = Task { await GaslessDriver(transport: transport).submit(fee, offer: Self.offer, prices: nil) }
         task.cancel()
         let outcome = await task.value
