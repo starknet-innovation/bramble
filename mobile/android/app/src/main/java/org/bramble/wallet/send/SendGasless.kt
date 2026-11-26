@@ -1,6 +1,8 @@
 package org.bramble.wallet.send
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.bramble.core.FeeAffordability
 import org.bramble.core.GaslessBalance
 import org.bramble.core.GaslessOffer
@@ -25,7 +27,11 @@ internal suspend fun SendFlowModel.offerGasless() {
     if (host == null || plan == null) return
     val prices = hooks.gaslessPrices(network.tokens.map { it.address })
     val held = network.tokens.map { GaslessBalance(it.address, balances[it.symbol]) }
-    val round = plan.takeIf { reviewing(it) }?.gaslessOffers(prices, held, host.clock().toULong()) ?: return
+    val now = host.clock().toULong()
+    val round =
+        plan.takeIf { reviewing(it) }?.let {
+            withContext(Dispatchers.Default) { it.gaslessOffers(prices, held, now) }
+        } ?: return
     val offers = host.offers(round.fee, round.step)
     if (reviewing(plan)) {
         gaslessFee = round.fee
@@ -93,7 +99,7 @@ internal suspend fun SendFlowModel.watch(hash: String) {
     stage = Stage.CONFIRMING
     val plan =
         try {
-            core.refreshActivity(account.id, hash)
+            withContext(Dispatchers.Default) { core.refreshActivity(account.id, hash) }
         } catch (ignored: SendException) {
             stage = Stage.PENDING
             return
