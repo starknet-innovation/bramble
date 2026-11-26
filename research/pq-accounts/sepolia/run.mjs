@@ -12,7 +12,7 @@
 // Starknet nodes running Sierra compiler 1.9.x cannot estimate fees for Sierra 1.10 classes,
 // so the PQ-account transactions and the declare use fixed resource bounds.
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Account, CallData, RpcProvider, cairo, hash, stark, transaction } from "starknet";
 
@@ -105,7 +105,16 @@ const casm = JSON.parse(readFileSync(`${ARTIFACTS}.compiled_contract_class.json`
 const classHash = hash.computeContractClassHash(sierra);
 const publicKey = JSON.parse(readFileSync(KEY, "utf8")).public_key;
 const ctor = ["0x2", publicKey[0], publicKey[1]];
-const state = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : { salt: stark.randomAddress() };
+// Read the state in one step (no exists-then-read); a missing file starts a new account.
+const readState = () => {
+  try {
+    return JSON.parse(readFileSync(STATE, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return { salt: stark.randomAddress() };
+    throw error;
+  }
+};
+const state = readState();
 state.address = hash.calculateContractAddressFromHash(state.salt, classHash, ctor, 0);
 writeFileSync(STATE, JSON.stringify(state, null, 1));
 console.log("class", classHash, "account", state.address);
