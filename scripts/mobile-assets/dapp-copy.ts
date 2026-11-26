@@ -1,7 +1,8 @@
 /**
  * The in-app browser's copy (P16), rendered for both apps so neither restates a string. The
- * connection card and the site warnings are the extension's own signing text (the side panel's
- * `approval-connect-card.ts` and `@bramble/permissions` insight messages), imported verbatim:
+ * connection and sign cards and the site warnings are the extension's own signing text (the side
+ * panel's `approval-connect-card.ts`, `approval-cards.ts`'s sign card, `sign-request.ts` and
+ * `@bramble/permissions` insight messages), imported verbatim:
  * approval and warning sentences are edited as a reviewed group, never here. `{target}` and
  * `{tld}` are filled in by the apps from the core's `SiteWarning`.
  */
@@ -9,6 +10,7 @@ import { insightMessages } from "@bramble/permissions/insight-messages";
 // Not package exports: the English catalogs, read here only to pin the mobile copy to them.
 import { reviewApprovalMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/review-approvals";
 import { reviewDetailMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/review-details";
+import { reviewSignMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/review-sign";
 import { HEADER, sorted } from "./shared";
 
 /** Repository-relative path of the iOS browser copy table. */
@@ -33,6 +35,7 @@ const camel = (key: string): string =>
 const dappCopy = (): Readonly<Record<string, string>> => {
   const details = reviewDetailMessages.en;
   const approvals = reviewApprovalMessages.en;
+  const signing = reviewSignMessages.en;
   return {
     ...DAPP_MOBILE_ONLY,
     ...Object.fromEntries(
@@ -45,6 +48,15 @@ const dappCopy = (): Readonly<Record<string, string>> => {
     connectSelectAccount: details["detail.connect.selectAccount"],
     connectShares: details["detail.connect.shares"],
     connectTitle: details["detail.connect.title"],
+    signAction: approvals["approval.sign.action"],
+    signConstraints: approvals["approval.sign.constraints"],
+    signDeny: approvals["approval.card.deny"],
+    signHint: approvals["approval.sign.hint"],
+    signOutcome: approvals["approval.sign.outcome"],
+    signOutsideExecution: signing["signing.outsideExecution"],
+    signRaw: signing["signing.raw"],
+    signTitle: approvals["approval.sign.title"],
+    signWontSend: approvals["approval.payment.wontSend"],
   };
 };
 
@@ -55,7 +67,7 @@ export const renderSwiftDappCopy = (): string =>
   [
     `// ${HEADER}`,
     "",
-    "/// The in-app browser's copy: the extension's connection card and site warnings, verbatim.",
+    "/// The in-app browser's copy: the extension's connection and sign cards and site warnings, verbatim.",
     "enum DappCopy {",
     ...sorted(dappCopy()).map(([key, value]) => `    static let ${key} = ${quoted(value)}`),
     "}",
@@ -68,7 +80,7 @@ export const renderKotlinDappCopy = (): string =>
     `// ${HEADER}`,
     "package org.bramble.wallet.browser",
     "",
-    "/** The in-app browser's copy: the extension's connection card and site warnings, verbatim. */",
+    "/** The in-app browser's copy: the extension's connection and sign cards and site warnings, verbatim. */",
     "object DappCopy {",
     ...sorted(dappCopy()).map(
       ([key, value]) => `    const val ${key} = ${quoted(value).replaceAll("$", "\\$")}`,
