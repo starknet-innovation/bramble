@@ -95,7 +95,7 @@ enum SendFailureText {
         case .braavosStrongSigner:
             SendCopy.failureBraavosStrongSigner
 
-        case .boundsOutOfRange, .nodeError, .locked, .signingFailed:
+        case .boundsOutOfRange, .nodeError, .locked, .signingFailed, .deviceRefused:
             nil
         }
     }

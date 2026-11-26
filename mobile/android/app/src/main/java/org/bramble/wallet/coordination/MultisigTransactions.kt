@@ -36,7 +36,8 @@ suspend fun CoordinationStore.intents(multisigId: String): List<MultisigIntent> 
     return if (settled) storedIntents(multisigId) else listed
 }
 
-private suspend fun CoordinationStore.storedIntents(multisigId: String): List<MultisigIntent> =
+/** The intents stored for [multisigId] as filed, unsettled; empty when the core refuses. */
+internal suspend fun CoordinationStore.storedIntents(multisigId: String): List<MultisigIntent> =
     runCatching { work { core.multisigIntents(multisigId) } }.getOrDefault(emptyList())
 
 /**

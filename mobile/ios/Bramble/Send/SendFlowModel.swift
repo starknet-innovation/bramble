@@ -383,6 +383,10 @@ final class SendFlowModel {
 
         case .rpc, .wait:
             break
+
+        case .device, .deviceRetry:
+            // No Ledger transport on mobile yet: a Ledger account's plan fails closed.
+            fail(with: SendFailure(code: .signingFailed, hash: nil))
         }
     }
 

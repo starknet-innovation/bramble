@@ -26,6 +26,7 @@ class MultisigTxTextTest {
         staleReason = stale,
         summary = "Transfer 1.5 STRK to 0x1234…5678",
         transactionHash = "0x2",
+        sender = "0x1",
         nonce = "0x5",
         threshold = 2u,
         signerGuids = listOf("0xa", "0xb"),
