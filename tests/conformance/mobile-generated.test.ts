@@ -32,6 +32,7 @@ import {
   SEND_COPY_KOTLIN_PATH,
   SEND_COPY_SWIFT_PATH,
 } from "../../scripts/mobile-send-copy";
+import { renderStrk20Jobs, STRK20_JOBS_PATH } from "../../scripts/mobile-strk20-jobs";
 import {
   computeStrk20Primitives,
   STRK20_PRIMITIVES_PATH,
@@ -211,6 +212,14 @@ describe("mobile privacy parity", () => {
       expect(committed).toEqual(await computeStrk20Primitives());
     },
     60_000,
+  );
+
+  test.skipIf(!existsSync(PRIVACY_SDK_BUNDLE))(
+    "the committed STRK20 job transcripts are what the extension's proof path does today",
+    async () => {
+      expect(await readFile(STRK20_JOBS_PATH, "utf8")).toBe(await renderStrk20Jobs());
+    },
+    120_000,
   );
 
   test("the privacy copy tables are rendered from the committed fixture", async () => {

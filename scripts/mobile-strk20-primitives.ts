@@ -27,20 +27,20 @@ export const STRK20_PRIMITIVES_PATH = "mobile/core/tests/fixtures/extension-strk
 
 const SDK_DIR = "vendor/starknet-privacy/sdk";
 /** A pinned SDK source module, loaded untyped: the vendored tree has no declarations here. */
-const sdkSource = async <T>(path: string): Promise<T> =>
+export const sdkSource = async <T>(path: string): Promise<T> =>
   (await import(pathToFileURL(resolve(SDK_DIR, "src", path)).href)) as T;
 
 type Felt = bigint | number | string;
 type HashFn = (...args: (bigint | number)[]) => bigint;
 
 /** Lowercase unpadded `0x` hex, the fixture's one felt spelling. */
-const hex = (value: Felt): string => `0x${BigInt(value).toString(16)}`;
+export const hex = (value: Felt): string => `0x${BigInt(value).toString(16)}`;
 
 /** Serves `stream` to `crypto.getRandomValues` while `run` runs, recording each read's length. */
-const withRandomStream = <T>(
+export const withRandomStream = async <T>(
   stream: Uint8Array,
-  run: () => T,
-): { readonly consumed: Uint8Array; readonly reads: number[]; readonly value: T } => {
+  run: () => T | Promise<T>,
+): Promise<{ readonly consumed: Uint8Array; readonly reads: number[]; readonly value: T }> => {
   const original = crypto.getRandomValues;
   const reads: number[] = [];
   let offset = 0;
@@ -54,16 +54,16 @@ const withRandomStream = <T>(
     return array;
   }) as typeof crypto.getRandomValues;
   try {
-    const value = run();
+    const value = await run();
     return { consumed: stream.slice(0, offset), reads, value };
   } finally {
     crypto.getRandomValues = original;
   }
 };
 
-const bytesHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
+export const bytesHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 /** A fixed arbitrary stream: sha256 blocks of `label`, so the inputs are reproducible. */
-const labelledStream = (label: string, length: number): Uint8Array => {
+export const labelledStream = (label: string, length: number): Uint8Array => {
   const out = new Uint8Array(length);
   for (let block = 0; block * 32 < length; block += 1) {
     const digest = createHash("sha256").update(`${label}:${block}`).digest();
@@ -101,7 +101,7 @@ const computeRandom = async () => {
       ["generateRandom", full],
       ["generateRandom120", short],
     ] as const) {
-      const drawn = withRandomStream(stream, sdkCrypto[fn]);
+      const drawn = await withRandomStream(stream, sdkCrypto[fn]);
       rows.push({
         bytes: bytesHex(drawn.consumed),
         function: fn,
