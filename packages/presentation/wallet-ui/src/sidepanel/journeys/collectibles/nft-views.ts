@@ -140,10 +140,21 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
     ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="${eager ? "eager" : "lazy"}" referrerpolicy="no-referrer" />`
     : "";
 
-// A revealed tile says when its art is missing: shown at once when the
-// background found none, or by CSS once a present image fails to load.
+/**
+ * Whether a collectible has no art this build can show: the background found
+ * none, or its only art is an animation and the build ships no renderer to play
+ * it (Firefox). The background counts an animation as art, so the second case
+ * is the view's to catch. Display-only; never gates a request.
+ */
+export const nftArtMissing = (
+  item: Pick<NftGalleryItem, "animationUrl" | "artUnavailable" | "image">,
+  renderer = shipsAnimationRenderer(),
+): boolean => item.artUnavailable || (!item.image && Boolean(item.animationUrl) && !renderer);
+
+// A revealed tile says when its art is missing: shown at once when there is
+// none to show, or by CSS once a present image fails to load.
 const nftArtNote = (item: NftGalleryItem, reveal: boolean): string =>
-  reveal && (item.image || item.artUnavailable)
+  reveal && (item.image || nftArtMissing(item))
     ? `<span class="nft-art-note"${item.image ? "" : ' data-shown="true"'}>${th("collectibles.artUnavailable")}</span>`
     : "";
 

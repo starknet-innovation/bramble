@@ -30,7 +30,8 @@
  *   is the kind of difference that stays invisible until it matters, so where
  *   the manifest cannot sandbox it, it does not ship. The NFTs tab still
  *   works there; the gallery hides its play control (`shipsAnimationRenderer`
- *   in wallet-ui's `build-info.ts`), so an animation shows as its image only.
+ *   in wallet-ui's `build-info.ts`), so an animated NFT shows its image, or
+ *   "Art unavailable" when it has none (`nftArtMissing`).
  * - `browser_specific_settings` is added. The add-on id is what binds this
  *   build to its stored data and its AMO listing, and `strict_min_version`
  *   refuses installation on releases whose MV3 support this manifest assumes.

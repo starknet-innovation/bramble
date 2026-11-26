@@ -11,6 +11,7 @@ import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { bindNfts, type NftUiDeps } from "../../../../src/sidepanel/journeys/collectibles/nft-ui";
 import {
+  nftArtMissing,
   nftDetailFlow,
   nftGalleryFlow,
 } from "../../../../src/sidepanel/journeys/collectibles/nft-views";
@@ -157,5 +158,18 @@ describe("NFT collectibles-tile animation", () => {
     const app = fromHtml(nftGalleryFlow(status, account, preferences, [plain]));
     bind(app);
     expect(app.querySelector(".nft-play-tile")).toBeNull();
+  });
+});
+
+describe("NFT art without a renderer", () => {
+  const art = { animationUrl: "data:text/html,x", artUnavailable: false, image: "" };
+
+  test("an animation-only NFT has no art where the build cannot play it", () => {
+    expect(nftArtMissing(art, false)).toBe(true);
+    expect(nftArtMissing(art, true)).toBe(false);
+  });
+
+  test("an image is art on every build", () => {
+    expect(nftArtMissing({ ...art, image: "https://example.com/a.png" }, false)).toBe(false);
   });
 });

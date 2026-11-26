@@ -83,7 +83,8 @@ merely a cautious one.
 The floor and the collectible renderer are **one decision**. That page executes untrusted on-chain
 HTML and is only safe inside a manifest-declared sandbox, which Firefox gained in 154 — so it is
 withheld from the Gecko package rather than shipped where the manifest cannot sandbox it. On Firefox
-the NFTs tab works, but a collectible's animation has no play control and only its image shows.
+the NFTs tab works, but an animation has no play control: the NFT shows its image, or "Art
+unavailable" when it has none.
 Playing animations there means raising this floor back to 154 and excluding ESR again.
 
 **Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
