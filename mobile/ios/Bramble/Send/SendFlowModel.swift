@@ -367,12 +367,9 @@ final class SendFlowModel {
         case let .failed(failure):
             fail(with: failure)
 
-        case .rpc, .wait:
+        case .rpc, .wait, .device, .deviceRetry:
+            // The driver answers these (`SendDriver.run`); a device step comes back as `.failed`.
             break
-
-        case .device, .deviceRetry:
-            // No Ledger transport on mobile yet: a Ledger account's plan fails closed.
-            fail(with: SendFailure(code: .signingFailed, hash: nil))
         }
     }
 

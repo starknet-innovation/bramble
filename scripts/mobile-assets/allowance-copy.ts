@@ -1,15 +1,13 @@
 /**
- * The extension's allowance-manager copy (`portfolio.allowance.*`, `allowance-views.ts`) and the
- * two numbers its lines depend on, rendered for the mobile allowance screens (M19) so neither app
- * restates a string or a limit. `{count}` and `{amount}` are filled in by the apps exactly as the
- * side panel's `t()` fills them.
+ * The extension's allowance-manager copy (`portfolio.allowance.*`, `allowance-views.ts`), rendered
+ * for the mobile allowance screens (M19) so neither app restates a string. `{count}` and `{amount}`
+ * are filled in by the apps exactly as the side panel's `t()` fills them.
  *
  * Not here, by design: the revoke's review sentence, its risk lines and its refusals, which come
- * from the Rust core (`TransferPlan.currentReview`, `riskFlags`, `RevokeError`) and are shown
- * verbatim or through the generated friendly-error copy.
+ * from the Rust core (`TransferPlan.currentReview`, `riskFlags`, `RevokeError`'s Display) and are
+ * shown verbatim or through the generated friendly-error copy; and the unlimited cut-off and the
+ * retention cap, which the core exports (`AllowanceView.unlimited`, `allowance_entries_per_scope`).
  */
-import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
-import { ALLOWANCE_LIMITS } from "@bramble/transactions/allowance-store";
 // Not package exports: the English catalogs, read here only to pin the mobile copy to them.
 import { activityMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/activity";
 import { portfolioMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/portfolio";
@@ -52,11 +50,6 @@ export const allowanceCopy = (): Readonly<Record<string, string>> => ({
   settingsSection: settingsMessages.en["settings.dock.access"],
 });
 
-// `isUnlimitedAllowance`'s cut-off (2^128 - 1) as base-10 digits, and the per-account retention
-// cap the `retentionFull` notice names. Neither is exported by wallet-core v0.8.0.
-const UNLIMITED_FLOOR = UNLIMITED_ALLOWANCE_THRESHOLD.toString();
-const ENTRIES_PER_SCOPE = ALLOWANCE_LIMITS.entriesPerScope;
-
 const quoted = (value: string): string => JSON.stringify(value);
 
 /** `AllowanceCopy.generated.swift`. */
@@ -64,12 +57,10 @@ export const renderSwiftAllowanceCopy = (): string =>
   [
     `// ${HEADER}`,
     "",
-    "/// The extension's allowance-manager copy (`portfolio.allowance.*`) and limits; placeholders are",
-    "/// filled by the app.",
+    "/// The extension's allowance-manager copy (`portfolio.allowance.*`); placeholders are filled by",
+    "/// the app.",
     "enum AllowanceCopy {",
     ...sorted(allowanceCopy()).map(([key, value]) => `    static let ${key} = ${quoted(value)}`),
-    `    static let entriesPerScope = ${ENTRIES_PER_SCOPE}`,
-    `    static let unlimitedFloor = ${quoted(UNLIMITED_FLOOR)}`,
     "}",
     "",
   ].join("\n");
@@ -80,13 +71,11 @@ export const renderKotlinAllowanceCopy = (): string =>
     `// ${HEADER}`,
     "package org.bramble.wallet.allowances",
     "",
-    "/** The extension's allowance-manager copy (`portfolio.allowance.*`) and limits; placeholders are filled by the app. */",
+    "/** The extension's allowance-manager copy (`portfolio.allowance.*`); placeholders are filled by the app. */",
     "object AllowanceCopy {",
     ...sorted(allowanceCopy()).map(
       ([key, value]) => `    const val ${key} = ${quoted(value).replaceAll("$", "\\$")}`,
     ),
-    `    const val entriesPerScope = ${ENTRIES_PER_SCOPE}`,
-    `    const val unlimitedFloor = ${quoted(UNLIMITED_FLOOR)}`,
     "}",
     "",
   ].join("\n");

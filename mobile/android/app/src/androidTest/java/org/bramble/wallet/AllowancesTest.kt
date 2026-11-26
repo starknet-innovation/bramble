@@ -8,8 +8,10 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.bramble.core.NetworkId
+import org.bramble.core.RevokeException
 import org.bramble.wallet.allowances.AllowanceCopy
 import org.bramble.wallet.allowances.AllowancesScreen
+import org.bramble.wallet.allowances.RevokeFlowModel
 import org.bramble.wallet.design.BrambleTheme
 import org.bramble.wallet.send.SendCopy
 import org.json.JSONArray
@@ -55,6 +57,22 @@ class AllowancesTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.noBackupFilesDir.resolve("vault/allowances.v1.json").writeText(JSONArray().put(record).toString())
         return id
+    }
+
+    /**
+     * A refusal reads in the core's words (`RevokeError`'s `Display`, native since wallet-core
+     * v0.9.0, so not a JVM test) through the extension's friendly copy.
+     */
+    @Test
+    fun aRefusalReadsInTheCoresWords() {
+        assertEquals(
+            "That's an NFT contract, not a token. Revoke it from the site that asked.",
+            RevokeFlowModel.shown(RevokeException.Collection()),
+        )
+        assertEquals(
+            "Couldn't confirm that contract is a token, so the revoke wasn't sent. Revoke it from the site that asked.",
+            RevokeFlowModel.shown(RevokeException.UnconfirmedToken()),
+        )
     }
 
     @Test

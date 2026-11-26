@@ -142,44 +142,7 @@ final class RevokeFlowModel {
     /// extension's friendly copy.
     nonisolated static func shown(_ error: RevokeError) -> String {
         if case .Locked = error { return SendFailureText.message(SendFailure(code: .locked, hash: nil)) }
-        return FriendlyError.message(refusal(error))
-    }
-
-    /// The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.8.0
-    /// (`send/revoke.rs`), byte for byte. The bindings carry only `Refused`'s sentence (the batch
-    /// review's own); the other variants reach Swift without their text, so it is mirrored here
-    /// until the core exports it. The screen shows it through the extension's friendly copy
-    /// (`FriendlyError.message`), as the side panel does.
-    nonisolated static func refusal(_ error: RevokeError) -> String {
-        switch error {
-        case let .Refused(reason):
-            reason
-
-        case .Locked:
-            "wallet is locked"
-
-        case .UnknownAccount:
-            "unknown account"
-
-        case .Storage:
-            "a wallet file could not be read"
-
-        case .InvalidRequest:
-            "invalid revoke request"
-
-        case .OtherAccount:
-            "switch to the account that granted this allowance"
-
-        case .NotFound:
-            "allowance not found"
-
-        case .Collection:
-            "this contract is an NFT collection, not a token; revoke it from the dapp"
-
-        case .UnconfirmedToken:
-            "this wallet could not confirm that contract is a token, so it will not send a revoke "
-                + "that could approve an NFT instead; revoke it from the dapp"
-        }
+        return FriendlyError.message(error.description)
     }
 
     private func settle(_ plan: TransferPlan, _ outcome: () async throws -> SendStep) async {
@@ -219,11 +182,8 @@ final class RevokeFlowModel {
         case let .failed(failure):
             fail(failure)
 
-        case .device, .deviceRetry:
-            // No Ledger transport on mobile yet: a Ledger account's plan fails closed.
-            fail(SendFailure(code: .signingFailed, hash: nil))
-
-        case .rpc, .wait:
+        case .rpc, .wait, .device, .deviceRetry:
+            // The driver answers these (`SendDriver.run`); a device step comes back as `.failed`.
             break
         }
     }

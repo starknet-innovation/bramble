@@ -2,6 +2,7 @@ package org.bramble.wallet.coordination
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -100,7 +101,18 @@ private fun MultisigStack(
     val open = { next: MultisigFlow -> stack = stack + next }
     val pop = { stack = stack.dropLast(1) }
     BackHandler(enabled = stack.isNotEmpty()) { pop() }
-    when (val top = stack.lastOrNull()) {
+    CompositionLocalProvider(LocalMultisigOpen provides open) { Top(store, stack.lastOrNull(), root, open, pop) }
+}
+
+@Composable
+private fun Top(
+    store: WalletStore,
+    top: MultisigFlow?,
+    root: @Composable (open: (MultisigFlow) -> Unit) -> Unit,
+    open: (MultisigFlow) -> Unit,
+    pop: () -> Unit,
+) {
+    when (top) {
         null -> root(open)
         MultisigFlow.AddShared -> AddSharedAccountScreen(store, back = pop)
         is MultisigFlow.Create -> CreateMultisigScreen(store, top.resume, back = pop)

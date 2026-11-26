@@ -20,6 +20,7 @@ built in app code.
 | Co-sign | `multisig_intent_read(intent_id, now_ms)`, then `sign_multisig_intent(intent_id, signer_account_id, state)` | `sign` |
 | Submit | `multisig_intent_read`, then `submit_multisig_intent(intent_id, state)` → `MultisigSubmission` | `submit` |
 | Import | `MultisigStateRead::new(network, address)`, then `import_multisig_intent(package, state, tokens)` | `importIntent` |
+| Card review | `MultisigAuthorityRead` of `MultisigIntent.sender`, then `multisig_intent_review(intent_id, tokens, read)` → `MultisigIntentReview` (wallet-core #146, `v0.9.0`) | `review` |
 
 iOS: `App/CoordinationStore+Transactions.swift`, `Screens/Multisig/MultisigProposeView.swift`
 (composer, signers, import), `MultisigIntentView.swift` (the card), `MultisigTxText.swift` (copy).
@@ -45,9 +46,27 @@ Copy is the extension's (`i18n/messages/multisig*.ts`, `review-steps-multisig.ts
   add a key ("Approvals after adding"), remove the selected key ("Approvals after removal"), and
   "Change approvals required". Success: "Signer change ready for multisig review".
 - **Import transaction.** "Intent package", the extension's import note, "Verify and import".
-- **Intent card.** The core's summary, "Out of date" when stale, "Signatures", "Maximum network
-  fee" (`FeeAmount.display`), one action, "Copy transaction package" while collecting or ready, and
-  "Technical details" (hash, nonce, each call's entrypoint, contract and calldata).
+- **Intent card.** Its label ("Fee-updated transaction" for an open intent whose exact action a
+  stale one froze, the extension's `sameAction`; "Out of date" when stale; none otherwise, since
+  the page title already says "Reviewed transaction"), the core's summary, each call's summary
+  from the core's review, the risk panel (Send's "Risk and recovery": the core's flags, in its
+  words), "Cost" ("Maximum network fee" from `FeeAmount.display`, then "Signatures"), one action,
+  "Copy transaction package" while collecting or ready, and "Technical details" (hash, sender with
+  "Copy sender", chain ID, nonce, call count, each call's entrypoint, contract and calldata; iOS
+  shows the hash and sender whole, Android shortened). The chain ID is the multisig network's
+  (`supportedNetworks`), which the core verifies every endpoint against before it freezes an
+  intent. The review is read when the card shows and whenever the intent changes, against a fresh
+  authority read of the sender. Until it says the chain's signers still match
+  (`hasFreshAuthority`), the card offers neither Sign nor Submit; when they do not, or the review
+  cannot be read, the panel ends with "The on-chain signers no longer match this transaction.
+  Signing and submission are disabled.", the note reads "The signers changed since this
+  transaction was frozen. Signing and submission stay blocked.", and the one action is "Review
+  current signers", which opens the multisig's Signers screen, as the extension's card. The card's
+  sentences are generated from the extension (`MultisigCopy.generated.*`,
+  `scripts/mobile-assets/multisig-copy.ts`).
+- **Not yet ported.** The extension's signer-change review (threshold and signers before and
+  after, the exact additions and removals) and the class hash row: the core does not expose a
+  stored intent's config snapshot or decoded change.
 
 ## 3. Guards (all the core's; the apps only show them)
 
@@ -105,8 +124,12 @@ failed read leaves the intent submitted, and the next list reads it again.
   with `confirm_resend`. A submitted intent must become accepted once the node reports its
   transaction accepted, through the app's settle (`MultisigTxDriver.settle` / `settleSubmitted`),
   with no further write.
+- iOS `MultisigTransactionsTests` also reads the card's review through the app's authority read:
+  the sender is the multisig, the transfer's call is summarised, Sign is offered while the signers
+  match and withdrawn with the signers-changed sentence once the fake node's threshold moves, and
+  a transfer to the multisig itself raises the core's self-transfer flag in the panel.
 - Android `test/.../MultisigTxTextTest.kt` holds the card's action, note and status for each state,
-  plus the failure copy.
+  the signers-changed rule and panel, plus the failure copy.
 - iOS `BrambleUITests/MultisigTransactionsFlowTests.swift` proposes and signs on the stub 1-of-1
   `0x123` (`-BrambleStubNetwork`, which now also answers the nonce, the recorded fee estimate, and
   "hash not found"), sees the intent ready in Transactions, and has a garbage package refused.

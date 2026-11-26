@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import org.bramble.core.AllowanceList
 import org.bramble.core.AllowanceView
 import org.bramble.core.TokenConfig
+import org.bramble.core.allowanceEntriesPerScope
 import org.bramble.core.compactAmount
 import org.bramble.core.formatTokenAmount
 import org.bramble.core.validateRecipient
@@ -131,7 +132,7 @@ private fun Listing(
         }
 
         else -> {
-            list.notices.forEach { StatusLine(AllowanceCopy.notice(it)) }
+            list.notices.forEach { StatusLine(AllowanceCopy.notice(it, allowanceEntriesPerScope())) }
             if (list.allowances.isEmpty()) {
                 Empty(AllowanceCopy.noneFound)
             } else {

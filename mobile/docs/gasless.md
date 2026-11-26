@@ -86,8 +86,6 @@ All strings are generated (`scripts/mobile-send-copy.ts` → `SendCopy`): `payUp
   them, and nothing starts one.
 - **The "Signed for relay" dock** (`relay-rows.ts`) lists messages signed for a dapp; mobile signs
   none (P16).
-- A relay row awaiting its hash links its signed message's hash to the explorer like any row; the
-  core's row appearance does not yet drop that link (flagged for wallet-core).
 
 ## Tests
 

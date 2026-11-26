@@ -23,7 +23,8 @@ actor SendDriver {
     }
 
     /// Advances the plan from `reply` until it needs the user (`Review`, `Broadcast`, `Finished`,
-    /// `Failed`). `onStep` sees every RPC step before it is sent, so the UI can follow progress.
+    /// `Failed`); a device step is `Failed` as `signingFailed`. `onStep` sees every RPC step before
+    /// it is sent, so the UI can follow progress.
     func run(
         from initial: StepReply,
         onStep: @Sendable (SendStep) async -> Void = { _ in /* No progress to follow. */ }
@@ -39,6 +40,11 @@ actor SendDriver {
             case let .wait(delayMs):
                 try await Task.sleep(for: .milliseconds(Int(delayMs)))
                 reply = .waitElapsed
+
+            case .device, .deviceRetry:
+                // Mobile signs on no device (P8): a Ledger account's plan ends here, unsigned, for
+                // every flow this driver runs.
+                return .failed(failure: SendFailure(code: .signingFailed, hash: nil))
 
             default:
                 return step

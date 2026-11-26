@@ -1,18 +1,10 @@
 import BrambleCore
 
-/// The allowance manager's row lines, as the extension's `allowance-views.ts`. The words and the two
-/// limits are generated from the extension (`AllowanceCopy.generated.swift`). Pure over the core's
-/// `AllowanceView`: every amount, source and flag is the core's; this only picks the line. Review,
+/// The allowance manager's row lines, as the extension's `allowance-views.ts`. The words are
+/// generated from the extension (`AllowanceCopy.generated.swift`). Pure over the core's
+/// `AllowanceView`: every amount, source, flag and limit is the core's; this only picks the line. Review,
 /// risk and refusal sentences are not here: those are the core's own (`RevokeFlowModel`).
 extension AllowanceCopy {
-    /// `isUnlimitedAllowance`: a plain base-10 amount at or above 2^128 - 1 (`unlimitedFloor`, which
-    /// wallet-core v0.8.0 does not export; `AllowanceFlowTests` also holds it to the fixture).
-    static func isUnlimited(_ amount: String) -> Bool {
-        guard !amount.isEmpty, amount.allSatisfy(\.isASCII), amount.allSatisfy(\.isNumber) else { return false }
-        let digits = String(amount.drop { $0 == "0" })
-        return digits.count != unlimitedFloor.count ? digits.count > unlimitedFloor.count : digits >= unlimitedFloor
-    }
-
     /// `displayAmount`: the token's units when it is tracked, else raw base units, said so.
     static func display(_ amount: String, token: TokenConfig?) -> String {
         if let token, amount.allSatisfy(\.isNumber),
@@ -24,7 +16,7 @@ extension AllowanceCopy {
 
     /// `amountLabel`: unlimited wins; a lower bound says so, and a bound of zero is unknown.
     static func amount(_ view: AllowanceView, token: TokenConfig?) -> String {
-        if isUnlimited(view.amount) { return unlimited }
+        if view.unlimited { return unlimited }
         if !view.lowerBound { return display(view.amount, token: token) }
         if view.amount == "0" { return unknownAmount }
         return atLeast.replacingOccurrences(of: "{amount}", with: display(view.amount, token: token))
@@ -50,8 +42,8 @@ extension AllowanceCopy {
         return "\(amount(view, token: token))\(contract) · \(source(view.source))"
     }
 
-    /// `noticeCopy`.
-    static func notice(_ notice: AllowanceNotice) -> String {
+    /// `noticeCopy`; `entriesPerScope` is the core's retention cap (`allowanceEntriesPerScope()`).
+    static func notice(_ notice: AllowanceNotice, entriesPerScope: UInt32 = allowanceEntriesPerScope()) -> String {
         switch notice {
         case .multisigUnread:
             multisigUnread

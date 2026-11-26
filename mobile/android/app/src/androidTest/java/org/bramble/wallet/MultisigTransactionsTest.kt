@@ -141,7 +141,7 @@ class MultisigTransactionsTest {
             }
             assertEquals(IntentState.READY, intent.state)
             assertEquals(proposal.getString("readyPackage"), intent.`package`)
-            assertEquals(IntentAction.SUBMIT, MultisigTxText.action(intent, false, true).first)
+            assertEquals(IntentAction.SUBMIT, MultisigTxText.action(intent, false, true, fresh = true).first)
             val submission = core.submitMultisigIntent(intent.id, intentRead(intent.id))
             val sent = runPlan(network, node) { submission.advance(it) }
             assertEquals(MultisigTxStep.Submitted(proposal.getString("transactionHash")), sent)
@@ -180,7 +180,7 @@ class MultisigTransactionsTest {
             val read = intentRead(id)
             assertThrows(Exception::class.java) { core.signMultisigIntent(id, signer(1), read) }
             assertEquals(StaleReason.NONCE, stored(id).staleReason)
-            assertEquals(IntentAction.NONE, MultisigTxText.action(stored(id), true, true).first)
+            assertEquals(IntentAction.NONE, MultisigTxText.action(stored(id), true, true, fresh = true).first)
             assertEquals(MultisigTxStep.Failed(MultisigTxFailure.RESEND_UNCONFIRMED), propose())
             assertEquals(MultisigTxStep.Proposed::class, propose(confirmResend = true)::class)
             assertEquals("proposing never writes", 0, node.writes.get())

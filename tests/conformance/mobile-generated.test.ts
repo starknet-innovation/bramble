@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { readMobileAssetSources, renderMobileAssets } from "../../scripts/mobile-assets";
 import { mobilePrivacyRoutes } from "../../scripts/mobile-assets/privacy";
+import { MOBILE_PROVIDER_PATH } from "../../scripts/mobile-assets/provider";
 import { FACE_ID_USAGE, SECURITY_POLICY } from "../../scripts/mobile-assets/security-copy";
 import {
   computeParityAccounts,
@@ -42,6 +43,11 @@ describe("mobile generated sources", async () => {
       expect(await readFile(path, "utf8")).toBe(expected);
     });
   }
+  test(`${MOBILE_PROVIDER_PATH} is the extension's in-page provider behind the mobile bridge`, async () => {
+    const render = Bun.spawnSync(["bun", "scripts/mobile-assets/provider.ts"]);
+    expect(render.exitCode).toBe(0);
+    expect(await readFile(MOBILE_PROVIDER_PATH, "utf8")).toBe(render.stdout.toString());
+  }, 30_000);
 });
 
 describe("mobile core parity", () => {

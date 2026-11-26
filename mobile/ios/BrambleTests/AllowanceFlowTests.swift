@@ -227,6 +227,10 @@ final class AllowanceFlowTests: XCTestCase {
         XCTAssertEqual(revoke.message, lockLine)
         XCTAssertNotEqual(revoke.message, FriendlyError.message("wallet is locked"))
         XCTAssertEqual(RevokeFlowModel.shown(.Locked), lockLine)
+        // Any other refusal is the core's own sentence (`RevokeError`'s Display), read through the
+        // extension's friendly copy.
+        XCTAssertEqual(RevokeError.NotFound.description, "allowance not found")
+        XCTAssertEqual(RevokeFlowModel.shown(.NotFound), FriendlyError.message("allowance not found"))
         XCTAssertFalse(node.posts.contains(where: \.write))
     }
 
@@ -237,21 +241,6 @@ final class AllowanceFlowTests: XCTestCase {
         XCTAssertEqual(listed.notices, [.scanIncomplete])
         XCTAssertEqual(listed.allowances.map(\.amount), ["1000"])
         XCTAssertEqual(AllowanceCopy.notice(.scanIncomplete), AllowanceCopy.scanIncomplete)
-    }
-
-    func testUnlimitedFollowsTheFixture() throws {
-        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "extension-allowances", withExtension: "jsonl"))
-        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
-        let entries = try lines.compactMap { line in
-            try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
-        }
-        let cases = entries.filter { $0["block"] as? String == "unlimited" }
-        XCTAssertEqual(cases.count, 6)
-        for entry in cases {
-            let amount: String = try fixtureValue(entry, "amount")
-            let unlimited: Bool = try fixtureValue(entry, "unlimited")
-            XCTAssertEqual(AllowanceCopy.isUnlimited(amount), unlimited, amount)
-        }
     }
 
     func testRowsReadAsTheExtensions() throws {
@@ -273,7 +262,7 @@ final class AllowanceFlowTests: XCTestCase {
         XCTAssertFalse(AllowanceCopy.canRevoke(view(amount: "1", source: .multisig)))
         XCTAssertFalse(AllowanceCopy.canRevoke(view(amount: "1", unconfirmed: true)))
         XCTAssertEqual(
-            AllowanceCopy.notice(.retentionFull),
+            AllowanceCopy.notice(.retentionFull, entriesPerScope: allowanceEntriesPerScope()),
             "This wallet keeps 50 approvals per account and drops the smallest first, so some may be missing."
         )
     }

@@ -82,8 +82,19 @@ enum MultisigTxText {
 
     /// `intentAction`: what the intent card offers and the note beside it. Mobile proposes a fresh
     /// transaction from the composer rather than re-pricing a stale one, so a stale card says it is
-    /// out of date and, when fully signed, offers the unchanged-fee retry only.
-    static func action(_ intent: MultisigIntent, canSign: Bool, holdsSigner: Bool) -> (IntentAction, String?) {
+    /// out of date and, when fully signed, offers the unchanged-fee retry only. `signers` is the
+    /// card's review (`MultisigIntentReview.hasFreshAuthority`): `.changed`, which a review that
+    /// could not be read also is, offers nothing to sign or submit, only the current signers, as the
+    /// extension's card; `.reading` offers nothing yet.
+    static func action(
+        _ intent: MultisigIntent,
+        canSign: Bool,
+        holdsSigner: Bool,
+        signers: SignerCheck
+    ) -> (IntentAction, String?) {
+        if isOpen(intent), signers != .match {
+            return signers == .changed ? (.reviewSigners, MultisigCopy.noteSignersChanged) : (.nothing, nil)
+        }
         switch intent.state {
         case .ready:
             return (.submit, nil)
@@ -110,6 +121,33 @@ enum MultisigTxText {
         case .submitted, .accepted, .rejected:
             return (.nothing, "Nothing left to do here.")
         }
+    }
+
+    /// The card's label (`intentCard`'s kicker): a fee-updated version of an attempt that went
+    /// stale, or a stale one; nil for an ordinary reviewed transaction, which the screen's title
+    /// already names.
+    static func kicker(_ intent: MultisigIntent, among intents: [MultisigIntent]) -> String? {
+        if isFeeReplacement(intent, among: intents) { return MultisigCopy.cardFeeUpdated }
+        return intent.state == .stale ? MultisigCopy.staleLabel : nil
+    }
+
+    /// `isFeeReplacementIntent`: an open intent whose exact action a stale one of the same multisig
+    /// already froze (`sameAction`). The core stores calls, nonce and signer GUIDs canonical, so
+    /// plain equality is the extension's felt comparison.
+    static func isFeeReplacement(_ intent: MultisigIntent, among intents: [MultisigIntent]) -> Bool {
+        [.collecting, .ready].contains(intent.state) && intents.contains { stale in
+            stale.state == .stale && stale.id != intent.id && stale.multisigId == intent.multisigId
+                && stale.threshold == intent.threshold && stale.signerGuids == intent.signerGuids
+                && stale.nonce == intent.nonce && stale.calls == intent.calls
+        }
+    }
+
+    /// The card's risk panel (`reviewPanel`): the core's flags, then, unless the chain's signers
+    /// still match the intent, the extension's signers-changed sentence. A review that could not be
+    /// read says the same, since nothing proves the signers still match.
+    static func risks(_ review: MultisigIntentReview?) -> [String] {
+        (review?.riskFlags.map(\.message) ?? [])
+            + (review?.hasFreshAuthority == true ? [] : [MultisigCopy.cardSignersChanged])
     }
 
     /// How a plan ended, in the extension's words. Send's generated copy where the failure is the
@@ -149,5 +187,12 @@ enum MultisigTxText {
     }
 }
 
+/// Whether the chain's signers still match an intent, as the card's review last said.
+enum SignerCheck: Equatable {
+    case reading, match, changed
+
+    init(_ review: MultisigIntentReview?) { self = review?.hasFreshAuthority == true ? .match : .changed }
+}
+
 /// The one action an intent card offers.
-enum IntentAction: Equatable { case sign, submit, retryUnchangedFee, copyPackage, nothing }
+enum IntentAction: Equatable { case sign, submit, retryUnchangedFee, copyPackage, reviewSigners, nothing }
