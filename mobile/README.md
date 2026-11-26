@@ -16,6 +16,11 @@ and `core/tests/fixtures/extension-parity.json`) come from the extension's TypeS
 Never edit them by hand: run `bun run mobile:assets` or `bun run mobile:parity` from the repo
 root. `bun run check` fails when they drift.
 
+`core/tests/fixtures/extension-ledger.jsonl` is recorded by hand with `bun run mobile:ledger`
+against the Starknet app under Speculos. It needs Docker and `bun run vendor:ledger-app nanosp`
+(on Apple Silicon Docker runs the image as `linux/amd64`). wallet-core's `ledger_parity.rs`
+replays it; nothing here checks it for drift.
+
 ## Linting
 
 Swift and Kotlin are linted strictly by pinned tools: SwiftLint 0.65.1, ktlint 1.8.0 (official
@@ -54,6 +59,13 @@ build, XcodeGen, `BrambleTests` on a simulator and SwiftLint's analyzer rules on
 Android core build plus `./gradlew :app:testDebugUnitTest`, then `android-device`, which runs the
 instrumented suite on an API 35 x86_64 emulator on Linux with the core the `android` job built. The
 iOS UI tests (`BrambleUITests`) stay local.
+
+To keep runs short: draft PRs run only the Linux `core` job, and the macOS jobs start when the PR is
+marked ready for review. A PR touching only `mobile/ios` or only `mobile/android` skips the other
+platform. CI builds just the simulator and x86_64 slices (`BRAMBLE_IOS_TARGETS`,
+`BRAMBLE_ANDROID_ABIS`) and caches them by their inputs, so a run whose `mobile/core` and build
+scripts are unchanged skips the Rust build. SwiftLint's analyzer rules run on pushes only, so run
+`swift-analyze` (above) before pushing Swift changes.
 
 ## Rust core
 

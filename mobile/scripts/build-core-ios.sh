@@ -6,13 +6,14 @@
 #   mobile/ios/Generated/Swift/BrambleCore.swift      UniFFI bindings compiled into the app
 #
 # Usage: mobile/scripts/build-core-ios.sh [release|debug]   (default: release)
+# BRAMBLE_IOS_TARGETS (space-separated) narrows the targets; CI builds only the simulator slice.
 set -euo pipefail
 
 PROFILE="${1:-release}"
 MOBILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE_DIR="$MOBILE_DIR/core"
 OUT_DIR="$MOBILE_DIR/ios/Generated"
-TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim)
+read -r -a TARGETS <<<"${BRAMBLE_IOS_TARGETS:-aarch64-apple-ios aarch64-apple-ios-sim}"
 CARGO_FLAGS=(--locked -p bramble-core --lib)
 [[ "$PROFILE" == "release" ]] && CARGO_FLAGS+=(--release)
 
@@ -38,9 +39,11 @@ module bramble_coreFFI {
 MAP
 rm -rf "$OUT_DIR/bindings"
 
-xcodebuild -create-xcframework \
-  -library "$CORE_DIR/target/aarch64-apple-ios/$PROFILE/libbramble_core.a" -headers "$OUT_DIR/headers" \
-  -library "$CORE_DIR/target/aarch64-apple-ios-sim/$PROFILE/libbramble_core.a" -headers "$OUT_DIR/headers" \
+xcframework_args=()
+for target in "${TARGETS[@]}"; do
+  xcframework_args+=(-library "$CORE_DIR/target/$target/$PROFILE/libbramble_core.a" -headers "$OUT_DIR/headers")
+done
+xcodebuild -create-xcframework "${xcframework_args[@]}" \
   -output "$OUT_DIR/BrambleCoreFFI.xcframework" >/dev/null
 
 echo "iOS core ($PROFILE) -> $OUT_DIR"

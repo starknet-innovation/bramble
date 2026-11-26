@@ -272,8 +272,9 @@ class Robot(
     /** The home screen, whose account name is the core's address-derived nickname. */
     fun waitForHome(timeoutMs: Long = 20_000) = waitForText("Tokens", timeoutMs)
 
+    /** Restore reads mainnet RPC like the search does, so it gets the search's budget. */
     fun finishAndCheckHome() {
-        waitForText("You’re all set", 20_000)
+        waitForText("You’re all set", 120_000)
         snapshot("complete")
         tap("Open Bramble")
         waitForHome()

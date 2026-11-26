@@ -7,13 +7,14 @@
 #
 # Requires the Android NDK (ANDROID_NDK_HOME) and `cargo install cargo-ndk --version 4.1.2 --locked`.
 # Usage: mobile/scripts/build-core-android.sh [release|debug]   (default: release)
+# BRAMBLE_ANDROID_ABIS (space-separated) narrows the ABIs; CI builds only the emulator's x86_64.
 set -euo pipefail
 
 PROFILE="${1:-release}"
 MOBILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE_DIR="$MOBILE_DIR/core"
 APP_DIR="$MOBILE_DIR/android/app"
-ABIS=(arm64-v8a x86_64)
+read -r -a ABIS <<<"${BRAMBLE_ANDROID_ABIS:-arm64-v8a x86_64}"
 CARGO_FLAGS=(--locked -p bramble-core --lib)
 [[ "$PROFILE" == "release" ]] && CARGO_FLAGS+=(--release)
 
