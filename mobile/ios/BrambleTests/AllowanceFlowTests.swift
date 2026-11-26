@@ -120,6 +120,7 @@ final class AllowanceFlowTests: XCTestCase {
 
     private func view(
         amount: String,
+        unlimited: Bool = false,
         lowerBound: Bool = false,
         source: AllowanceSource = .wallet,
         unconfirmed: Bool = false,
@@ -132,6 +133,7 @@ final class AllowanceFlowTests: XCTestCase {
             token: Self.strk,
             spender: Self.spender,
             amount: amount,
+            unlimited: unlimited,
             lowerBound: lowerBound,
             revoking: false,
             source: source,
@@ -256,7 +258,7 @@ final class AllowanceFlowTests: XCTestCase {
         let tracked = TokenPreferences(persisted: nil).tracked(network: .sepolia).map(\.token)
         let token = try XCTUnwrap(tracked.first { $0.symbol == "STRK" })
         XCTAssertEqual(AllowanceCopy.amount(view(amount: "1000000000000000000"), token: token), "1 STRK")
-        let floor = view(amount: "340282366920938463463374607431768211455")
+        let floor = view(amount: "340282366920938463463374607431768211455", unlimited: true)
         XCTAssertEqual(AllowanceCopy.amount(floor, token: token), "Unlimited")
         XCTAssertEqual(AllowanceCopy.amount(view(amount: "0", lowerBound: true), token: token), "an unknown amount")
         XCTAssertEqual(
