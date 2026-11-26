@@ -20,13 +20,14 @@ import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.FlowHeader
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.heldAddresses
-import org.bramble.wallet.ledger.LedgerStage
+import org.bramble.wallet.ledger.LedgerRoute
 import org.bramble.wallet.ui.onboarding.OnboardingStep
 import org.bramble.wallet.ui.onboarding.StepHeading
 
 /**
- * Onboarding's Ledger step, twin of iOS `LedgerOnboardingStep`: connect and pick, then the
- * passphrase step creates the wallet. The connection ends when the picks are taken.
+ * Onboarding's Ledger step, twin of iOS `LedgerOnboardingStep`: connect and pick, reading both
+ * Bramble's and Ready's schemes as the extension's first-run setup does, then the passphrase step
+ * creates the wallet. The connection ends when the picks are taken.
  */
 @Composable
 fun LedgerOnboardingStep(
@@ -34,10 +35,10 @@ fun LedgerOnboardingStep(
     back: () -> Unit,
     next: (List<LedgerAccountRequest>) -> Unit,
 ) {
-    val model = rememberLedgerModel(store.network, emptySet())
+    val model = rememberLedgerModel(store, LedgerRoute.FIRST_RUN, emptySet())
     OnboardingStep(
         back = back,
-        heading = StepHeading(BrambleIconName.SHIELD, LedgerCopy.title(model.stage), LedgerCopy.lede(model.stage)),
+        heading = StepHeading(BrambleIconName.SHIELD, LedgerCopy.title(model), LedgerCopy.lede(model)),
         content = { LedgerConnectContent(model) },
         cta = {
             LedgerConnectAction(model, "Continue") { requests ->
@@ -48,22 +49,26 @@ fun LedgerOnboardingStep(
     )
 }
 
-/** Add account's "Ledger account", twin of iOS `LedgerAddAccountFlow`: connect, pick, add. */
+/**
+ * Add account's "Ledger account" ([LedgerRoute.BRAMBLE]) and Import's "Ready Ledger account"
+ * ([LedgerRoute.READY]), twin of iOS `LedgerAddAccountFlow`: connect, pick, add.
+ */
 @Composable
 fun LedgerAddAccountFlow(
     store: WalletStore,
+    route: LedgerRoute,
     back: () -> Unit,
     added: () -> Unit,
 ) {
-    val model = rememberLedgerModel(store.network, store.heldAddresses)
+    val model = rememberLedgerModel(store, route, store.heldAddresses)
     var adding by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-        FlowHeader(LedgerCopy.title(model.stage), network = store.networkLabel, back = back)
+        FlowHeader(LedgerCopy.title(model), network = store.networkLabel, back = back)
         Column(
             Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(BrambleSpace.md),
         ) {
-            if (model.stage != LedgerStage.Picking) StatusLine(LedgerCopy.LEDE)
+            StatusLine(LedgerCopy.lede(model))
             LedgerConnectContent(model)
         }
         val count = model.chosen.size

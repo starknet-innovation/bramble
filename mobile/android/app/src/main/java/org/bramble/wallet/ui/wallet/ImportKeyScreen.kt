@@ -27,18 +27,20 @@ import org.bramble.wallet.design.SecretKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.ui.ledger.LedgerCopy
 import org.bramble.wallet.ui.onboarding.clearClipboard
 
 /**
  * `importAccountChooser`, twin of iOS `ImportAccountChooser`: the second stage of "Import an
- * existing account". Mobile imports a private key; another recovery phrase is shown as coming, as
- * onboarding shows what it lacks. "Find my other accounts" and "Ready Ledger account" are left out.
+ * existing account". Mobile imports a private key or a Ready Ledger account; another recovery
+ * phrase is shown as coming, as onboarding shows what it lacks. "Find my other accounts" is left out.
  */
 @Composable
 fun ImportAccountChooser(
     store: WalletStore,
     back: () -> Unit,
     importKey: () -> Unit,
+    readyLedger: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         FlowHeader("Import an existing account", network = store.networkLabel, back = back)
@@ -49,6 +51,7 @@ fun ImportAccountChooser(
             "Import a single account from its raw Starknet key.",
             onClick = importKey,
         )
+        OptionCard(BrambleIconName.SHIELD, LedgerCopy.READY_TITLE, LedgerCopy.READY_DETAIL, onClick = readyLedger)
     }
 }
 

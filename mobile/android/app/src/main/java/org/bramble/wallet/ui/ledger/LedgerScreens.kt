@@ -1,5 +1,6 @@
 package org.bramble.wallet.ui.ledger
 
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,22 +14,28 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import org.bramble.core.AccountFamily
 import org.bramble.core.LedgerAccountRequest
-import org.bramble.core.LedgerCandidate
+import org.bramble.core.LedgerKey
 import org.bramble.core.LedgerKeyReader
 import org.bramble.core.LedgerScheme
-import org.bramble.core.NetworkId
+import org.bramble.core.NetworkInfo
 import org.bramble.core.accountLabel
 import org.bramble.core.ledgerAccountCandidates
+import org.bramble.wallet.RpcClient
+import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.CheckRow
+import org.bramble.wallet.design.Disclosure
 import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.MenuGroup
@@ -42,31 +49,42 @@ import org.bramble.wallet.ledger.LedgerBleDriver
 import org.bramble.wallet.ledger.LedgerBleScanner
 import org.bramble.wallet.ledger.LedgerBluetooth
 import org.bramble.wallet.ledger.LedgerConnectModel
+import org.bramble.wallet.ledger.LedgerCore
 import org.bramble.wallet.ledger.LedgerGattLink
+import org.bramble.wallet.ledger.LedgerGroup
 import org.bramble.wallet.ledger.LedgerLinkException
+import org.bramble.wallet.ledger.LedgerRoute
+import org.bramble.wallet.ledger.LedgerRow
 import org.bramble.wallet.ledger.LedgerStage
+import org.bramble.wallet.ledger.ledgerActivity
 import org.bramble.wallet.ledger.ledgerBluetoothPermissions
+import org.bramble.wallet.ledger.title
 
 /**
- * The live model for a screen: Android Bluetooth, a new link and driver per connection, and
- * Bramble (OpenZeppelin) accounts placed on [network]. Asks for the Bluetooth permissions once,
- * when first shown without them, and ends the connection and scan when the screen leaves.
+ * The live model for [route]: Android Bluetooth, a new link and driver per connection, accounts
+ * placed on the store's network, and each address checked through its RPC (deployed, and the
+ * network's known tokens, as the extension's `readLedgerAccountState`). Asks once, when first
+ * shown, for the Bluetooth permissions or for Bluetooth to be turned on, and ends the connection
+ * and scan when the screen leaves.
  */
 @Composable
 fun rememberLedgerModel(
-    network: NetworkId,
+    store: WalletStore,
+    route: LedgerRoute,
     existing: Set<String>,
 ): LedgerConnectModel {
     val context = LocalContext.current
     val scanner = remember { LedgerBleScanner(context) }
-    val model = remember { liveModel(context, scanner, network, existing) }
+    val model = remember { liveModel(context, scanner, route, LiveLedgerCore(store.rpc, store.networkInfo), existing) }
     val permissions =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             model.bluetoothChanged()
         }
     LaunchedEffect(Unit) {
-        if (model.stage == LedgerStage.Bluetooth(LedgerBluetooth.UNAUTHORIZED)) {
-            permissions.launch(ledgerBluetoothPermissions())
+        when (model.stage) {
+            LedgerStage.Bluetooth(LedgerBluetooth.UNAUTHORIZED) -> permissions.launch(ledgerBluetoothPermissions())
+            LedgerStage.Bluetooth(LedgerBluetooth.OFF) -> askToTurnOnBluetooth(context)
+            else -> Unit
         }
     }
     DisposableEffect(Unit) {
@@ -78,12 +96,33 @@ fun rememberLedgerModel(
     return model
 }
 
+/** The core and chain calls the live model makes. */
+private class LiveLedgerCore(
+    private val rpc: RpcClient,
+    private val network: NetworkInfo,
+) : LedgerCore {
+    override fun reader(
+        scheme: LedgerScheme,
+        startIndex: UInt,
+        count: UInt,
+    ) = LedgerKeyReader(scheme, startIndex, count)
+
+    override fun place(
+        keys: List<LedgerKey>,
+        family: AccountFamily,
+    ) = ledgerAccountCandidates(network.network, family, keys)
+
+    override suspend fun describe(address: String) = rpc.ledgerActivity(address, network)
+}
+
 private fun liveModel(
     context: Context,
     scanner: LedgerBleScanner,
-    network: NetworkId,
+    route: LedgerRoute,
+    core: LedgerCore,
     existing: Set<String>,
 ) = LedgerConnectModel(
+    route = route,
     scanner = scanner,
     connect = { ledger ->
         val device = scanner.device(ledger) ?: throw LedgerLinkException.Failed()
@@ -91,8 +130,7 @@ private fun liveModel(
         link.connect()
         LedgerBleDriver(link)
     },
-    reader = { start, count -> LedgerKeyReader(LedgerScheme.BRAMBLE, start, count) },
-    place = { keys -> ledgerAccountCandidates(network, AccountFamily.OPEN_ZEPPELIN, keys) },
+    core = core,
     existing = existing,
 )
 
@@ -105,8 +143,22 @@ fun ColumnScope.LedgerConnectContent(model: LedgerConnectModel) {
         is LedgerStage.Bluetooth -> {
             val tone = if (stage.state == LedgerBluetooth.UNKNOWN) StatusTone.MUTED else StatusTone.DANGER
             StatusLine(LedgerCopy.bluetooth(stage.state), tone)
-            if (stage.state == LedgerBluetooth.UNAUTHORIZED) {
-                PillButton("Open Settings", kind = PillKind.SECONDARY) { openAppSettings(context) }
+            when (stage.state) {
+                LedgerBluetooth.UNAUTHORIZED -> {
+                    PillButton("Open Settings", kind = PillKind.SECONDARY) { openAppSettings(context) }
+                }
+
+                LedgerBluetooth.OFF -> {
+                    PillButton("Turn on Bluetooth", kind = PillKind.SECONDARY) { askToTurnOnBluetooth(context) }
+                }
+
+                LedgerBluetooth.LOCATION_OFF -> {
+                    PillButton("Open Settings", kind = PillKind.SECONDARY) {
+                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    }
+                }
+
+                else -> {}
             }
         }
 
@@ -138,12 +190,7 @@ fun ColumnScope.LedgerConnectContent(model: LedgerConnectModel) {
         }
 
         LedgerStage.Picking -> {
-            Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-                model.candidates.forEach { CandidateRow(model, it) }
-                PillButton("Show more", kind = PillKind.SECONDARY, busy = model.loadingMore) {
-                    scope.launch { model.more() }
-                }
-            }
+            LedgerAccountList(model)
         }
     }
 }
@@ -162,25 +209,73 @@ fun LedgerConnectAction(
     }
 }
 
-/** `.select-row`: checkbox, "Account <index>", the 6…4 address; one already held is disabled. */
+/**
+ * `ledgerAccountPicker`: the route's groups (Bramble and Argent or Ready accounts, each a
+ * disclosure that opens once it has an active account), or Ready's one list, then "Show more".
+ */
 @Composable
-private fun CandidateRow(
+private fun LedgerAccountList(model: LedgerConnectModel) {
+    val scope = rememberCoroutineScope()
+    var opened by remember { mutableStateOf(emptySet<String>()) }
+    Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
+        model.groups.forEach { group ->
+            if (model.route == LedgerRoute.READY) {
+                StatusLine(listOfNotNull(group.title, LedgerCopy.detected(group.detected)).joinToString(" · "))
+                group.rows.forEach { LedgerRowView(model, it, group.namingPath) }
+            } else {
+                LedgerGroupView(model, group, group.title in opened) { open ->
+                    opened = if (open) opened + group.title else opened - group.title
+                }
+            }
+        }
+        PillButton("Show more", kind = PillKind.SECONDARY, busy = model.loadingMore) {
+            scope.launch { model.more() }
+        }
+    }
+}
+
+/** One group's disclosure; it opens itself once the group has an active account. */
+@Composable
+private fun LedgerGroupView(
     model: LedgerConnectModel,
-    candidate: LedgerCandidate,
+    group: LedgerGroup,
+    open: Boolean,
+    setOpen: (Boolean) -> Unit,
+) {
+    LaunchedEffect(group.title, group.detected) {
+        if (group.detected > 0) setOpen(true)
+    }
+    Disclosure(group.title, open = open, onToggle = { setOpen(!open) }, detail = LedgerCopy.detected(group.detected)) {
+        group.rows.forEach { LedgerRowView(model, it, group.namingPath) }
+    }
+}
+
+/** `.select-row`: checkbox, title, the 6…4 address and the row's status; dimmed when not pickable. */
+@Composable
+private fun LedgerRowView(
+    model: LedgerConnectModel,
+    row: LedgerRow,
+    namingPath: Boolean,
 ) {
     val skin = LocalSkin.current
-    val existing = model.isExisting(candidate)
     CheckRow(
-        "Account ${candidate.request.accountIndex}",
-        checked = candidate.address in model.selected,
-        enabled = !existing,
-        onCheckedChange = { model.toggle(candidate) },
+        row.title(namingPath),
+        checked = row.selectable && row.id in model.selected,
+        enabled = row.selectable,
+        onCheckedChange = { model.toggle(row) },
     ) {
         val mono = textStyle(BrambleTypeScale.caption, mono = true)
-        Text(accountLabel(candidate.address), color = skin.muted, style = mono)
-        if (existing) {
-            Text("Already in this wallet", color = skin.muted, style = textStyle(BrambleTypeScale.caption))
-        }
+        Text(accountLabel(row.candidate.address), color = skin.muted, style = mono)
+        Text(row.status, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+    }
+}
+
+/** The system's prompt to turn Bluetooth on; the adapter's broadcast reports the answer. */
+private fun askToTurnOnBluetooth(context: Context) {
+    try {
+        context.startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+    } catch (ignored: SecurityException) {
+        // Without BLUETOOTH_CONNECT the state reads as unauthorized first.
     }
 }
 

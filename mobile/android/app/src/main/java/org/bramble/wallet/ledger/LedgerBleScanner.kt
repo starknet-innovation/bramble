@@ -13,9 +13,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
 import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import org.bramble.core.ledgerBleLink
 import java.util.UUID
 
@@ -32,7 +34,8 @@ fun ledgerBluetoothPermissions(): Array<String> =
 
 /**
  * Finds Ledgers over [android.bluetooth.le.BluetoothLeScanner]: advertisers of the services
- * `ledgerBleLink()` names, as iOS `LedgerBleScanner`. Watches the adapter's state until [release].
+ * `ledgerBleLink()` names, plus bonded Ledgers, as iOS `LedgerBleScanner`. Watches the adapter's
+ * state, and Location services (needed for a scan before Android 12), until [release].
  *
  * Trust boundary: a name is whatever the device advertises and is only shown. A refused
  * permission is [LedgerBluetooth.UNAUTHORIZED]; the screen asks for it at the point of use and
@@ -86,7 +89,9 @@ class LedgerBleScanner(
         ContextCompat.registerReceiver(
             context,
             stateReceiver,
-            IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED).apply {
+                addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
     }
@@ -106,6 +111,10 @@ class LedgerBleScanner(
                     LedgerBluetooth.OFF
                 }
 
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !locationOn() -> {
+                    LedgerBluetooth.LOCATION_OFF
+                }
+
                 else -> {
                     LedgerBluetooth.READY
                 }
@@ -114,6 +123,7 @@ class LedgerBleScanner(
     override fun startScan() {
         val scanner = adapter?.bluetoothLeScanner
         if (scanning || bluetooth != LedgerBluetooth.READY || scanner == null) return
+        bonded().forEach { found(it.address, it.name) }
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         scanning =
             try {
@@ -149,10 +159,49 @@ class LedgerBleScanner(
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
 
-    private fun found(result: ScanResult) {
-        val id = result.device.address
+    private fun found(result: ScanResult) = found(result.device.address, result.scanRecord?.deviceName)
+
+    private fun found(
+        id: String,
+        name: String?,
+    ) {
         if (devices.any { it.id == id }) return
-        devices = devices + LedgerDevice(id, result.scanRecord?.deviceName ?: "Ledger")
+        devices = devices + LedgerDevice(id, name ?: "Ledger")
         changed?.invoke()
+    }
+
+    /**
+     * Ledgers bonded to the phone, which a scan can miss while they are connected elsewhere: a
+     * bonded LE device whose cached services include a Ledger service, or, when the stack cached
+     * none, whose name is a Ledger model's. ponytail: the name check is a heuristic for devices
+     * with no cached services; a bonded non-Ledger named "Nano …" would be listed, and fail to connect.
+     */
+    private fun bonded(): List<BluetoothDevice> {
+        val services = filters.mapNotNull { it.serviceUuid }.toSet()
+        return try {
+            adapter?.bondedDevices.orEmpty().filter { device ->
+                val cached = device.uuids?.toSet().orEmpty()
+                device.type != BluetoothDevice.DEVICE_TYPE_CLASSIC &&
+                    if (cached.isEmpty()) {
+                        LEDGER_NAMES.any { device.name.orEmpty().startsWith(it) }
+                    } else {
+                        cached.any {
+                            it in
+                                services
+                        }
+                    }
+            }
+        } catch (ignored: SecurityException) {
+            emptyList()
+        }
+    }
+
+    private fun locationOn(): Boolean =
+        context.getSystemService(LocationManager::class.java)?.let { LocationManagerCompat.isLocationEnabled(it) }
+            ?: false
+
+    private companion object {
+        /** The names Ledger models advertise ("Nano X 1A2B", "Ledger Stax 1A2B", ...). */
+        val LEDGER_NAMES = listOf("Nano ", "Ledger ")
     }
 }

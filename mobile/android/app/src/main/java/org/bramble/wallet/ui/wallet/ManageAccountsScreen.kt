@@ -47,6 +47,7 @@ import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.SecretKind
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.hasRecoveryPhrase
+import org.bramble.wallet.ledger.LedgerRoute
 import org.bramble.wallet.networkName
 import org.bramble.wallet.saveLabel
 import org.bramble.wallet.select
@@ -258,7 +259,7 @@ private fun GroupFields(
 }
 
 /** Where the Add account chooser is: its own options, or one of the import screens. */
-private enum class AddStage { ADD, LEDGER, IMPORT_CHOOSER, IMPORT_KEY }
+private enum class AddStage { ADD, LEDGER, READY_LEDGER, IMPORT_CHOOSER, IMPORT_KEY }
 
 /**
  * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account" (not in a
@@ -280,11 +281,20 @@ fun AddAccountChooser(
         }
 
         AddStage.LEDGER -> {
-            LedgerAddAccountFlow(store, back = { stage = AddStage.ADD }, added = added)
+            LedgerAddAccountFlow(store, LedgerRoute.BRAMBLE, back = { stage = AddStage.ADD }, added = added)
+        }
+
+        AddStage.READY_LEDGER -> {
+            LedgerAddAccountFlow(store, LedgerRoute.READY, back = { stage = AddStage.IMPORT_CHOOSER }, added = added)
         }
 
         AddStage.IMPORT_CHOOSER -> {
-            ImportAccountChooser(store, back = { stage = AddStage.ADD }, importKey = { stage = AddStage.IMPORT_KEY })
+            ImportAccountChooser(
+                store,
+                back = { stage = AddStage.ADD },
+                importKey = { stage = AddStage.IMPORT_KEY },
+                readyLedger = { stage = AddStage.READY_LEDGER },
+            )
         }
 
         AddStage.IMPORT_KEY -> {
