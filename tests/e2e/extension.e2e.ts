@@ -334,6 +334,23 @@ test("detects the injected provider after a page reload", async ({ extension }) 
     await dapp.reload();
     await dapp.getByTestId("detect").click();
     await expect(dapp.getByTestId("provider-status")).toHaveText(BRAMBLE_PROVIDER_STATUS);
+
+    // starknet-react 5.0.3's discovery: `scanObjectForWallets` + `isWalletObject`.
+    const discovered = await dapp.evaluate(() => {
+      const required =
+        "request isConnected provider enable isPreauthorized on off version id name icon";
+      const page = window as unknown as Record<
+        string,
+        { readonly id?: unknown } | null | undefined
+      >;
+      return Object.getOwnPropertyNames(window)
+        .filter((name) => name.startsWith("starknet"))
+        .map((name) => page[name])
+        .filter((wallet) => typeof wallet === "object" && wallet !== null)
+        .filter((wallet) => required.split(" ").every((key) => key in (wallet as object)))
+        .map((wallet) => wallet?.id);
+    });
+    expect(discovered).toEqual(["bramble"]);
   } finally {
     await dappServer.close();
   }
