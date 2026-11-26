@@ -141,7 +141,7 @@ final class LedgerSigningTests: XCTestCase {
         let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
         var connects = 0
         var release: CheckedContinuation<Void, Never>?
-        let signer = LedgerSigner(scanner: scanner) { _ in
+        let signer = LedgerSigner(scanner: scanner, osGate: LedgerOsCheck.skipped) { _ in
             connects += 1
             // The second connect (the session's Ledger again) waits until the test lets it fail.
             if connects > 1 {
@@ -250,7 +250,8 @@ final class LedgerSigningTests: XCTestCase {
         let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
         let devices = Connections()
         devices.hold = hold
-        let signer = LedgerSigner(scanner: FakeLedgerScanner(bluetooth: .ready, devices: [ledger])) { _ in
+        let scanner = FakeLedgerScanner(bluetooth: .ready, devices: [ledger])
+        let signer = LedgerSigner(scanner: scanner, osGate: LedgerOsCheck.skipped) { _ in
             let device = ReplayLedgerDevice(script: script)
             try configure(device)
             devices.made.append(device)

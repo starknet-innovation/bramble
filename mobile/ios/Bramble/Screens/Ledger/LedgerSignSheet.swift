@@ -49,6 +49,9 @@ enum LedgerSignCopy {
         case .connecting:
             "Connecting securely"
 
+        case .deviceCheck:
+            "Checking your Ledger"
+
         case .checking:
             "Verifying the right account"
 
@@ -110,6 +113,9 @@ struct LedgerSignSheet: View {
         case let .connecting(device):
             StatusLine(text: "Connecting to \(device.name)…")
             StatusLine(text: "If asked, confirm the pairing code on both devices.")
+
+        case let .deviceCheck(phase):
+            StatusLine(text: LedgerCopy.checking(phase))
 
         case .checking:
             StatusLine(text: LedgerSignCopy.verifyingBody)

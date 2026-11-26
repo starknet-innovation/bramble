@@ -67,6 +67,8 @@ struct BrowserView: View {
                     }
                 }
             }
+            // A Ledger account's signature is asked for on top of the card that asked for it.
+            .ledgerSigning()
             .environment(store)
             .interactiveDismissDisabled()
         }

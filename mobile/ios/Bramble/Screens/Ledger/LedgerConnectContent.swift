@@ -25,6 +25,14 @@ enum LedgerCopy {
             : "Accounts with activity are preselected."
     }
 
+    /// The device OS gate's line: the extension's `ledgerGrant.progress.*` words, the device prompt
+    /// only while it asks to reopen Starknet.
+    static func checking(_ phase: String) -> String {
+        phase == LedgerOsCheck.openingStarknet
+            ? "Approve opening Starknet on your Ledger. No transaction is signed."
+            : "Checking your Ledger. The Starknet app closes and reopens."
+    }
+
     /// "N accounts detected", as Find your accounts says it; nil for none.
     static func detected(_ count: Int) -> String? {
         count > 0 ? "\(count) \(count == 1 ? "account" : "accounts") detected" : nil
@@ -75,6 +83,9 @@ struct LedgerConnectContent: View {
             case let .connecting(device):
                 StatusLine(text: "Connecting to \(device.name)…")
                 StatusLine(text: "If asked, confirm the pairing code on both devices.")
+
+            case let .checking(phase):
+                StatusLine(text: LedgerCopy.checking(phase))
 
             case .reading:
                 StatusLine(text: "Reading accounts…")

@@ -75,6 +75,8 @@ final class DappRequestSink {
     @ObservationIgnored private let session: DappSession
     @ObservationIgnored private let core: WalletCore
     @ObservationIgnored private let rpc: RpcTransport
+    /// The Ledger a Ledger account signs on; nil is the app's Bluetooth one (`LedgerSigner.shared`).
+    @ObservationIgnored private let signer: (any DeviceSigning)?
     @ObservationIgnored private let http: PortfolioTransport
     @ObservationIgnored private let now: () -> Double
     @ObservationIgnored private var pageIds: [UInt64: String] = [:]
@@ -83,17 +85,24 @@ final class DappRequestSink {
     @ObservationIgnored private var lastRequestId: UInt64 = 0
     /// When the person last cancelled each site's card.
     @ObservationIgnored private var deniedAt: [String: Double] = [:]
+    /// The card being signed: the core no longer lists it, but it stays first (and its sheet up,
+    /// under the Ledger's) until the signature settles, and a second Sign does nothing.
+    @ObservationIgnored private var signing: Card?
+    /// The device the card being signed is on, once it asked for one.
+    @ObservationIgnored private var ledger: (any DeviceSigning)?
 
     init(
         core: WalletCore,
         tokens: TokenPreferences = TokenPreferences(persisted: nil),
         rpc: RpcTransport = RpcTransports.launch,
+        signer: (any DeviceSigning)? = nil,
         http: PortfolioTransport = BoundedHttp.shared,
         now: @escaping () -> Double = { Date().timeIntervalSince1970 * DappRequestSink.millisecondsPerSecond }
     ) {
         session = DappSession(wallet: core, tokens: tokens)
         self.core = core
         self.rpc = rpc
+        self.signer = signer
         self.http = http
         self.now = now
     }
@@ -152,9 +161,13 @@ final class DappRequestSink {
     /// The person approved signing `card` with the account it was reviewed for. A Ready or Braavos
     /// account's live state is read first, each read posted to one endpoint that proved the card's
     /// chain (a failed post is passed on empty, which the core refuses); the core then signs or
-    /// refuses. A Ledger account's device step is cancelled, so its request ends refused.
+    /// refuses. A Ledger account signs on its device through the same sheet a send uses, with the
+    /// account the card was reviewed for as the signer; the person's cancel there refuses the page.
+    /// Every APDU comes from the core and goes back to it unread.
     func sign(_ card: Card) async -> [Settled] {
-        guard let sign = card.sign else { return [] }
+        guard let sign = card.sign, signing == nil else { return [] }
+        signing = card
+        let account = try? core.allAccountRecords().first { $0.id == sign.accountId }
         var endpoint: RpcEndpoint?
         var step = session.approveSignTypedData(approvalId: card.id, reviewedAccountId: sign.accountId, nowMs: now())
         while true {
@@ -170,11 +183,32 @@ final class DappRequestSink {
                 }
                 step = session.answerSignRead(approvalId: card.id, id: id, body: text)
 
-            case .device, .deviceRetry:
-                // No Ledger signer on mobile yet: refuse rather than hang. P8 wires the device here.
-                step = session.cancelSignDevice(approvalId: card.id)
+            case let .device(apdu):
+                let device = ledger ?? signer ?? LedgerSigner.shared
+                ledger = device
+                switch await device.exchange(apdu, for: account) {
+                case let .device(reply)?:
+                    step = session.answerSignDevice(approvalId: card.id, reply: reply)
+
+                case let .deviceFailure(failure)?:
+                    step = session.signDeviceTransportFailure(approvalId: card.id, failure: failure)
+
+                default:
+                    // Cancelled on the sheet (or the wallet locked).
+                    step = session.cancelSignDevice(approvalId: card.id)
+                }
+
+            case let .deviceRetry(reason):
+                let device = ledger ?? signer ?? LedgerSigner.shared
+                ledger = device
+                step = await device.refused(reason, for: account)
+                    ? session.retrySignDevice(approvalId: card.id)
+                    : session.cancelSignDevice(approvalId: card.id)
 
             case let .settled(settled):
+                ledger?.finish()
+                ledger = nil
+                signing = nil
                 return finish(settled)
             }
         }
@@ -208,6 +242,9 @@ final class DappRequestSink {
     /// and a card no request waits on any more goes with them, so a stale card can never be approved.
     func pageGone() {
         session.withdraw(requestIds: Array(heldCards.keys))
+        // A signature in progress is dropped by the core; its Ledger sheet closes with the page.
+        signing = nil
+        ledger?.finish()
         heldCards = [:]
         pageIds = [:]
         reload()
@@ -240,7 +277,10 @@ final class DappRequestSink {
     }
 
     private func reload() {
-        cards = session.pendingApprovals(nowMs: now()).filter { Self.isShown($0.card) }.map { approval in
+        let pending = session.pendingApprovals(nowMs: now()).filter { approval in
+            Self.isShown(approval.card) && approval.approvalId != signing?.id
+        }
+        cards = (signing.map { [$0] } ?? []) + pending.map { approval in
             Card(
                 id: approval.approvalId,
                 origin: approval.origin,

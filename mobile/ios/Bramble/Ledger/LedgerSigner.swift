@@ -37,6 +37,8 @@ final class LedgerSigner: DeviceSigning {
         case bluetooth(LedgerBluetooth)
         case scanning
         case connecting(LedgerDevice)
+        /// The device OS gate at `phase`, once per Ledger per session: Starknet closes and reopens.
+        case deviceCheck(phase: String)
         /// The core is checking the app and the key, before the person is asked.
         case checking
         /// The device shows `hash` (the sign APDU's) and waits for the person.
@@ -64,15 +66,26 @@ final class LedgerSigner: DeviceSigning {
 
     private let scanner: any LedgerScanning
     private let connector: (UUID) async throws -> any LedgerExchanging
+    private let osGate: LedgerOsCheck.Run
     private var device: (any LedgerExchanging)?
+    /// The Ledger that passed the OS gate this session, as the extension's `readiness: verified`;
+    /// forgotten at lock.
+    private var verified: UUID?
+    /// The gate's refusal code, shown in place of the plan's own when the connection it ended fails.
+    private var gateRefusal: String?
     /// The Ledger connected earlier in this session, tried first; forgotten at lock.
     private var known: LedgerDevice?
     private var picking: CheckedContinuation<LedgerDevice?, Never>?
     private var deciding: CheckedContinuation<Bool, Never>?
     private var cancelled = false
 
-    init(scanner: any LedgerScanning, connect: @escaping (UUID) async throws -> any LedgerExchanging) {
+    init(
+        scanner: any LedgerScanning,
+        osGate: @escaping LedgerOsCheck.Run = LedgerOsCheck.run,
+        connect: @escaping (UUID) async throws -> any LedgerExchanging
+    ) {
         self.scanner = scanner
+        self.osGate = osGate
         connector = connect
     }
 
@@ -109,7 +122,8 @@ final class LedgerSigner: DeviceSigning {
             device = nil
             known = nil
         }
-        stage = .refused(message: FriendlyError.message(reason))
+        stage = .refused(message: FriendlyError.message(gateRefusal ?? reason))
+        gateRefusal = nil
         return await withCheckedContinuation { deciding = $0 }
     }
 
@@ -140,6 +154,7 @@ final class LedgerSigner: DeviceSigning {
     func close() {
         cancelled = active || cancelled
         known = nil
+        verified = nil
         end()
     }
 
@@ -176,12 +191,39 @@ final class LedgerSigner: DeviceSigning {
 
     private func open(_ ledger: LedgerDevice) async -> (any LedgerExchanging)? {
         stage = .connecting(ledger)
-        guard let connected = try? await connector(ledger.id) else { return nil }
+        guard let connected = await reopen(ledger) else { return nil }
+        if verified != ledger.id {
+            stage = .deviceCheck(phase: "")
+            let checked = await osGate(connected, { [weak self] in await self?.reopen(ledger) }, { [weak self] phase in
+                if self?.cancelled == false { self?.stage = .deviceCheck(phase: phase) }
+            })
+            device = nil
+            switch checked {
+            case let .success(link) where !cancelled:
+                verified = ledger.id
+                device = link
+
+            case let .success(link):
+                link.close()
+                return nil
+
+            case let .failure(refusal):
+                gateRefusal = cancelled ? nil : refusal.reason
+                return nil
+            }
+        }
+        known = ledger
+        return device
+    }
+
+    /// One connection to `ledger`, held as `device` so a cancel closes it; nil once cancelled.
+    private func reopen(_ ledger: LedgerDevice) async -> (any LedgerExchanging)? {
+        guard !cancelled, let connected = try? await connector(ledger.id) else { return nil }
         guard !cancelled else {
             connected.close()
             return nil
         }
-        known = ledger
+        device = connected
         return connected
     }
 

@@ -315,13 +315,20 @@ extension DappRequestSinkTests {
         }
     }
 
+    /// A device sheet the person cancels at once.
+    private final class CancelledLedger: DeviceSigning {
+        func exchange(_: Data, for _: AccountRecord?) -> StepReply? { nil }
+        func refused(_: String, for _: AccountRecord?) -> Bool { false }
+        func finish() { /* Nothing to close. */ }
+    }
+
     /// A Ledger OpenZeppelin account on Mainnet, active and connected to the site.
     private func ledgerConnected(_ core: WalletCore) throws -> (DappRequestSink, AccountRecord) {
         let ledger = try core.addLedgerAccount(request: LedgerAccountRequest(
             network: .mainnet, family: .openZeppelin, scheme: .bramble, accountIndex: 0, publicKeyX: "0x1ed6e5"
         ))
         XCTAssertTrue(ledger.ledger)
-        let sink = DappRequestSink(core: core, rpc: NoRpc(), http: NoNetwork())
+        let sink = DappRequestSink(core: core, rpc: NoRpc(), signer: CancelledLedger(), http: NoNetwork())
         _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
         _ = sink.approve(try XCTUnwrap(sink.cards.first), accountId: ledger.id)
         return (sink, ledger)
@@ -340,8 +347,8 @@ extension DappRequestSinkTests {
         XCTAssertEqual((try object(try XCTUnwrap(settled.first).json)["result"] as? [String])?.count, 2)
     }
 
-    /// The core asks a Ledger account's device for the signature; with no signer on mobile yet, the
-    /// sink cancels it, so the page is refused (163) rather than left waiting.
+    /// The core asks a Ledger account's device for the signature; cancelled on the device sheet, the
+    /// page is refused (163) rather than left waiting.
     func testALedgerAccountsTypedDataEndsRefused() async throws {
         let (core, _) = try wallet()
         let (sink, ledger) = try ledgerConnected(core)
