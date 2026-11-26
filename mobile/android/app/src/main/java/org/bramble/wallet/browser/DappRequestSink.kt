@@ -8,13 +8,20 @@ import org.bramble.core.DappCard
 import org.bramble.core.DappReply
 import org.bramble.core.DappSession
 import org.bramble.core.DappSettled
+import org.bramble.core.DappSignStep
 import org.bramble.core.NetworkId
 import org.bramble.core.RiskFlagCode
+import org.bramble.core.RpcPurpose
 import org.bramble.core.SiteWarning
+import org.bramble.core.StepReply
 import org.bramble.core.TokenPreferences
 import org.bramble.core.WalletCore
+import org.bramble.wallet.RpcClient
+import org.bramble.wallet.RpcPost
+import org.bramble.wallet.endpointNetwork
 import org.bramble.wallet.portfolio.BoundedHttp
 import org.bramble.wallet.portfolio.PortfolioTransport
+import org.bramble.wallet.send.RpcEndpoint
 import org.json.JSONObject
 
 /**
@@ -24,12 +31,14 @@ import org.json.JSONObject
  *
  * The core answers connect, typed-data signing and the passive reads around them. A connect or a
  * signature is held as a card until the person approves it, denies it, or it expires; the core
- * reviews, signs and re-checks everything at approval, so nothing here judges or signs. Main
- * thread only.
+ * reviews, signs and re-checks everything at approval, so nothing here judges or signs. Every
+ * other card (switch network, watch asset, a call batch) has no screen yet and is declined at once,
+ * and a request that needs a chain read first ([DappReply.Read]) is refused. Main thread only.
  */
 class DappRequestSink(
-    core: WalletCore,
+    private val core: WalletCore,
     tokens: TokenPreferences = TokenPreferences(null),
+    private val rpc: RpcPost = RpcClient.https,
     private val http: PortfolioTransport = BoundedHttp,
     private val now: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
@@ -124,13 +133,22 @@ class DappRequestSink(
             }
 
             is DappReply.Pending -> {
-                pageIds[requestId] = request.id
-                heldCards[requestId] = reply.approvalId
-                reload()
-                Answer.Held(requestId)
+                declineUnshown(session, now(), request.id, requestId, reply.approvalId) ?: run {
+                    pageIds[requestId] = request.id
+                    heldCards[requestId] = reply.approvalId
+                    reload()
+                    Answer.Held(requestId)
+                }
             }
 
-            else -> {
+            is DappReply.Read -> {
+                // wallet_deploymentData and wallet_watchAsset read the chain first; neither is
+                // answered on mobile yet, so the read is dropped and the page refused.
+                session.withdraw(listOf(requestId))
+                Answer.Now(errorJson(request.id, UNKNOWN_ERROR, UNKNOWN_ERROR_MESSAGE, null))
+            }
+
+            is DappReply.Result, is DappReply.Error -> {
                 Answer.Now(json(request.id, reply))
             }
         }
@@ -142,9 +160,38 @@ class DappRequestSink(
         accountId: String,
     ): List<Settled> = finish(session.approveConnect(card.id, accountId, now()))
 
-    /** The person approved signing [card] with the account it was reviewed for. */
-    fun sign(card: Card): List<Settled> =
-        card.sign?.let { finish(session.approveSignTypedData(card.id, it.accountId, now())) } ?: emptyList()
+    /**
+     * The person approved signing [card] with the account it was reviewed for. A Ready or Braavos
+     * account's live state is read first, each read posted to one endpoint that proved the card's
+     * chain (a failed post is passed on empty, which the core refuses); the core then signs or
+     * refuses. A Ledger account's device step is cancelled, so its request ends refused.
+     */
+    suspend fun sign(card: Card): List<Settled> {
+        val sign = card.sign ?: return emptyList()
+        var endpoint: RpcEndpoint? = null
+        var step = session.approveSignTypedData(card.id, sign.accountId, now())
+        while (true) {
+            step =
+                when (step) {
+                    is DappSignStep.Read -> {
+                        val bound = endpoint ?: RpcEndpoint(endpointNetwork(step.network, core), rpc)
+                        endpoint = bound
+                        // No purpose comes with the read, so the endpoint proves the chain with its own probe.
+                        val reply = bound.exchange(step.id, step.body, RpcPurpose.ACCOUNT_SIGNER, false)
+                        session.answerSignRead(card.id, step.id, (reply as? StepReply.Rpc)?.body.orEmpty())
+                    }
+
+                    // No Ledger signer on mobile yet: refuse rather than hang. P8 wires the device here.
+                    is DappSignStep.Device, is DappSignStep.DeviceRetry -> {
+                        session.cancelSignDevice(card.id)
+                    }
+
+                    is DappSignStep.Settled -> {
+                        return finish(step.settled)
+                    }
+                }
+        }
+    }
 
     /** Whether the blocklist refuses [origin], so the browser can stop a listed page before it loads. */
     fun isBlockedSite(origin: String): Boolean = session.isBlockedSite(origin)
@@ -186,7 +233,7 @@ class DappRequestSink(
 
     private fun reload() {
         cards =
-            session.pendingApprovals(now()).map {
+            session.pendingApprovals(now()).filter { hasScreen(it.card) }.map {
                 Card(it.approvalId, it.origin, it.blocked, it.warnings.map(::warningCopy), signRequest(it.card))
             }
     }
@@ -207,6 +254,24 @@ class DappRequestSink(
 
         /** The methods that raise a card in this slice: connect and typed-data signing. */
         private val CARD_METHODS = setOf("wallet_requestAccounts", "mc_requestAccounts", "wallet_signTypedData")
+
+        /**
+         * Declines [approvalId] at once when it is a card this app has no screen for (anything but a
+         * connection or a signature), answering the page with the deny's reply; null for a card it shows.
+         */
+        private fun declineUnshown(
+            session: DappSession,
+            nowMs: Double,
+            pageId: String,
+            requestId: ULong,
+            approvalId: String,
+        ): Answer? {
+            val card = session.pendingApprovals(nowMs).firstOrNull { it.approvalId == approvalId }?.card
+            if (card != null && hasScreen(card)) return null
+            val reply = session.deny(approvalId, nowMs).firstOrNull { it.requestId == requestId }?.reply
+            val refused = errorJson(pageId, USER_REFUSED, USER_REFUSED_MESSAGE, null)
+            return Answer.Now(reply?.let { json(pageId, it) } ?: refused)
+        }
 
         /** A site warning in the extension's words (`insight-messages.ts`). */
         fun warningCopy(warning: SiteWarning): String =
@@ -229,7 +294,7 @@ class DappRequestSink(
             when (reply) {
                 is DappReply.Result -> """{"id":"$id","result":${reply.json}}"""
                 is DappReply.Error -> errorJson(id, reply.code, reply.message, reply.data)
-                is DappReply.Pending -> errorJson(id, UNKNOWN_ERROR, UNKNOWN_ERROR_MESSAGE, null)
+                is DappReply.Pending, is DappReply.Read -> errorJson(id, UNKNOWN_ERROR, UNKNOWN_ERROR_MESSAGE, null)
             }
 
         private fun errorJson(
@@ -245,6 +310,16 @@ class DappRequestSink(
     }
 }
 
+/** Whether [card] is a kind this app shows: a connection or a signature. */
+private fun hasScreen(card: DappCard): Boolean =
+    when (card) {
+        DappCard.Connect, is DappCard.SignTypedData -> true
+        is DappCard.SwitchChain, is DappCard.WatchAsset, is DappCard.Invoke -> false
+    }
+
+// ponytail: the card's decoded `domain`/`message` rows are not shown; the sheet shows the exact
+// document. Rendering them is a sign-sheet redesign, not part of the v0.11.0 bump.
+
 /** A typed-data card's request, or null for a connection. */
 private fun signRequest(card: DappCard): DappRequestSink.SignRequest? =
     (card as? DappCard.SignTypedData)?.let {
@@ -256,17 +331,9 @@ private fun signRequest(card: DappCard): DappRequestSink.SignRequest? =
             calls = it.callSummaries,
             risks = it.flags.map { flag -> flag.message },
             poisoned = it.flags.any { flag -> flag.code == RiskFlagCode.ADDRESS_POISONING },
-            outsideExecution = isOutsideExecution(it.summary),
+            outsideExecution = it.outsideExecution,
         )
     }
-
-/**
- * Whether a card's [summary] (`"<primaryType> · <domain.name>"`, or the primary type alone) names an
- * `OutsideExecution`, the extension's `signRequestWarnings` test. The primary type is ASCII (the
- * core's name grammar), so the first segment is exactly it (as iOS `isOutsideExecution`).
- */
-internal fun isOutsideExecution(summary: String): Boolean =
-    summary == "OutsideExecution" || summary.startsWith("OutsideExecution · ")
 
 /**
  * [json] re-indented one value per line: it is never parsed, so no number or key order can change

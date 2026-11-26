@@ -39,6 +39,8 @@ class MultisigTxTextTest {
         calls = emptyList(),
         broadcastTransactionHash = null,
         `package` = "{}",
+        change = null,
+        nextConfig = null,
     )
 
     @Test
