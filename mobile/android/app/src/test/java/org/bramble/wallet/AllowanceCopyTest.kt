@@ -69,7 +69,8 @@ class AllowanceCopyTest {
     @Test
     fun amountsReadAsTheExtensions() {
         assertEquals("1000 units", AllowanceCopy.amount(view("1000"), units))
-        assertEquals("Unlimited", AllowanceCopy.amount(view("340282366920938463463374607431768211455", lowerBound = true), units))
+        val floor = view("340282366920938463463374607431768211455", lowerBound = true)
+        assertEquals("Unlimited", AllowanceCopy.amount(floor, units))
         assertEquals("an unknown amount", AllowanceCopy.amount(view("0", lowerBound = true), units))
         assertEquals("at least 5 units", AllowanceCopy.amount(view("5", lowerBound = true), units))
     }
