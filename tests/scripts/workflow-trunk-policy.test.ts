@@ -84,6 +84,20 @@ const cases = [
     failure: "release-validation must run only on pushes to main and same-repository pull requests",
   },
   {
+    name: "rejects fast-checks skipped when a pull request is retargeted",
+    workflow: "ci.yml",
+    search: "    if: github.event.action != 'edited' || github.event.changes.base\n",
+    replacement: "    if: github.event.action != 'edited'\n",
+    failure: "fast-checks must run when a pull request's base changes",
+  },
+  {
+    name: "rejects release validation skipped when a pull request is retargeted",
+    workflow: "ci.yml",
+    search: "      (github.event.action != 'edited' || github.event.changes.base) &&\n",
+    replacement: "      github.event.action != 'edited' &&\n",
+    failure: "release-validation must run only on pushes to main and same-repository pull requests",
+  },
+  {
     name: "rejects self-hosted release validation that persists the checkout token",
     workflow: "ci.yml",
     search: "        with:\n          persist-credentials: false\n",

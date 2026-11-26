@@ -33,10 +33,9 @@ const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.1.0
         with:
           node-version: 24`;
 
-// Upstream verification is all-or-nothing: a workflow that builds one pinned
-// source against a stale or unverified other one is not running the reviewed artifact set. The
-// rule selects itself from content, so it reaches any future workflow that
-// vendors anything.
+// Upstream verification is all-or-nothing: building one pinned source against a
+// stale or unverified other is not the reviewed artifact set. The rule selects
+// itself from content, so it reaches any future workflow that vendors anything.
 const VENDOR_STEPS = [
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
@@ -137,9 +136,8 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
   return failures;
 };
 
-// Trunk-based CI: PRs into `main` only, and the heavy self-hosted pipeline on
-// every same-repository PR and every push to `main`. A fork PR must never reach
-// the self-hosted runner, and the advisory guards must never block a merge.
+// Trunk CI: the heavy pipeline on same-repo PRs and pushes to `main`, never a
+// fork PR on the self-hosted runner, gates rerun on retarget, guards advisory.
 const ciFailures = (source: string): string[] => {
   const failures: string[] = [];
   const guards = jobBody(source, "pr-guards");
@@ -149,6 +147,12 @@ const ciFailures = (source: string): string[] => {
     source,
     "types: [opened, synchronize, reopened, edited]\n    branches: [main]\n  push:\n    branches: [main]\n",
     "CI must run on pull requests into main and on pushes to main only",
+  );
+  requireText(
+    failures,
+    jobBody(source, "fast-checks"),
+    "if: github.event.action != 'edited' || github.event.changes.base\n",
+    "fast-checks must run when a pull request's base changes",
   );
   forbidText(
     failures,
@@ -166,7 +170,7 @@ const ciFailures = (source: string): string[] => {
     failures,
     validation,
     `if: >-
-      github.event.action != 'edited' &&
+      (github.event.action != 'edited' || github.event.changes.base) &&
       (github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository))
