@@ -22,6 +22,7 @@ import { parityPrivacyAccount } from "./mobile-privacy-wire";
 import { invokeStrk20Batches } from "./mobile-strk20-batches-invoke";
 import { moreStrk20Batches } from "./mobile-strk20-batches-more";
 import { multisigStrk20Batches } from "./mobile-strk20-batches-multisig";
+import { repeatStrk20Batches } from "./mobile-strk20-batches-repeat";
 import type { Signed } from "./mobile-strk20-jobs";
 import { bytesHex, hex, labelledStream, sdkSource } from "./mobile-strk20-primitives";
 
@@ -420,5 +421,6 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     ...moreStrk20Batches(kit),
     ...(await invokeStrk20Batches(kit)),
     ...(await multisigStrk20Batches(kit)),
+    ...repeatStrk20Batches(kit),
   ];
 };
