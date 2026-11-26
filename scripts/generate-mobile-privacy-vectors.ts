@@ -15,6 +15,7 @@ import {
 import { computePrivacyFixture, PRIVACY_FIXTURE_PATHS } from "./mobile-privacy-fixture";
 import { renderStrk20Jobs, STRK20_JOBS_PATH } from "./mobile-strk20-jobs";
 import { computeStrk20Primitives, STRK20_PRIMITIVES_PATH } from "./mobile-strk20-primitives";
+import { computeStrk20Shadow, STRK20_SHADOW_PATH } from "./mobile-strk20-shadow";
 
 const parts = await computePrivacyFixture();
 for (const [path, part] of parts) {
@@ -25,6 +26,7 @@ await writeFile(
   STRK20_PRIMITIVES_PATH,
   `${JSON.stringify(await computeStrk20Primitives(), null, 2)}\n`,
 );
+await writeFile(STRK20_SHADOW_PATH, `${JSON.stringify(await computeStrk20Shadow(), null, 2)}\n`);
 // And its job transcripts, through the extension's proof path.
 await writeFile(STRK20_JOBS_PATH, await renderStrk20Jobs());
 const copyDocument = parts.get(PRIVACY_FIXTURE_PATHS.copy) as {
@@ -46,8 +48,9 @@ const formatted = Bun.spawnSync([
   "--write",
   ...parts.keys(),
   STRK20_PRIMITIVES_PATH,
+  STRK20_SHADOW_PATH,
 ]);
 if (formatted.exitCode !== 0) throw new Error("biome could not format the privacy fixture");
 console.log(
-  `wrote ${[...parts.keys(), STRK20_PRIMITIVES_PATH, STRK20_JOBS_PATH, PRIVACY_COPY_SWIFT_PATH, PRIVACY_COPY_KOTLIN_PATH].join(", ")}`,
+  `wrote ${[...parts.keys(), STRK20_PRIMITIVES_PATH, STRK20_SHADOW_PATH, STRK20_JOBS_PATH, PRIVACY_COPY_SWIFT_PATH, PRIVACY_COPY_KOTLIN_PATH].join(", ")}`,
 );

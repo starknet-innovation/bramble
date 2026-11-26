@@ -220,7 +220,10 @@ const computeHashes = async (real: Parties) => {
   return rows;
 };
 
-type Action = { readonly type: string; readonly input: Readonly<Record<string, Felt>> };
+export type Action = {
+  readonly type: string;
+  readonly input: Readonly<Record<string, Felt | readonly Felt[]>>;
+};
 type Factory = {
   create: (
     user: { address: string; viewingKey: string; signer: unknown },
@@ -231,7 +234,7 @@ type Factory = {
 };
 
 /** The compile_actions calldata the SDK's ProofInvocationFactory hands its signer. */
-const compileActionsCalldata = async (
+export const compileActionsCalldata = async (
   user: string,
   viewingKey: string,
   actions: readonly Action[],
@@ -249,7 +252,14 @@ const compileActionsCalldata = async (
   };
   const typed = actions.map((action) => ({
     input: Object.fromEntries(
-      Object.entries(action.input).map(([k, v]) => [k, k === "index" ? Number(v) : BigInt(v)]),
+      Object.entries(action.input).map(([k, v]) => [
+        k,
+        typeof v === "object"
+          ? v.map((felt) => BigInt(felt))
+          : k === "index"
+            ? Number(v)
+            : BigInt(v),
+      ]),
     ),
     type: action.type,
   }));

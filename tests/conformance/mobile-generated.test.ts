@@ -37,6 +37,7 @@ import {
   computeStrk20Primitives,
   STRK20_PRIMITIVES_PATH,
 } from "../../scripts/mobile-strk20-primitives";
+import { computeStrk20Shadow, STRK20_SHADOW_PATH } from "../../scripts/mobile-strk20-shadow";
 import {
   computeTransactionFixture,
   splitTransactionFixture,
@@ -210,6 +211,15 @@ describe("mobile privacy parity", () => {
     async () => {
       const committed = JSON.parse(await readFile(STRK20_PRIMITIVES_PATH, "utf8"));
       expect(committed).toEqual(await computeStrk20Primitives());
+    },
+    60_000,
+  );
+
+  test.skipIf(!existsSync(PRIVACY_SDK_BUNDLE))(
+    "the committed STRK20 shadow-account vectors are what the pinned SDK computes",
+    async () => {
+      const committed = JSON.parse(await readFile(STRK20_SHADOW_PATH, "utf8"));
+      expect(committed).toEqual(await computeStrk20Shadow());
     },
     60_000,
   );
