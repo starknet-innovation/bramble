@@ -10,6 +10,8 @@ import XCTest
 final class LedgerConnectModelTests: XCTestCase {
     private let ledger = LedgerDevice(id: UUID(), name: "Nano X 1A2B")
     private static let bramble0 = "0x23156521d2acf1de4e36ff383f1281437cace4bf231a547a7f9f4aff7cc409d"
+    /// Hex digits in a fully padded felt.
+    private static let feltDigits = 64
     private static let ready0 = "0x64f0159222d0f6468f10db7eb536888f90432122d34336120d04fad77424a86"
 
     func testBrambleKeysArePlacedAsBrambleAndArgentAccounts() async throws {
@@ -155,6 +157,25 @@ final class LedgerConnectModelTests: XCTestCase {
         XCTAssertEqual(first.status, "Already in this wallet")
         picked.model.toggle(first)
         XCTAssertFalse(picked.model.chosen.contains(first.candidate.request))
+    }
+
+    func testAPaddedHeldAddressStillMatches() async throws {
+        let address = try Self.address(.bramble, Self.bramble0, .openZeppelin)
+        let digits = address.dropFirst(2)
+        let padded = "0x" + String(repeating: "0", count: Self.feltDigits - digits.count) + digits
+        XCTAssertNotEqual(padded, address, "the held spelling differs from the core's")
+        let picked = try picker(.bramble, existing: [padded]) { _ in
+            LedgerActivity(deployed: .present, funded: .present)
+        }
+        await picked.model.choose(ledger)
+        XCTAssertEqual(picked.model.rows.first?.status, "Already in this wallet")
+    }
+
+    func testAFailedCheckIsNotCheckingForever() async throws {
+        let picked = try picker(.bramble) { _ in .unknown }
+        await picked.model.choose(ledger)
+        XCTAssertEqual(picked.model.rows.first?.status, LedgerRow.unchecked)
+        XCTAssertNotEqual(picked.model.rows.first?.status, "Checking…")
     }
 
     // MARK: Fixtures

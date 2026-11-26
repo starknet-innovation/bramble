@@ -69,10 +69,11 @@ struct LedgerAddAccountFlow: View {
     private func add(_ requests: [LedgerAccountRequest]) {
         guard !adding else { return }
         adding = true
-        model?.close()
         Task {
             do {
                 try await store.addLedgerAccounts(requests)
+                // Only now: after a failure the connection stays, so Show more still works.
+                model?.close()
                 added()
             } catch {
                 store.toast = describe(error)

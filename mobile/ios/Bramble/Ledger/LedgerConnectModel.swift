@@ -80,7 +80,7 @@ final class LedgerConnectModel {
         connector = connect
         self.place = place
         self.describe = describe
-        self.existing = Set(existing.map { $0.lowercased() })
+        self.existing = Set(existing.map(Self.canonical))
         self.pageSize = pageSize
         scanner.changed = { [weak self] in self?.bluetoothChanged() }
         bluetoothChanged()
@@ -198,7 +198,8 @@ final class LedgerConnectModel {
             return
         }
         rows += placed.map { candidate in
-            LedgerRow(candidate: candidate, activity: nil, existing: existing.contains(candidate.address.lowercased()))
+            let held = existing.contains(Self.canonical(candidate.address))
+            return LedgerRow(candidate: candidate, activity: nil, existing: held)
         }
         nextIndex += UInt32(pages.first?.1.count ?? 0)
         stage = .picking
@@ -232,6 +233,11 @@ final class LedgerConnectModel {
     private func fail(_ reason: String) {
         close()
         stage = .failed(FriendlyError.message(reason))
+    }
+
+    /// An address in the core's canonical felt form, so padded and unpadded spellings match.
+    nonisolated static func canonical(_ address: String) -> String {
+        validateRecipient(input: address) ?? address.lowercased()
     }
 
     /// The core's refusal code.

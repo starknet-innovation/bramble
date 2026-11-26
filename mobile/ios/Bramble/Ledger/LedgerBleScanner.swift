@@ -30,32 +30,47 @@ protocol LedgerScanning: AnyObject {
 /// Finds Ledgers over CoreBluetooth: advertisers of the services `ledgerBleLink()` names, plus
 /// Ledgers the system is already connected to (a paired Ledger does not always advertise).
 ///
-/// Trust boundary: a name is whatever the peripheral advertises and is only shown. Creating the
-/// scanner asks for Bluetooth permission the first time; a refusal is `.unauthorized`.
+/// Trust boundary: a name is whatever the peripheral advertises and is only shown. The first read
+/// of `bluetooth` (or scan) asks for Bluetooth permission, never creating the scanner; a refusal
+/// is `.unauthorized`.
 @MainActor
 final class LedgerBleScanner: NSObject, LedgerScanning {
-    private(set) var bluetooth = LedgerBluetooth.unknown
+    /// Bluetooth's state. The first read creates the CoreBluetooth manager, which is when iOS asks
+    /// for Bluetooth permission: only a Ledger screen or a Ledger signature reads it.
+    var bluetooth: LedgerBluetooth {
+        _ = manager()
+        return state
+    }
+
+    private var state = LedgerBluetooth.unknown
     private(set) var devices: [LedgerDevice] = []
     var changed: (() -> Void)?
 
     private let services = ledgerBleLink().specs.map { CBUUID(string: $0.service) }
     private var central: CBCentralManager?
 
-    override init() {
-        super.init()
-        central = CBCentralManager(delegate: self, queue: nil)
-    }
+    /// Whether the CoreBluetooth manager exists yet (and so the permission was asked).
+    var awake: Bool { central != nil }
 
     func startScan() {
-        guard let central, central.state == .poweredOn else { return }
-        for peripheral in central.retrieveConnectedPeripherals(withServices: services) {
+        let radio = manager()
+        guard radio.state == .poweredOn else { return }
+        for peripheral in radio.retrieveConnectedPeripherals(withServices: services) {
             found(peripheral.identifier, name: peripheral.name)
         }
-        if !central.isScanning { central.scanForPeripherals(withServices: services) }
+        if !radio.isScanning { radio.scanForPeripherals(withServices: services) }
     }
 
     func stopScan() {
         if central?.isScanning == true { central?.stopScan() }
+    }
+
+    /// The CoreBluetooth manager, created on first use, never at init.
+    private func manager() -> CBCentralManager {
+        if let central { return central }
+        let made = CBCentralManager(delegate: self, queue: nil)
+        central = made
+        return made
     }
 
     private func found(_ id: UUID, name: String?) {
@@ -92,8 +107,8 @@ extension LedgerBleScanner: CBCentralManagerDelegate {
     nonisolated func centralManagerDidUpdateState(_: CBCentralManager) {
         // CoreBluetooth calls on the main queue (`queue: nil`); the actor's own reference is read.
         MainActor.assumeIsolated {
-            bluetooth = Self.bluetooth(central?.state ?? .unknown)
-            if bluetooth != .ready { devices.removeAll() }
+            state = Self.bluetooth(central?.state ?? .unknown)
+            if state != .ready { devices.removeAll() }
             changed?()
         }
     }

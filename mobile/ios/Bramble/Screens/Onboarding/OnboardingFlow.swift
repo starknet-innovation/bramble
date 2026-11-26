@@ -81,6 +81,13 @@ struct OnboardingFlow: View {
         steps.append(step)
     }
 
+    /// The import's recovery-phrase choice. Back from the Ledger choice leaves the path at
+    /// `.ledger`, so it is set again here.
+    private func recoverWithPhrase() {
+        path = .recover
+        push(.recoveryPhrase)
+    }
+
     private func pop() {
         forward = false
         // The recovery step always remounts with empty cells, so the handed-off copy is unreachable
@@ -105,10 +112,10 @@ struct OnboardingFlow: View {
             )
 
         case .importMethod:
-            ImportMethodStep(back: pop, recoveryPhrase: { push(.recoveryPhrase) }, ledger: {
+            ImportMethodStep(back: pop, recoveryPhrase: recoverWithPhrase) {
                 path = .ledger
                 push(.ledger)
-            })
+            }
 
         case .ledger:
             LedgerOnboardingStep(back: pop) { requests in

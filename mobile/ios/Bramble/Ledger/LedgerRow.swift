@@ -69,21 +69,26 @@ struct LedgerRow: Equatable, Identifiable {
         return namingPath && atBramblePath ? "Account \(index) · Bramble path" : "Account \(index)"
     }
 
+    /// A check that ran and could not read the account (`ledger.candidate.balanceUnknown`).
+    static let unchecked = "Couldn't check this account's activity. Try again."
+
     /// `candidateState`: the row's status, in the recovery picker's words.
     var status: String {
         if existing { return "Already in this wallet" }
-        guard let activity, activity.deployed != .unknown else { return "Checking…" }
+        guard let activity else { return "Checking…" }
         if activity.deployed == .present { return "Deployed on Starknet" }
         switch activity.funded {
         case .present:
             return family == .openZeppelin ? "Funded and ready to deploy" : "Funded, not deployed"
 
         case .unknown:
-            return "Couldn't check this account's activity. Try again."
+            return Self.unchecked
 
         case .absent:
             break
         }
+        // The check ran but could not read the deployment: never "Checking…" forever.
+        if activity.deployed == .unknown { return Self.unchecked }
         if family == .argent {
             return candidate.request.scheme == .ready
                 ? "No on-chain activity found — Bramble only imports existing Ready accounts"

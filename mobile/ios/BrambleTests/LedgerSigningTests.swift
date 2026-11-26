@@ -136,6 +136,36 @@ final class LedgerSigningTests: XCTestCase {
         XCTAssertTrue(rig.node.posts.allSatisfy { !$0.write })
     }
 
+    func testCancelDuringTheReconnectEndsWithoutListingLedgers() async throws {
+        let scanner = FakeLedgerScanner(bluetooth: .ready, devices: [ledger])
+        let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
+        var connects = 0
+        var release: CheckedContinuation<Void, Never>?
+        let signer = LedgerSigner(scanner: scanner) { _ in
+            connects += 1
+            // The second connect (the session's Ledger again) waits until the test lets it fail.
+            if connects > 1 {
+                await withCheckedContinuation { release = $0 }
+                throw LedgerLinkError.failed
+            }
+            return ReplayLedgerDevice(script: script)
+        }
+        let version = Data([0x5a, 0, 0, 0, 0])
+        let first = Task { await signer.exchange(version, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        _ = await first.value
+        signer.finish()
+        let second = Task { await signer.exchange(version, for: nil) }
+        try await until { signer.stage == .connecting(ledger) }
+        signer.cancel()
+        release?.resume()
+        let answer = await second.value
+        XCTAssertNil(answer, "a cancel is not a failed reconnect")
+        XCTAssertEqual(signer.stage, .idle, "the sheet stays closed")
+        XCTAssertEqual(scanner.scans, 1, "no second list of Ledgers")
+    }
+
     func testOnlyTheSignHashApduShowsAHash() throws {
         XCTAssertNil(LedgerSigner.shownHash(Data([0x5a, 0, 0, 0, 0])))
         XCTAssertEqual(LedgerSigner.shownHash(try Self.signRequest(Self.transferHash)), Self.padded(Self.transferHash))

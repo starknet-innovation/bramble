@@ -163,6 +163,8 @@ final class LedgerSigner: DeviceSigning {
     /// The session's Ledger first; else the list until the person picks one or cancels.
     private func connect() async -> (any LedgerExchanging)? {
         if let known, let connected = await open(known) { return connected }
+        // Cancelled (or locked) during that reconnect: stop; only a failed reconnect lists Ledgers.
+        guard !cancelled else { return nil }
         scanner.changed = { [weak self] in self?.bluetoothChanged() }
         stage = .bluetooth(.unknown)
         bluetoothChanged()
