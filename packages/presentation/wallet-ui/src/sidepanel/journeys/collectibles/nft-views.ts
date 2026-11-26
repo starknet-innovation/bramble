@@ -30,6 +30,7 @@ import {
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
+import { shipsAnimationRenderer } from "../../shell/build-info";
 import { nftCardActions } from "./nft-card-actions";
 import { nftCoverageNote } from "./nft-coverage";
 
@@ -157,7 +158,7 @@ const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
 // so it never runs on gallery paint. The host `<li>` must be positioned
 // (`.nft-card`) for the overlay to cover the art.
 const nftTilePlay = (item: NftGalleryItem): string =>
-  item.animationUrl
+  item.animationUrl && shipsAnimationRenderer()
     ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="${th("collectibles.play")}">${icon("gamepad")}<span>${th("collectibles.play")}</span></button>
       <iframe class="nft-animation nft-animation--tile" title="${th("collectibles.animationTitle")}" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
     : "";
@@ -402,7 +403,7 @@ export const selectedNftDetail = (
 // prefetching (Sherlock 236). The URI is carried on the button's data-* and
 // escaped into it here.
 const nftAnimationSection = (item: NftGalleryItem): string =>
-  item.animationUrl
+  item.animationUrl && shipsAnimationRenderer()
     ? `<section class="section">
         <h2>${th("collectibles.animation")}</h2>
         <span class="hint">${th("collectibles.animationHint")}</span>

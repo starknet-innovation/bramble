@@ -28,8 +28,9 @@
  *   runs untrusted on-chain HTML — would load as an ordinary privileged
  *   extension page. A page sandboxed on one browser and privileged on another
  *   is the kind of difference that stays invisible until it matters, so where
- *   the manifest cannot sandbox it, it does not ship. Nothing is lost: the
- *   collectibles journey is parked and no view can reach the gallery.
+ *   the manifest cannot sandbox it, it does not ship. The NFTs tab still
+ *   works there; the gallery hides its play control (`shipsAnimationRenderer`
+ *   in wallet-ui's `build-info.ts`), so an animation shows as its image only.
  * - `browser_specific_settings` is added. The add-on id is what binds this
  *   build to its stored data and its AMO listing, and `strict_min_version`
  *   refuses installation on releases whose MV3 support this manifest assumes.
@@ -56,12 +57,12 @@ export const FIREFOX_EXTENSION_ID = "bramble@starknet.org";
  * consent declaration the browser cannot honour, so this is the lowest honest
  * value rather than merely a conservative one.
  *
- * The floor and the collectibles gallery are ONE decision. It was 154 — above
+ * The floor and collectible animations are ONE decision. It was 154 — above
  * both ESR lines — while the sandboxed renderer shipped, because Firefox gained
- * the `sandbox` manifest key there. That renderer is now withheld (see
- * {@link shipsSandboxedRenderer}) because the journey is parked. Un-parking the
- * gallery means raising this back to 154 and excluding ESR again; it is not a
- * change that can be made on the UI side alone.
+ * the `sandbox` manifest key there. That renderer is withheld (see
+ * {@link shipsSandboxedRenderer}) to keep ESR, so Firefox shows NFTs without
+ * playing their animations. Playing them means raising this back to 154 and
+ * excluding ESR again; it is not a change that can be made on the UI side alone.
  *
  * Desktop only. No `gecko_android` key is declared, which is how an add-on
  * declines Android compatibility. Gecko has no sidebar on Android at all —

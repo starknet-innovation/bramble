@@ -21,7 +21,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless. An existing Ready (Argent X) Ledger account can be restored from the add-account chooser, which reads the device at Ready's derivation path.
 - **dApp connect** — injects `window.starknet_bramble` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
-- **NFT gallery (parked)** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`. The Collectibles tab, gallery entry points, and NFT indexer setting are hidden in the current release while the journey is finished.
+- **NFTs** — an NFTs tab on Home (on by default; Settings turns it off) shows ERC-721 and ERC-1155 collectibles found through Starkscan or an indexer you set, each re-proven owned on chain before it is shown, with name, image, description, and attributes from `token_uri` / `uri`. Send one through the usual review, hide spam, or approve a site's request to watch one. An on-chain animation plays only when you press play, inside the sandboxed renderer (Chromium only; see Firefox below).
 - **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.
 - **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
   reviewed public deposit, read private note totals on demand, submit private action batches, and
@@ -82,9 +82,9 @@ merely a cautious one.
 
 The floor and the collectible renderer are **one decision**. That page executes untrusted on-chain
 HTML and is only safe inside a manifest-declared sandbox, which Firefox gained in 154 — so it is
-withheld from the Gecko package rather than shipped where the manifest cannot sandbox it. Nothing is
-lost today: the collectibles journey is parked and no view can reach the gallery. Un-parking it means
-raising this floor back to 154 and excluding ESR again.
+withheld from the Gecko package rather than shipped where the manifest cannot sandbox it. On Firefox
+the NFTs tab works, but a collectible's animation has no play control and only its image shows.
+Playing animations there means raising this floor back to 154 and excluding ESR again.
 
 **Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
 hardware transport exists.

@@ -11,6 +11,7 @@
  * exhaustiveness rule that refuses to guess about a key nobody has classified.
  */
 import { describe, expect, test } from "bun:test";
+import { BUILD_TARGETS } from "../../apps/extension/build-target";
 import {
   FIREFOX_DATA_COLLECTION_PERMISSIONS,
   FIREFOX_EXCLUDED_FILES,
@@ -21,6 +22,7 @@ import {
   shipsSandboxedRenderer,
   toFirefoxManifest,
 } from "../../apps/extension/firefox-manifest";
+import { shipsAnimationRenderer } from "../../packages/presentation/wallet-ui/src/sidepanel/shell/build-info";
 import {
   EXPECTED_RUNTIME_FILES,
   FIREFOX_RUNTIME_FILES,
@@ -142,6 +144,10 @@ describe("firefox manifest derivation", () => {
     expect(FIREFOX_RUNTIME_FILES.length).toBe(chromeFiles.length - FIREFOX_EXCLUDED_FILES.length);
     expect(shipsSandboxedRenderer("firefox")).toBe(false);
     expect(shipsSandboxedRenderer("chrome")).toBe(true);
+    // The gallery offers "play" only where the build ships the page it plays in.
+    for (const target of BUILD_TARGETS) {
+      expect(shipsAnimationRenderer(target)).toBe(shipsSandboxedRenderer(target));
+    }
     for (const excluded of FIREFOX_EXCLUDED_FILES) {
       expect(chromeFiles).toContain(excluded);
       expect(FIREFOX_RUNTIME_FILES).not.toContain(excluded);
