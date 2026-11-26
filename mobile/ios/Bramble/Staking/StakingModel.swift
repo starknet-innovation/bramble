@@ -12,6 +12,26 @@ protocol StakingReadSteps: AnyObject, Sendable {
 extension StakingChainRead: StakingReadSteps {}
 extension StakingPreparation: StakingReadSteps {}
 
+/// A stake's check read (`StakingPreparation.checkNextCalls`, wallet-core #131): a second read of
+/// the same pool that `plan` requires to name the same pool, so no one node chooses where a stake's
+/// approval goes. Sent only to the network's bundled endpoints (`StakingCheck.bundled`), never the
+/// person's RPC override. Empty for every other action.
+final class StakingCheck: StakingReadSteps {
+    private let preparation: StakingPreparation
+
+    init(_ preparation: StakingPreparation) { self.preparation = preparation }
+
+    /// `network` with only its bundled endpoints; nil for a network the core does not bundle, so
+    /// the check is never read from the person's override and `plan` refuses the stake.
+    static func bundled(_ network: NetworkInfo) -> NetworkInfo? {
+        supportedNetworks().first { $0.network == network.network }
+    }
+
+    func nextCalls() -> [RpcRequest] { preparation.checkNextCalls() }
+    func accept(reply: RpcReply) -> ScanStep { preparation.checkAccept(reply: reply) }
+    func restart() { preparation.checkRestart() }
+}
+
 extension PortfolioEndpoints {
     /// Runs `read` to its end on the first verified endpoint that answers, replaying it from the
     /// start on the next after a transport failure (`withRpcFallback`). The core's `view` or `plan`

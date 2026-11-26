@@ -7,10 +7,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.bramble.core.NetworkId
+import org.bramble.core.supportedNetworks
 import org.bramble.wallet.design.BrambleTheme
 import org.bramble.wallet.portfolio.TokenDetailScreen
 import org.bramble.wallet.staking.StakingCopy
 import org.bramble.wallet.staking.StakingScreen
+import org.bramble.wallet.staking.bundledNetwork
 import org.bramble.wallet.staking.stakingRefusal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,6 +34,17 @@ class StakingTest {
 
     private fun waitFor(matcher: SemanticsMatcher) =
         rule.waitUntil(TIMEOUT_MS) { rule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty() }
+
+    /**
+     * A stake's check read (wallet-core #131) goes to the bundled endpoints only, never the
+     * person's RPC override, which `NetworkInfo.rpcUrls` lists first.
+     */
+    @Test
+    fun checkReadSkipsTheOverride() {
+        val mainnet = supportedNetworks().first { it.network == NetworkId.MAINNET }
+        val overridden = mainnet.copy(rpcUrls = listOf("https://override.invalid") + mainnet.rpcUrls)
+        assertEquals(mainnet.rpcUrls, bundledNetwork(overridden)?.rpcUrls)
+    }
 
     @Test
     fun sepoliaIsTheCoresRefusal() {
