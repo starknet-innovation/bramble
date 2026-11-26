@@ -53,7 +53,7 @@ struct BrowserView: View {
             SkinProvider {
                 if let sign = card.sign {
                     SignSheet(card: card, sign: sign) { approved in
-                        if approved { bridge?.sign(card) } else { bridge?.deny(card) }
+                        if approved { Task { await bridge?.sign(card) } } else { bridge?.deny(card) }
                     } leave: {
                         bridge?.deny(card)
                         back()
@@ -273,8 +273,8 @@ final class BrowserBridge: NSObject, WKScriptMessageHandlerWithReply, WKNavigati
         deliver(sink.approve(card, accountId: accountId))
     }
 
-    func sign(_ card: DappRequestSink.Card) {
-        deliver(sink.sign(card))
+    func sign(_ card: DappRequestSink.Card) async {
+        deliver(await sink.sign(card))
     }
 
     func deny(_ card: DappRequestSink.Card) {

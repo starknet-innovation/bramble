@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +30,7 @@ import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.bramble.core.NetworkId
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleField
@@ -109,6 +111,7 @@ private fun CardSheet(
     bridge: BrowserBridge,
     back: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     val card = bridge.sink.cards.firstOrNull() ?: return
     val sink = bridge.sink
     val leave = {
@@ -118,7 +121,7 @@ private fun CardSheet(
     val sign = card.sign
     if (sign != null) {
         SignSheet(store, card, sign, leave) { approved ->
-            bridge.deliver(if (approved) sink.sign(card) else sink.deny(card))
+            if (approved) scope.launch { bridge.deliver(sink.sign(card)) } else bridge.deliver(sink.deny(card))
         }
     } else {
         ConnectSheet(store, card, leave) { accountId ->

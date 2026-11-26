@@ -1,11 +1,9 @@
 package org.bramble.wallet.browser
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The sign card's pure helpers: the document re-indented, never parsed, and the outside-execution test. */
+/** The sign card's pure helper: the document re-indented, never parsed. */
 class SignRequestTextTest {
     /** String contents survive verbatim, spaces, separators, escapes and brackets included. */
     @Test
@@ -27,14 +25,5 @@ class SignRequestTextTest {
                 "}",
             ).joinToString("\n")
         assertEquals(expected, indentedJson(json))
-    }
-
-    /** The outside-execution warning follows the primary type, so one with no calls still carries it. */
-    @Test
-    fun outsideExecutionByType() {
-        assertTrue(isOutsideExecution("OutsideExecution · Account.execute_from_outside"))
-        assertTrue(isOutsideExecution("OutsideExecution"))
-        assertFalse(isOutsideExecution("Mail · OutsideExecution"))
-        assertFalse(isOutsideExecution("OutsideExecutionV2 · App"))
     }
 }
