@@ -33,6 +33,10 @@ import {
   SEND_COPY_SWIFT_PATH,
 } from "../../scripts/mobile-send-copy";
 import {
+  computeStrk20Primitives,
+  STRK20_PRIMITIVES_PATH,
+} from "../../scripts/mobile-strk20-primitives";
+import {
   computeTransactionFixture,
   splitTransactionFixture,
 } from "../../scripts/mobile-transactions-fixture";
@@ -198,6 +202,15 @@ describe("mobile privacy parity", () => {
         expect(JSON.parse(await readFile(path, "utf8"))).toEqual(part);
       }
     },
+  );
+
+  test.skipIf(!existsSync(PRIVACY_SDK_BUNDLE))(
+    "the committed STRK20 primitives are what the pinned SDK computes",
+    async () => {
+      const committed = JSON.parse(await readFile(STRK20_PRIMITIVES_PATH, "utf8"));
+      expect(committed).toEqual(await computeStrk20Primitives());
+    },
+    60_000,
   );
 
   test("the privacy copy tables are rendered from the committed fixture", async () => {
