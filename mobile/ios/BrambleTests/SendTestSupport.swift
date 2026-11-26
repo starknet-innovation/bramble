@@ -87,6 +87,8 @@ final class MockNode: RpcTransport, @unchecked Sendable {
     /// What `starknet_call` answers when set (a balance's limbs, a Starknet name's address); empty
     /// keeps the default reply.
     var callResult: [String] = []
+    /// What `starknet_estimateFee` answers for a deployment when set; else `estimate`.
+    var deployEstimate: [String: String] = [:]
     /// Runs before a `starknet_call` is answered, e.g. to edit the field while a name resolves.
     var onCall: (@Sendable () async -> Void)?
     /// Runs before a write is answered, e.g. to background the app while the write is in flight.
@@ -123,7 +125,11 @@ final class MockNode: RpcTransport, @unchecked Sendable {
 
         case "starknet_estimateFee":
             let txs = (request["params"] as? [String: Any])?["request"] as? [[String: Any]] ?? []
-            answer = ["result": txs.map { _ in Self.estimate }]
+            let estimates = txs.map { transaction in
+                let deploys = transaction["type"] as? String == "DEPLOY_ACCOUNT"
+                return deploys && !deployEstimate.isEmpty ? deployEstimate : Self.estimate
+            }
+            answer = ["result": estimates]
 
         case "starknet_addInvokeTransaction", "starknet_addDeployAccountTransaction":
             answer = ["result": ["transaction_hash": pendingHash() ?? "0x1"]]

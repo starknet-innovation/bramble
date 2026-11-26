@@ -24,6 +24,8 @@ struct GaslessDriver: Sendable {
     private static let millisecondsPerSecond: Double = 1_000
 
     let transport: any PortfolioTransport
+    /// The device a Ledger account signs the relay on; nil is the app's (`LedgerSigner.shared`).
+    var signer: (any DeviceSigning)?
     /// The host's wall clock in epoch milliseconds.
     var clock: @Sendable () -> UInt64 = { UInt64(Date().timeIntervalSince1970 * millisecondsPerSecond) }
 
@@ -56,6 +58,18 @@ struct GaslessDriver: Sendable {
     /// cancelled task stops at its next pause, never cutting the core's delay short, and reads as
     /// unknown (Android's cancellation, which posts nothing more either).
     func submit(_ fee: any GaslessFeeProtocol, offer: GaslessOffer, prices: PriceView?) async -> Outcome {
+        var device: (any DeviceSigning)?
+        let outcome = await submit(fee, offer: offer, prices: prices) { device = $0 }
+        await device?.finish()
+        return outcome
+    }
+
+    private func submit(
+        _ fee: any GaslessFeeProtocol,
+        offer: GaslessOffer,
+        prices: PriceView?,
+        using: (any DeviceSigning) -> Void
+    ) async -> Outcome {
         do {
             var step = try fee.choose(offer: offer, prices: prices, nowMs: clock())
             while true {
@@ -73,9 +87,17 @@ struct GaslessDriver: Sendable {
                     try await pause(delayMs)
                     step = try fee.resume()
 
-                case .device, .deviceRetry:
-                    // Mobile signs on no device (P8): a Ledger account's gasless send ends here, unsigned.
-                    return .refused(SendFailureText.message(SendFailure(code: .signingFailed, hash: nil)))
+                case let .device(apdu):
+                    let ledger = await deviceSigner()
+                    using(ledger)
+                    guard let answer = await ledger.exchange(apdu) else { return Self.cancelled }
+                    step = try fee.advanceDevice(reply: answer, nowMs: clock())
+
+                case let .deviceRetry(reason):
+                    let ledger = await deviceSigner()
+                    using(ledger)
+                    guard await ledger.refused(reason) else { return Self.cancelled }
+                    step = try fee.advanceDevice(reply: .retryDevice, nowMs: clock())
                 }
             }
         } catch let error as GaslessFeeError {
@@ -101,6 +123,14 @@ struct GaslessDriver: Sendable {
         case let .Lost(reason):
             .unknown(reason)
         }
+    }
+
+    /// Cancelled on the device sheet: nothing was signed, so nothing was submitted.
+    static let cancelled = Outcome.refused(SendFailureText.message(SendFailure(code: .signingFailed, hash: nil)))
+
+    private func deviceSigner() async -> any DeviceSigning {
+        if let signer { return signer }
+        return await MainActor.run { LedgerSigner.shared }
     }
 
     /// Waits the core's delay; throws `CancellationError` instead of cutting it short.

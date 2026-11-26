@@ -89,17 +89,25 @@ struct LedgerConnectContent: View {
     }
 
     private var devices: some View {
+        LedgerDeviceList(devices: model.devices) { device in Task { await model.choose(device) } }
+    }
+}
+
+/// "Ledgers nearby": each Ledger found, or "Searching…"; shared by connect and sign.
+struct LedgerDeviceList: View {
+    let devices: [LedgerDevice]
+    let choose: (LedgerDevice) -> Void
+
+    var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.sm) {
             Eyebrow(text: "Ledgers nearby")
-            if model.devices.isEmpty {
+            if devices.isEmpty {
                 StatusLine(text: "Searching…")
             } else {
                 MenuGroup {
-                    ForEach(model.devices) { device in
-                        MenuRow(icon: .shield, title: device.name) {
-                            Task { await model.choose(device) }
-                        }
-                        .accessibilityIdentifier("ledger-device")
+                    ForEach(devices) { device in
+                        MenuRow(icon: .shield, title: device.name) { choose(device) }
+                            .accessibilityIdentifier("ledger-device")
                     }
                 }
             }

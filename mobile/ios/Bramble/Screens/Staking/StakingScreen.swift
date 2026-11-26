@@ -45,6 +45,7 @@ struct StakingScreen: View {
                 store.tab = .activity
                 dismiss()
             })
+            .ledgerSigning()
             .environment(store)
         }
     }

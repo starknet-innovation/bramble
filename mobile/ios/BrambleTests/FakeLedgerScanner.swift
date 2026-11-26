@@ -76,7 +76,12 @@ final class ReplayLedgerDevice: LedgerExchanging {
     var version: Data?
     /// After this many replies, every exchange is a disconnect.
     var disconnectAfter: Int?
+    /// Replaces the reply to one request (a refusal's status word, say); used once.
+    var answerOnce: [Data: Data] = [:]
+    /// Sees each request before it is answered.
+    var onSend: ((Data) -> Void)?
     private(set) var closed = false
+    private(set) var requests: [Data] = []
     private var replies = 0
 
     init(script: [Data: Data]) {
@@ -84,9 +89,12 @@ final class ReplayLedgerDevice: LedgerExchanging {
     }
 
     func send(_ apdu: Data) -> LedgerExchange {
+        requests.append(apdu)
         guard !closed else { return .failure(.disconnected) }
         if let disconnectAfter, replies >= disconnectAfter { return .failure(.disconnected) }
         replies += 1
+        onSend?(apdu)
+        if let once = answerOnce.removeValue(forKey: apdu) { return .reply(once) }
         if apdu == Self.versionRequest, let version { return .reply(version) }
         guard let reply = script[apdu] else { return .failure(.other) }
         return .reply(reply)

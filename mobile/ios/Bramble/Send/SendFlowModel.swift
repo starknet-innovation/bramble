@@ -368,7 +368,7 @@ final class SendFlowModel {
             fail(with: failure)
 
         case .rpc, .wait, .device, .deviceRetry:
-            // The driver answers these (`SendDriver.run`); a device step comes back as `.failed`.
+            // The driver answers these (`SendDriver.run`), device steps on the Ledger sheet.
             break
         }
     }

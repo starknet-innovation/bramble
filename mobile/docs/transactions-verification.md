@@ -161,9 +161,16 @@ generated Kotlin bindings. They are **uncompiled** here (no SDK); a JVM parity t
 ## 9. Out of scope, and what Krusty 0.11.0 lacks
 
 **Out of scope (other workstreams):** swap, privacy/shield, multisig, the explorer activity feed,
-Braavos accounts (Ready/Argent sends: `accounts.md` §2.7a), Ledger, fiat prices (review shows "Fiat estimate unavailable" until the
+Braavos accounts (Ready/Argent sends: `accounts.md` §2.7a), fiat prices (review shows "Fiat estimate unavailable" until the
 portfolio workstream lands), the address book, a per-send biometric gate, hardware-wrapped keys
 and the inactivity lock (vault-security), and a fee-speed control (the extension has none).
+
+**Ledger (P8).** A Ledger account's plan signs on the device: `SendDriver` and `GaslessDriver`
+hand each `Device` APDU to the app's one `LedgerSigner` and its sheet (connect, check, the hash to
+compare, refusal with Try again, Cancel transaction, which closes the plan); the link closes when
+the run returns or the wallet locks. Covered by `LedgerSigningTests` (iOS, the real core over the
+Speculos transcripts) and `LedgerSignerTest` (Android, scripted plan). Not yet on the device:
+multisig co-signing (`MultisigDeviceSigning`) and dapp signing.
 
 **Krusty 0.11.0 gaps.** None blocks this work; none needs fallback crypto.
 1. **No query-version (2^128+3) hash.** None is needed: OZ estimates skip validation with an

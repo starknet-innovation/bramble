@@ -208,6 +208,7 @@ final class WalletStore {
         privacy.reset()
         plans.forEach { $0.cancel() }
         plans = []
+        LedgerSigner.shared.close()
         observedAtMs = [:]
         deployment = .unknown
         core.lock()
