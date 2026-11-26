@@ -14,7 +14,7 @@ struct TokenDetailView: View {
     var swap: (String) -> Void = { _ in /* No action unless the shell wires the swap flow. */ }
     /// Opens the privacy journey (Shield, Go private).
     var journey: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
-    /// Opens staking (`canStakeToken`): offered for STRK where the core's policy has staking on.
+    /// Opens staking: offered for STRK only, where the core's policy has staking on.
     var stake: () -> Void = { /* No action unless the shell wires staking. */ }
     @State private var points: [Double] = []
 
@@ -53,6 +53,8 @@ struct TokenDetailView: View {
     }
 
     /// STRK by address, never by symbol; the staking screen does its own on-chain check either way.
+    /// STRK only: the extension's `canStakeToken` also offers a token its loaded staking rows list,
+    /// and this screen has no staking rows loaded.
     private func canStake(_ token: TokenConfig) -> Bool {
         let strk = store.networkInfo.tokens.first { $0.symbol == "STRK" }
             .flatMap { validateRecipient(input: $0.address) }
