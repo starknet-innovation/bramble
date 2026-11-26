@@ -64,9 +64,8 @@ const cases = [
   {
     name: "rejects CI on pull requests into another branch",
     workflow: "ci.yml",
-    search: "types: [opened, synchronize, reopened, edited]\n    branches: [main]\n",
-    replacement:
-      'types: [opened, synchronize, reopened, edited]\n    branches: [main, "release/**"]\n',
+    search: "types: [opened, synchronize, reopened]\n    branches: [main]\n",
+    replacement: 'types: [opened, synchronize, reopened]\n    branches: [main, "release/**"]\n',
     failure: "CI must run on pull requests into main and on pushes to main only",
   },
   {
@@ -84,17 +83,26 @@ const cases = [
     failure: "release-validation must run only on pushes to main and same-repository pull requests",
   },
   {
-    name: "rejects fast-checks skipped when a pull request is retargeted",
+    name: "rejects CI re-running on pull request edits",
     workflow: "ci.yml",
-    search: "    if: github.event.action != 'edited' || github.event.changes.base\n",
-    replacement: "    if: github.event.action != 'edited'\n",
-    failure: "fast-checks must run when a pull request's base changes",
+    search: "types: [opened, synchronize, reopened]\n",
+    replacement: "types: [opened, synchronize, reopened, edited]\n",
+    failure: "CI must run on pull requests into main and on pushes to main only",
   },
   {
-    name: "rejects release validation skipped when a pull request is retargeted",
+    name: "rejects a skip condition on fast-checks",
     workflow: "ci.yml",
-    search: "      (github.event.action != 'edited' || github.event.changes.base) &&\n",
-    replacement: "      github.event.action != 'edited' &&\n",
+    search: "  fast-checks:\n    runs-on: ubuntu-latest\n",
+    replacement:
+      "  fast-checks:\n    if: github.event.action != 'edited'\n    runs-on: ubuntu-latest\n",
+    failure: "fast-checks is a required gate and must never report a skip",
+  },
+  {
+    name: "rejects release validation skipped on pull request edits",
+    workflow: "ci.yml",
+    search: "    if: >-\n      (github.event_name == 'push' ||\n",
+    replacement:
+      "    if: >-\n      github.event.action != 'edited' &&\n      (github.event_name == 'push' ||\n",
     failure: "release-validation must run only on pushes to main and same-repository pull requests",
   },
   {

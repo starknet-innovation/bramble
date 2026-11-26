@@ -25,11 +25,12 @@ name: CI
 # `main` commit) lives in nightly.yml.
 on:
   pull_request:
-    # `edited` is listed so a PR whose BASE changes re-evaluates its checks
-    # against the new base instead of reporting against the old one. Naming
-    # any type replaces the default set, so the other three are spelled out
-    # rather than inherited.
-    types: [opened, synchronize, reopened, edited]
+    # `edited` is deliberately absent. A title or body edit re-runs on the same
+    # commit, and a required job skipped there replaces an earlier failure with
+    # a skip that GitHub counts as passing. Every PR targets `main`, so a PR
+    # retargeted onto it shows its required checks as missing, which blocks the
+    # merge until the next push.
+    types: [opened, synchronize, reopened]
     branches: [main]
   push:
     branches: [main]
@@ -96,12 +97,6 @@ jobs:
   # aggregate `bun run check` is intentionally NOT used here because it chains
   # check:argent/check:privacy, which require the vendored artifacts.)
   fast-checks:
-    # `edited` also fires for title and body edits, which never change the head
-    # commit, so those are skipped. A BASE change is different: a PR retargeted
-    # to `main` has never been checked against it, and a skipped required job
-    # counts as passing, so a retarget must run the gates. `github.event.action`
-    # is absent on push, so that path is unaffected.
-    if: github.event.action != 'edited' || github.event.changes.base
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,11 +132,9 @@ jobs:
   # validation of exactly what landed, including fork PRs' merge commits).
   # A PR head from a fork never reaches the self-hosted runner: the fork guard
   # below admits only PRs whose head lives in this repository. A push to
-  # `main` is trusted (it is the merged result of a PR that passed CI). Skipped
-  # on `edited` unless the base changed, for the same reason as fast-checks.
+  # `main` is trusted (it is the merged result of a PR that passed CI).
   release-validation:
     if: >-
-      (github.event.action != 'edited' || github.event.changes.base) &&
       (github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository))

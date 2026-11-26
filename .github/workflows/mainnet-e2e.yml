@@ -78,6 +78,7 @@ jobs:
       strk_before_raw: ${{ steps.balance.outputs.strk_before_raw }}
       usdc_before_raw: ${{ steps.balance.outputs.usdc_before_raw }}
       rpc_sha256: ${{ steps.balance.outputs.rpc_sha256 }}
+      verdict: ${{ steps.balance.outputs.verdict }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -249,7 +250,6 @@ jobs:
           if [ "${chain,,}" != "0x534e5f4d41494e" ]; then
             echo "::error::The mainnet RPC is unavailable or not mainnet. CI does not fall back."; exit 1
           fi
-      # Only spec is the STRK20 lifecycle (strk20 tier). Zero executed tests fail.
       - name: Playwright mainnet
         id: playwright
         if: vars.MAINNET_E2E_STRK20 == 'true'
@@ -402,7 +402,7 @@ jobs:
           REVISION: ${{ needs.resolve.outputs.revision }}
           ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
           TIER: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'strk20' || 'standard' }}
-          VERDICT: ${{ needs.post.outputs.verdict }}
+          VERDICT: ${{ needs.post.outputs.verdict || needs.preflight.outputs.verdict }}
           STRK_BEFORE: ${{ needs.post.outputs.strk_before }}
           STRK_AFTER: ${{ needs.post.outputs.strk_after }}
           STRK_DELTA: ${{ needs.post.outputs.strk_delta }}
@@ -468,7 +468,7 @@ jobs:
           RESULTS: ${{ needs.preflight.result }} ${{ needs.build.result }} ${{ needs.execute.result }} ${{ needs.post.result }}
           PLAYWRIGHT: ${{ needs.execute.outputs.playwright }}
           GASLESS: ${{ needs.execute.outputs.gasless }}
-          VERDICT: ${{ needs.post.outputs.verdict }}
+          VERDICT: ${{ needs.post.outputs.verdict || needs.preflight.outputs.verdict }}
           STRK_DELTA: ${{ needs.post.outputs.strk_delta }}
           USDC_DELTA: ${{ needs.post.outputs.usdc_delta }}
         with:

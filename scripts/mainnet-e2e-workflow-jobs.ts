@@ -55,7 +55,7 @@ const JOBS: Readonly<Record<string, { readonly [key: string]: Shape }>> = {
     environment: BALANCE,
     permissions: READ,
     "runs-on": HOSTED,
-    outputs: outputs("balance", ["strk_before_raw", "usdc_before_raw", "rpc_sha256"]),
+    outputs: outputs("balance", ["strk_before_raw", "usdc_before_raw", "rpc_sha256", "verdict"]),
   },
   build: {
     needs: ["resolve", "gate"],

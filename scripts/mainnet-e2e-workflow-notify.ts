@@ -74,7 +74,7 @@ export const NOTIFY_STEPS: readonly StepShape[] = [
         RESULTS: ["preflight", "build", "execute", "post"].map(result).join(" "),
         PLAYWRIGHT: expression("needs.execute.outputs.playwright"),
         GASLESS: expression("needs.execute.outputs.gasless"),
-        VERDICT: expression("needs.post.outputs.verdict"),
+        VERDICT: expression("needs.post.outputs.verdict || needs.preflight.outputs.verdict"),
         STRK_DELTA: expression("needs.post.outputs.strk_delta"),
         USDC_DELTA: expression("needs.post.outputs.usdc_delta"),
       },

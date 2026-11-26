@@ -301,7 +301,7 @@ const REPORT: readonly StepShape[] = [
         REVISION: expression("needs.resolve.outputs.revision"),
         ADDRESS,
         TIER,
-        VERDICT: post("verdict"),
+        VERDICT: expression("needs.post.outputs.verdict || needs.preflight.outputs.verdict"),
         STRK_BEFORE: post("strk_before"),
         STRK_AFTER: post("strk_after"),
         STRK_DELTA: post("strk_delta"),

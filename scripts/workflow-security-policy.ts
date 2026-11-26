@@ -137,7 +137,7 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
 };
 
 // Trunk CI: the heavy pipeline on same-repo PRs and pushes to `main`, never a
-// fork PR on the self-hosted runner, gates rerun on retarget, guards advisory.
+// fork PR on the self-hosted runner, no skip-on-edit, guards advisory.
 const ciFailures = (source: string): string[] => {
   const failures: string[] = [];
   const guards = jobBody(source, "pr-guards");
@@ -145,14 +145,14 @@ const ciFailures = (source: string): string[] => {
   requireText(
     failures,
     source,
-    "types: [opened, synchronize, reopened, edited]\n    branches: [main]\n  push:\n    branches: [main]\n",
+    "types: [opened, synchronize, reopened]\n    branches: [main]\n  push:\n    branches: [main]\n",
     "CI must run on pull requests into main and on pushes to main only",
   );
-  requireText(
+  forbidText(
     failures,
     jobBody(source, "fast-checks"),
-    "if: github.event.action != 'edited' || github.event.changes.base\n",
-    "fast-checks must run when a pull request's base changes",
+    "\n    if:",
+    "fast-checks is a required gate and must never report a skip",
   );
   forbidText(
     failures,
@@ -170,7 +170,6 @@ const ciFailures = (source: string): string[] => {
     failures,
     validation,
     `if: >-
-      (github.event.action != 'edited' || github.event.changes.base) &&
       (github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository))
