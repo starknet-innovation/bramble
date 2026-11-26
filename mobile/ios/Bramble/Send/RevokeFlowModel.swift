@@ -219,6 +219,10 @@ final class RevokeFlowModel {
         case let .failed(failure):
             fail(failure)
 
+        case .device, .deviceRetry:
+            // No Ledger transport on mobile yet: a Ledger account's plan fails closed.
+            fail(SendFailure(code: .signingFailed, hash: nil))
+
         case .rpc, .wait:
             break
         }

@@ -34,10 +34,23 @@ class AllowanceCopyTest {
 
     private fun view(
         amount: String,
+        unlimited: Boolean = false,
         lowerBound: Boolean = false,
         source: AllowanceSource = AllowanceSource.WALLET,
         unconfirmed: Boolean = false,
-    ) = AllowanceView("x", "a", NetworkId.SEPOLIA, "0x1", "0x2", amount, lowerBound, false, source, unconfirmed)
+    ) = AllowanceView(
+        "x",
+        "a",
+        NetworkId.SEPOLIA,
+        "0x1",
+        "0x2",
+        amount,
+        unlimited,
+        lowerBound,
+        false,
+        source,
+        unconfirmed,
+    )
 
     @Test
     fun unlimitedFollowsTheFixture() {
@@ -56,7 +69,7 @@ class AllowanceCopyTest {
     @Test
     fun amountsReadAsTheExtensions() {
         assertEquals("1000 units", AllowanceCopy.amount(view("1000"), units))
-        assertEquals("Unlimited", AllowanceCopy.amount(view("340282366920938463463374607431768211455", true), units))
+        assertEquals("Unlimited", AllowanceCopy.amount(view("340282366920938463463374607431768211455", lowerBound = true), units))
         assertEquals("an unknown amount", AllowanceCopy.amount(view("0", lowerBound = true), units))
         assertEquals("at least 5 units", AllowanceCopy.amount(view("5", lowerBound = true), units))
     }
