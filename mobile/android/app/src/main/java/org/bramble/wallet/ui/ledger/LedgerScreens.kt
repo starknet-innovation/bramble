@@ -25,6 +25,7 @@ import org.bramble.core.AccountFamily
 import org.bramble.core.LedgerAccountRequest
 import org.bramble.core.LedgerKey
 import org.bramble.core.LedgerKeyReader
+import org.bramble.core.LedgerOsGate
 import org.bramble.core.LedgerScheme
 import org.bramble.core.NetworkInfo
 import org.bramble.core.accountLabel
@@ -112,6 +113,8 @@ private class LiveLedgerCore(
     override suspend fun describe(address: String) = rpc.ledgerActivity(address, network)
 
     override fun canonical(address: String) = validateRecipient(address) ?: address.lowercase()
+
+    override fun osGate() = LedgerOsGate()
 }
 
 private fun liveModel(
@@ -149,6 +152,10 @@ fun ColumnScope.LedgerConnectContent(model: LedgerConnectModel) {
         is LedgerStage.Connecting -> {
             StatusLine("Connecting to ${stage.device.name}…")
             StatusLine("If asked, confirm the pairing code on both devices.")
+        }
+
+        is LedgerStage.Checking -> {
+            StatusLine(LedgerCopy.checking(stage.phase))
         }
 
         LedgerStage.Reading -> {

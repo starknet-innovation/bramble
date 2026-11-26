@@ -13,11 +13,13 @@ import org.bramble.core.LedgerAccountRequest
 import org.bramble.core.LedgerScheme
 import org.bramble.core.NetworkId
 import org.bramble.core.SiteWarning
+import org.bramble.core.StepReply
 import org.bramble.core.TokenPreferences
 import org.bramble.core.WalletCore
 import org.bramble.wallet.browser.DappCopy
 import org.bramble.wallet.browser.DappRequest
 import org.bramble.wallet.browser.DappRequestSink
+import org.bramble.wallet.ledger.DeviceSigning
 import org.bramble.wallet.security.DeviceClock
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -277,15 +279,30 @@ class DappRequestSinkTest {
             )
         assertTrue(ledger.ledger)
         val noRpc = RpcPost { _, _, _ -> throw AssertionError("no read expected") }
-        val sink = DappRequestSink(core, rpc = noRpc, http = { HttpOutcome(0u, null, null, false) })
+        val cancelled =
+            object : DeviceSigning {
+                override suspend fun exchange(
+                    apdu: ByteArray,
+                    account: AccountRecord?,
+                ): StepReply? = null
+
+                override suspend fun refused(
+                    reason: String,
+                    account: AccountRecord?,
+                ) = false
+
+                override fun finish() = Unit
+            }
+        val sink =
+            DappRequestSink(core, rpc = noRpc, signer = cancelled, http = { HttpOutcome(0u, null, null, false) })
         held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
         sink.approve(sink.cards.single(), ledger.id)
         return Triple(core, sink, ledger)
     }
 
     /**
-     * The core asks a Ledger account's device for the signature; with no signer on mobile yet, the
-     * sink cancels it, so the page is refused (163) rather than left waiting.
+     * The core asks a Ledger account's device for the signature; cancelled on the device sheet, the
+     * page is refused (163) rather than left waiting.
      */
     @Test
     fun ledgerTypedDataEndsRefused() {
