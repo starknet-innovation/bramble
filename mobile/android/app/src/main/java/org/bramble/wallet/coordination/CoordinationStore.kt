@@ -127,7 +127,8 @@ class CoordinationStore(
         val nextContacts = runCatching { work { core.contacts(id) } }.getOrDefault(emptyList())
         val nextMultisigs = runCatching { work { core.multisigs(id) } }.getOrDefault(emptyList())
         val nextPolicy = runCatching { work { core.relayPolicy() } }.getOrNull()
-        val nextOpen = nextMultisigs.associate { record -> record.id to intents(record.id).count(::isOpen) }
+        // Stored intents only: settling reads the chain, and only moves Submitted to a closed state.
+        val nextOpen = nextMultisigs.associate { record -> record.id to storedIntents(record.id).count(::isOpen) }
         if (started != generation) return
         contacts = nextContacts
         multisigs = nextMultisigs

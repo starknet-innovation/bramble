@@ -4,7 +4,7 @@ import SwiftUI
 /// `multisig-home` (`journeys/multisig/multisig-portfolio.ts`): the shared account's actions and
 /// notes, then Tokens and Transactions. Transactions lists the open signing intents and imports
 /// one; "Co-signer updates" syncs gift wraps, whose trusted packages are still held, not imported
-/// (wallet-core v0.7.0 imports a package only by paste, docs/multisig-transactions.md).
+/// (wallet-core v0.9.0 imports a package only by paste, docs/multisig-transactions.md).
 struct SharedAccountHomeView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -63,8 +63,8 @@ struct SharedAccountHomeView: View {
             .padding(BrambleMetrics.Screen.shellPadding)
             .padding(.bottom, BrambleSpace.xl)
         }
-        // Again on every return, so a signature or submission made one screen deeper shows here.
-        .onAppear { Task { await loadIntents() } }
+        // `.task` restarts on every appear, so a signature or submission made one screen deeper
+        // shows here on return, as well as on each switch to Transactions.
         .task(id: tab) { await loadIntents() }
         .task {
             if let address = record?.address {
