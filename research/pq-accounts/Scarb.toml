@@ -1,0 +1,21 @@
+[workspace]
+members = [
+    "crates/bench_interface",
+    "crates/slh_dsa_blake2s_128s",
+    "contracts",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024_07"
+cairo-version = "2.22.0"
+license = "MIT"
+
+[workspace.dependencies]
+starknet = "2.22.0"
+snforge_std = "0.64.1"
+assert_macros = "2.22.0"
+pqbench_interface = { path = "crates/bench_interface" }
+
+[workspace.tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]

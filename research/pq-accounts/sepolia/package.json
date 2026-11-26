@@ -1,0 +1,8 @@
+{
+  "name": "pq-accounts-sepolia",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "starknet": "10.0.2"
+  }
+}

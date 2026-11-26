@@ -1,0 +1,18 @@
+[package]
+name = "pq_accounts"
+version.workspace = true
+edition.workspace = true
+cairo-version.workspace = true
+
+[dependencies]
+starknet.workspace = true
+pqbench_interface.workspace = true
+pqbench_slh_dsa_blake2s_128s = { path = "../crates/slh_dsa_blake2s_128s" }
+
+[[target.starknet-contract]]
+allowed-libfuncs-list.name = "audited"
+sierra = true
+casm = true
+
+[tool]
+scarb.workspace = true

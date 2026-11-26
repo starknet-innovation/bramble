@@ -116,6 +116,7 @@ export const EXPECTED_BIOME_INCLUDES = [
   "!node_modules",
   "!output",
   "!playwright-report",
+  "!research",
   "!test-results",
   "!vendor",
 ] as const;
