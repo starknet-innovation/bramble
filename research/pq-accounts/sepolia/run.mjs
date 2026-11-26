@@ -71,7 +71,7 @@ const sign = (request, tamper) =>
       if (tamper) signature[200] = `0x${(BigInt(signature[200]) ^ 1n).toString(16)}`;
       resolve(signature);
     });
-    child.stdin.end(JSON.stringify(request));
+    child.stdin.end(JSON.stringify({ scheme: "slh-dsa-blake2s-128s", ...request }));
   });
 
 class SlhSigner {

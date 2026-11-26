@@ -23,7 +23,7 @@
 python3 -I signer/slh_signer.py keygen --key my-slh-key.json   # prints the public key
 
 # Serves one request on stdin and answers {"signature": [...]} on stdout:
-echo '{"action":"sign-transaction","payload":{"hash":"0x1234"}}' \
+echo '{"scheme":"slh-dsa-blake2s-128s","action":"sign-transaction","payload":{"hash":"0x1234"}}' \
   | python3 -I signer/slh_signer.py --key my-slh-key.json
 ```
 
