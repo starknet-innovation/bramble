@@ -120,6 +120,7 @@ final class AllowanceFlowTests: XCTestCase {
 
     private func view(
         amount: String,
+        unlimited: Bool = false,
         lowerBound: Bool = false,
         source: AllowanceSource = .wallet,
         unconfirmed: Bool = false,
@@ -132,6 +133,7 @@ final class AllowanceFlowTests: XCTestCase {
             token: Self.strk,
             spender: Self.spender,
             amount: amount,
+            unlimited: unlimited,
             lowerBound: lowerBound,
             revoking: false,
             source: source,
@@ -225,6 +227,10 @@ final class AllowanceFlowTests: XCTestCase {
         XCTAssertEqual(revoke.message, lockLine)
         XCTAssertNotEqual(revoke.message, FriendlyError.message("wallet is locked"))
         XCTAssertEqual(RevokeFlowModel.shown(.Locked), lockLine)
+        // Any other refusal is the core's own sentence (`RevokeError`'s Display), read through the
+        // extension's friendly copy.
+        XCTAssertEqual(RevokeError.NotFound.description, "allowance not found")
+        XCTAssertEqual(RevokeFlowModel.shown(.NotFound), FriendlyError.message("allowance not found"))
         XCTAssertFalse(node.posts.contains(where: \.write))
     }
 
@@ -237,26 +243,11 @@ final class AllowanceFlowTests: XCTestCase {
         XCTAssertEqual(AllowanceCopy.notice(.scanIncomplete), AllowanceCopy.scanIncomplete)
     }
 
-    func testUnlimitedFollowsTheFixture() throws {
-        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "extension-allowances", withExtension: "jsonl"))
-        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
-        let entries = try lines.compactMap { line in
-            try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
-        }
-        let cases = entries.filter { $0["block"] as? String == "unlimited" }
-        XCTAssertEqual(cases.count, 6)
-        for entry in cases {
-            let amount: String = try fixtureValue(entry, "amount")
-            let unlimited: Bool = try fixtureValue(entry, "unlimited")
-            XCTAssertEqual(AllowanceCopy.isUnlimited(amount), unlimited, amount)
-        }
-    }
-
     func testRowsReadAsTheExtensions() throws {
         let tracked = TokenPreferences(persisted: nil).tracked(network: .sepolia).map(\.token)
         let token = try XCTUnwrap(tracked.first { $0.symbol == "STRK" })
         XCTAssertEqual(AllowanceCopy.amount(view(amount: "1000000000000000000"), token: token), "1 STRK")
-        let floor = view(amount: "340282366920938463463374607431768211455")
+        let floor = view(amount: "340282366920938463463374607431768211455", unlimited: true)
         XCTAssertEqual(AllowanceCopy.amount(floor, token: token), "Unlimited")
         XCTAssertEqual(AllowanceCopy.amount(view(amount: "0", lowerBound: true), token: token), "an unknown amount")
         XCTAssertEqual(
@@ -271,7 +262,7 @@ final class AllowanceFlowTests: XCTestCase {
         XCTAssertFalse(AllowanceCopy.canRevoke(view(amount: "1", source: .multisig)))
         XCTAssertFalse(AllowanceCopy.canRevoke(view(amount: "1", unconfirmed: true)))
         XCTAssertEqual(
-            AllowanceCopy.notice(.retentionFull),
+            AllowanceCopy.notice(.retentionFull, entriesPerScope: allowanceEntriesPerScope()),
             "This wallet keeps 50 approvals per account and drops the smallest first, so some may be missing."
         )
     }

@@ -226,54 +226,7 @@ internal class RevokeFlowModel(
             if (error is RevokeException.Locked) {
                 SendFailureText.message(SendFailure(SendFailureCode.LOCKED, null, null))
             } else {
-                friendlyError(refusal(error))
-            }
-
-        /**
-         * The core's sentence for a refusal: `RevokeError`'s `#[error]` text in wallet-core v0.8.0
-         * (`send/revoke.rs`), byte for byte. The bindings carry only `Refused`'s sentence (the batch
-         * review's own); the other variants reach Kotlin without their text, so it is mirrored here
-         * until the core exports it. The screen shows it through the extension's friendly copy
-         * ([friendlyError]), as the side panel does.
-         */
-        fun refusal(error: RevokeException): String =
-            when (error) {
-                is RevokeException.Refused -> {
-                    error.reason
-                }
-
-                is RevokeException.Locked -> {
-                    "wallet is locked"
-                }
-
-                is RevokeException.UnknownAccount -> {
-                    "unknown account"
-                }
-
-                is RevokeException.Storage -> {
-                    "a wallet file could not be read"
-                }
-
-                is RevokeException.InvalidRequest -> {
-                    "invalid revoke request"
-                }
-
-                is RevokeException.OtherAccount -> {
-                    "switch to the account that granted this allowance"
-                }
-
-                is RevokeException.NotFound -> {
-                    "allowance not found"
-                }
-
-                is RevokeException.Collection -> {
-                    "this contract is an NFT collection, not a token; revoke it from the dapp"
-                }
-
-                is RevokeException.UnconfirmedToken -> {
-                    "this wallet could not confirm that contract is a token, so it will not send a revoke " +
-                        "that could approve an NFT instead; revoke it from the dapp"
-                }
+                friendlyError(error.toString())
             }
     }
 }

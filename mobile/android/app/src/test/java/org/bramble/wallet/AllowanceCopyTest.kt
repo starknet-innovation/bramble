@@ -11,7 +11,6 @@ import org.bramble.wallet.allowances.AllowanceCopy
 import org.bramble.wallet.allowances.RevokeFlowModel
 import org.bramble.wallet.allowances.amount
 import org.bramble.wallet.allowances.canRevoke
-import org.bramble.wallet.allowances.isUnlimited
 import org.bramble.wallet.allowances.notice
 import org.bramble.wallet.allowances.source
 import org.bramble.wallet.allowances.subtitle
@@ -21,12 +20,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
- * The allowance manager's row lines as the extension's `allowance-views.ts` paints them, and the
- * unlimited cut-off held to the fixture's `unlimited` block (the core does not export the judge in
- * v0.8.0). Pure: the listing, the review and the revoke run against the core in `AllowancesTest`
+ * The allowance manager's row lines as the extension's `allowance-views.ts` paints them. The
+ * unlimited judge, the retention cap and the refusal sentences are the core's (native, so not
+ * called here). Pure: the listing, the review and the revoke run against the core in `AllowancesTest`
  * and the iOS `AllowanceFlowTests`.
  */
 class AllowanceCopyTest {
@@ -34,29 +32,31 @@ class AllowanceCopyTest {
 
     private fun view(
         amount: String,
+        unlimited: Boolean = false,
         lowerBound: Boolean = false,
         source: AllowanceSource = AllowanceSource.WALLET,
         unconfirmed: Boolean = false,
-    ) = AllowanceView("x", "a", NetworkId.SEPOLIA, "0x1", "0x2", amount, lowerBound, false, source, unconfirmed)
-
-    @Test
-    fun unlimitedFollowsTheFixture() {
-        val cases =
-            File("../../core/tests/fixtures/extension-allowances.jsonl")
-                .readLines()
-                .filter { it.contains(""""block":"unlimited"""") }
-        assertEquals(6, cases.size)
-        val amount = Regex(""""amount":"([^"]*)"""")
-        cases.forEach { line ->
-            val value = amount.find(line)!!.groupValues[1]
-            assertEquals(value, line.contains(""""unlimited":true"""), AllowanceCopy.isUnlimited(value))
-        }
-    }
+    ) = AllowanceView(
+        "x",
+        "a",
+        NetworkId.SEPOLIA,
+        "0x1",
+        "0x2",
+        amount,
+        unlimited,
+        lowerBound,
+        false,
+        source,
+        unconfirmed,
+    )
 
     @Test
     fun amountsReadAsTheExtensions() {
         assertEquals("1000 units", AllowanceCopy.amount(view("1000"), units))
-        assertEquals("Unlimited", AllowanceCopy.amount(view("340282366920938463463374607431768211455", true), units))
+        assertEquals(
+            "Unlimited",
+            AllowanceCopy.amount(view("340282366920938463463374607431768211455", unlimited = true), units),
+        )
         assertEquals("an unknown amount", AllowanceCopy.amount(view("0", lowerBound = true), units))
         assertEquals("at least 5 units", AllowanceCopy.amount(view("5", lowerBound = true), units))
     }
@@ -67,9 +67,9 @@ class AllowanceCopyTest {
         assertEquals("this wallet", AllowanceCopy.source(AllowanceSource.WALLET))
         assertEquals(
             "This wallet keeps 50 approvals per account and drops the smallest first, so some may be missing.",
-            AllowanceCopy.notice(AllowanceNotice.RETENTION_FULL),
+            AllowanceCopy.notice(AllowanceNotice.RETENTION_FULL, 50u),
         )
-        assertEquals(AllowanceCopy.scanIncomplete, AllowanceCopy.notice(AllowanceNotice.SCAN_INCOMPLETE))
+        assertEquals(AllowanceCopy.scanIncomplete, AllowanceCopy.notice(AllowanceNotice.SCAN_INCOMPLETE, 50u))
         assertEquals("3 outstanding", AllowanceCopy.subtitle(3))
         assertTrue(AllowanceCopy.canRevoke(view("1")))
         assertFalse(
@@ -84,7 +84,5 @@ class AllowanceCopyTest {
         val lockLine = SendFailureText.message(SendFailure(SendFailureCode.LOCKED, null, null))
         assertEquals(lockLine, RevokeFlowModel.shown(RevokeException.Locked()))
         assertFalse(lockLine == friendlyError("wallet is locked"))
-        val notFound = RevokeFlowModel.shown(RevokeException.NotFound())
-        assertEquals(friendlyError("allowance not found"), notFound)
     }
 }

@@ -113,9 +113,6 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/portfolio-parity.jsonl
         buildPhase: resources
-      # The allowance fixture's `unlimited` block (AllowanceFlowTests).
-      - path: ../core/tests/fixtures/extension-allowances.jsonl
-        buildPhase: resources
       # The privacy fixture the privacy tests replay (docs/privacy.md §7).
       - path: ../core/tests/fixtures/extension-privacy-wire.json
         buildPhase: resources
