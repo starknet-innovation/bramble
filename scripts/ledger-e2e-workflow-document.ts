@@ -33,7 +33,7 @@ const ROOT_KEYS = ["concurrency", "jobs", "name", "on", "permissions", "run-name
 const JOB_KEYS = ["if", "name", "runs-on", "steps", "timeout-minutes"];
 const STEP_KEYS = ["env", "id", "if", "name", "run", "shell", "timeout-minutes", "uses", "with"];
 const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"];
-const BRANCHES = ["main", "release/**"];
+const BRANCHES = ["main"];
 const REQUIRED_PATHS = [
   ".github/workflows/ledger-e2e.yml",
   "packages/platform/ledger-*/**",
@@ -135,7 +135,7 @@ const eventFailures = (events: Node, path: string): string[] => {
     extraKeys(pull, ["branches", "paths"]).length + extraKeys(push, ["branches", "paths"]).length >
       0
   ) {
-    failures.push(`${path} must run on Ledger changes into main and release branches`);
+    failures.push(`${path} must run on Ledger changes into main`);
   }
   const schedule = events["schedule"];
   if (!Array.isArray(schedule) || schedule.length !== 1) {
@@ -154,11 +154,11 @@ const eventFailures = (events: Node, path: string): string[] => {
 };
 
 // The resolve step first, then the checkout of its output: in any other order
-// a scheduled run would test the default branch and still look correct.
+// a scheduled run would test an unverified ref and still look correct.
 const nightlyTargetFailures = (steps: readonly unknown[], path: string): string[] => {
   const failures: string[] = [];
   if (!same(steps[0], NIGHTLY_TARGET_STEP)) {
-    failures.push(`${path} must resolve the nightly release commit first, exactly as reviewed`);
+    failures.push(`${path} must resolve the nightly main commit first, exactly as reviewed`);
   }
   const checkout = record(steps[1]);
   if (

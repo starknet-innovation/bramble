@@ -38,8 +38,8 @@ archive's checksum, which is the check the reviewer will perform.
 
 The file submitted to AMO is the CI-built Gecko package for the release revision: the
 `bramble-firefox-<version>.zip` inside the `bramble-extension` artifact uploaded by the
-`release-validation` job of `.github/workflows/ci.yml` on the release's promotion pull
-request into `main`. The same artifact carries `bramble-firefox-<version>.zip.sha256`;
+`release-validation` job of `.github/workflows/ci.yml` on the push to `main` of the
+release's tagged commit. The same artifact carries `bramble-firefox-<version>.zip.sha256`;
 that checksum is the one to give the reviewer. Do not submit a locally built zip.
 
 ## One command

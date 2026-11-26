@@ -1,5 +1,9 @@
 /**
- * Where the Mainnet E2E workflow may reference a repository secret.
+ * Where the Mainnet E2E workflow may reference a secret. Every secret here is
+ * an environment secret: the RPC URL in `mainnet-e2e-balance` and
+ * `mainnet-e2e`, the key and the STRK20 service URLs in `mainnet-e2e`, and
+ * the Slack webhook in `mainnet-e2e-slack`, so a job without that environment
+ * reads an empty value even if a binding were added.
  *
  * Every decoded key and string value in the whole document is scanned with
  * the shared reader in `workflow-secret-references.ts`: all jobs, `run`,
@@ -8,9 +12,10 @@
  * step-level `env` value in the named job and step, under the named variable,
  * spelled exactly `${{ secrets.NAME }}`, and used once. Every reviewed
  * binding must also be present, so the hot-wallet key reaches exactly five
- * step env values, all in `execute`, and the RPC URL reaches only the
- * balance steps and `execute`.
+ * step env values, all in `execute`, the RPC URL reaches only the balance
+ * steps and `execute`, and the Slack webhook reaches only the `notify` step.
  */
+import { SLACK_WEBHOOK_SECRET } from "./mainnet-e2e-workflow-notify";
 import { ANY_SECRET, type SecretReference, secretReferences } from "./workflow-secret-references";
 
 const PATH = ".github/workflows/mainnet-e2e.yml";
@@ -46,6 +51,7 @@ const BINDINGS: Bindings = {
     },
     gasless: { GASLESS_E2E_PRIVATE_KEY: KEY, GASLESS_E2E_RPC_URL: RPC },
   },
+  notify: { slack: { [SLACK_WEBHOOK_SECRET]: SLACK_WEBHOOK_SECRET } },
 };
 
 /** The number of step env values the hot-wallet key is bound to. */
@@ -58,11 +64,13 @@ const KEY_COUNT = `${PATH} must bind the hot-wallet private key in exactly ${HOT
 const KEY_PLACE = `${PATH} must bind the hot-wallet private key only as a step env value`;
 const RPC_PLACE = `${PATH} must bind the mainnet RPC URL only in its reviewed step env values`;
 const OTHER_PLACE = `${PATH} must reference secrets only in their reviewed step env bindings`;
+const SLACK_PLACE = `${PATH} must bind the Slack webhook only in the notify step env`;
 
 /** Failures specific to a job that must hold no secret, or not the key. */
 const JOB_FAILURES: Readonly<Record<string, string>> = {
-  build: "the mainnet build runs release code and must not receive any secret",
+  build: "the mainnet build runs the commit under test and must not receive any secret",
   report: "the hosted mainnet reporter must not receive mainnet secrets",
+  notify: "the hosted mainnet Slack notifier must receive only the Slack webhook",
 };
 
 const isStepEnvValue = ({ path, key }: SecretReference): boolean =>
@@ -84,14 +92,21 @@ const failuresFor = (reference: SecretReference): string[] => {
     failures.push(`the ${job} balance check must run trusted main code without the key`);
   }
   if (named(RPC)) failures.push(RPC_PLACE);
-  if (!named(KEY) && !named(RPC)) failures.push(OTHER_PLACE);
+  if (named(SLACK_WEBHOOK_SECRET)) failures.push(SLACK_PLACE);
+  if (!named(KEY) && !named(RPC) && !named(SLACK_WEBHOOK_SECRET)) failures.push(OTHER_PLACE);
   const specific = JOB_FAILURES[String(job)];
   if (reference.path[0] === "jobs" && specific !== undefined) failures.push(specific);
   return failures;
 };
 
 const missingFailure = (secret: string): string =>
-  secret === KEY ? KEY_COUNT : secret === RPC ? RPC_PLACE : OTHER_PLACE;
+  secret === KEY
+    ? KEY_COUNT
+    : secret === RPC
+      ? RPC_PLACE
+      : secret === SLACK_WEBHOOK_SECRET
+        ? SLACK_PLACE
+        : OTHER_PLACE;
 
 /**
  * Violations of the reviewed secret bindings in a decoded workflow document:

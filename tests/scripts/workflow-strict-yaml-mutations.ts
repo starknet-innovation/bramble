@@ -47,7 +47,7 @@ const SEPARATORS = [
 const RECORD_CHECKOUT =
   "        with:\n          persist-credentials: false\n      - uses: oven-sh/setup-bun@";
 const SUITE_STEP = "      - name: Speculos Ledger E2E\n";
-const BRANCHES = 'branches: [main, "release/**"]';
+const BRANCHES = "branches: [main]";
 
 const ledger = (
   label: string,
@@ -139,7 +139,7 @@ export const LEDGER_MORE_ROWS: readonly StrictYamlMutation[] = [
   ledger(
     "anchor and alias share the branch filter",
     [
-      [BRANCHES, 'branches: &branches [main, "release/**"]'],
+      [BRANCHES, "branches: &branches [main]"],
       [BRANCHES, "branches: *branches"],
     ],
     FAILURE.indirection,

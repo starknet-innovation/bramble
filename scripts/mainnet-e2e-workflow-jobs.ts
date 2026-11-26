@@ -4,15 +4,15 @@
  *
  * The workflow may declare only its name, triggers, permissions, concurrency
  * and jobs, so no workflow-level `env` or `defaults` (a default shell would
- * change every script) can be added. Triggers are exactly `schedule` and
- * `workflow_dispatch`. Each job's keys other than `steps` are compared whole:
+ * change every script) can be added. Triggers are exactly `schedule` and an
+ * input-free `workflow_dispatch`: every run tests main's commit. Each job's keys other than `steps` are compared whole:
  * runner, permissions, timeout, environment, needs, condition, outputs and
  * job `env`. Steps are compared in `mainnet-e2e-workflow-steps.ts` and
  * `mainnet-e2e-workflow-execute.ts`.
  */
 import { MAINNET_E2E_WORKFLOW_NAME } from "./mainnet-e2e-guard";
 import { EXECUTE_ORDER, EXECUTE_STEPS } from "./mainnet-e2e-workflow-execute";
-import { BRANCH_INPUT_DESCRIPTION } from "./mainnet-e2e-workflow-scripts";
+import { SLACK_ENVIRONMENT } from "./mainnet-e2e-workflow-notify";
 import {
   matches,
   record,
@@ -97,6 +97,14 @@ const JOBS: Readonly<Record<string, { readonly [key: string]: Shape }>> = {
     "runs-on": HOSTED,
     permissions: { contents: "read", issues: "write" },
   },
+  notify: {
+    needs: ["resolve", "gate", "preflight", "build", "execute", "post"],
+    if: `always() && ${GATED}`,
+    environment: { name: SLACK_ENVIRONMENT },
+    permissions: {},
+    "timeout-minutes": 5,
+    "runs-on": HOSTED,
+  },
 };
 
 /** Failures that name the control a job setting carries, where one is more specific. */
@@ -112,18 +120,24 @@ const SETTING_FAILURES: Readonly<Record<string, string>> = {
   "post.runs-on": "the post balance check must run on a hosted runner, apart from the tests",
   "report.runs-on": "mainnet issue reporting must use a hosted runner",
   "report.permissions": "the hosted mainnet reporter must declare its narrow issue permission",
+  "notify.if": "the mainnet Slack notifier must report every run the gate enabled, pass or fail",
+  "notify.runs-on": "the mainnet Slack notifier must use a hosted runner",
+  "notify.permissions": "the hosted mainnet Slack notifier must hold no token permission",
 };
 
 /** Reported when the reporter runs anything but its one reviewed action. */
 export const REPORT_ORDER =
-  "the hosted mainnet reporter must run only its reviewed step: no checkout and no release-branch source";
+  "the hosted mainnet reporter must run only its reviewed step: no checkout and no source under test";
+
+/** Reported when the Slack notifier runs anything but its one reviewed action. */
+export const NOTIFY_ORDER =
+  "the hosted mainnet Slack notifier must run only its reviewed step: no checkout, install or repository code";
 
 const ROOT_KEYS = ["concurrency", "jobs", "name", "on", "permissions"];
 const TRIGGERS = ["schedule", "workflow_dispatch"];
 
-const DISPATCH: Shape = {
-  inputs: { branch: { description: BRANCH_INPUT_DESCRIPTION, type: "string", default: "" } },
-};
+// No inputs: a dispatch cannot choose the branch or commit under test.
+const DISPATCH: Shape = null;
 
 /**
  * Violations of the workflow's top level: its keys, name, triggers,
@@ -145,7 +159,7 @@ export const rootFailures = (root: Record<string, unknown>): string[] => {
     failures.push(`${PATH} must schedule at 06:00 UTC, offset from nightly`);
   }
   if (!matches(DISPATCH, events["workflow_dispatch"])) {
-    failures.push(`${PATH} must allow manual dispatch with only the branch input`);
+    failures.push(`${PATH} must allow manual dispatch with no inputs`);
   }
   if (!matches(READ, root["permissions"])) {
     failures.push(`${PATH} must grant only contents: read at workflow level`);
@@ -193,7 +207,9 @@ export const jobFailures = (jobs: Record<string, unknown>): string[] => {
             OTHER_JOB_STEPS[name] ?? [],
             name === "report"
               ? REPORT_ORDER
-              : `the ${name} job must run exactly the reviewed steps, in order`,
+              : name === "notify"
+                ? NOTIFY_ORDER
+                : `the ${name} job must run exactly the reviewed steps, in order`,
           )),
     );
   }

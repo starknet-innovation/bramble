@@ -33,7 +33,7 @@ export const LEDGER_E2E_WORKFLOW = "ledger-e2e.yml";
  * decoded checks must also pass), then set this to the output of
  * `sha256sum .github/workflows/ledger-e2e.yml` in the same pull request.
  */
-export const LEDGER_E2E_SHA256 = "3e69ef8da2be86dc13e1d9aa56a858eeec1f01db89fba7e1fe63f6c80c668048";
+export const LEDGER_E2E_SHA256 = "f053ac5dfebc071bc1a621ceb15a15e2841d6288744c8808afe09d21b2e2a8ce";
 
 /**
  * Violations of the Ledger E2E workflow's reviewed controls. Pure: it reads

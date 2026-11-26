@@ -9,7 +9,7 @@
  *   bun run scripts/mainnet-e2e-balance.ts post
  *
  * The workflow runs both phases from the workflow's own `main` checkout, in
- * hosted jobs that never hold the signing key or the release commit. The
+ * hosted jobs that never hold the signing key or run the build. The
  * preflight's raw balances travel to `post` as job outputs
  * (MAINNET_E2E_STRK_BEFORE_RAW, MAINNET_E2E_USDC_BEFORE_RAW), so code under
  * test cannot rewrite the baseline its spend is measured against. Preflight

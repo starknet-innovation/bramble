@@ -1,7 +1,7 @@
 # Development workflow
 
 This is the canonical guide to how work flows through Bramble: where you
-branch from, where pull requests target, how changes reach a release, and what
+branch from, where pull requests go, how changes reach a release, and what
 CI runs at each stage. If you read only one document before opening a PR, read
 this one.
 
@@ -9,46 +9,42 @@ It complements — does not replace — the other docs:
 
 - **`CONTRIBUTING.md`** — the binding architecture, security, and code-style rules.
 - **`AGENTS.md`** — the operational guide for coding agents (setup, gates, layout).
-- **`RELEASING.md`** — the runbook that takes a finished release to a published build.
-
-> Current release: **`v0.7.0`**. The release-branch model began with **`v0.4`**;
-> each later milestone maps 1:1 to its matching `release/vX.Y` branch.
+- **`RELEASING.md`** — the runbook that takes a tagged commit on `main` to a published build.
 
 ---
 
 ## TL;DR
 
-- `main` is always the latest **stable, releasable** version. You never push work directly to it.
-- Each release is a small, shippable **slice of one roadmap phase**, tracked as one **milestone** (`v0.4`, `v0.5`, …) mapped **1:1** to one temporary **`release/vX.Y`** branch cut from `main`.
-- You do your work on a **`feature/` / `fix/` / `chore/`** branch cut from the **active release branch**, and you open your PR **against that release branch — never against `main`.**
-- When the release's scope and gates are met, the release branch is merged into `main` and tagged **`vX.Y.0`**.
-- Only **one** active release branch exists at a time. Keep it **short-lived**.
+- Bramble uses **trunk-based development**. `main` is the only long-lived
+  branch, and it is **always releasable**.
+- Do your work on a **short-lived branch** cut from the latest `main` and open a
+  PR **straight into `main`**. Keep it small; merge it within a day or two.
+- PRs are **squash-merged**. Any developer with write access may merge their own
+  PR as soon as the required checks are green. No approval is required, but ask
+  for review on risky changes (see [Review](#review)).
+- Unfinished user-facing work must not be reachable by users: leave it unwired
+  or put it behind a feature flag.
+- A release is a **version-bump PR merged into `main`, then a `vX.Y.Z` tag** on
+  that commit. Hotfixes are ordinary PRs into `main` followed by a patch release.
+  There are no `release/` or `hotfix/` branches.
 
 ---
 
-## Phases and releases are not the same thing
-
-This is the most important idea in this document; the rest follows from it.
+## Phases and milestones
 
 The GTM roadmap (codename *Pharaoh*) is organized into **8 large, phase-gated
 phases** plus an out-of-GTM terminal track. A phase is a big body of work with
-its own exit criteria — far too large to live on a single short-lived branch.
+its own exit criteria and spans several releases.
 
-So we separate the two concerns:
+| Concept | What it is | Tracked by |
+| --- | --- | --- |
+| **Phase** | The roadmap "what / why" — a large capability area with phase-gate exit criteria | `phase:N` label + roadmap tracking issue (#79–#87) |
+| **Milestone** | A planned release version (`v0.11.0`, …) — a planning bucket for the issues expected to ship in it | GitHub **milestone**; shipped as the matching `vX.Y.Z` tag on `main` |
 
-| Concept | What it is | Tracked by | Lifetime |
-| --- | --- | --- | --- |
-| **Phase** | The roadmap "what / why" — a large capability area with phase-gate exit criteria | `phase:N` label + roadmap tracking issue (#79–#87) | Long-lived; spans many releases |
-| **Release** | A small, shippable **slice** of one phase | A GitHub **milestone** (`v0.4`, …) mapped **1:1** to one **`release/vX.Y`** branch | Short-lived; cut, shipped, archived |
-
-**A release branch is a slice of a phase, not the whole phase. One phase yields
-several short releases.** The mapping is always explicit:
-
-```
-phase  (phase:N label + roadmap issue #79–#87)
-  └── release  (milestone vX.Y  ⇄  branch release/vX.Y)
-        └── work  (feature/… , fix/… , chore/… → PR into release/vX.Y)
-```
+Milestones are for planning only. They have no branch: work for every milestone
+lands on `main`, and the release ships whatever `main` holds when it is tagged.
+An issue carries its `phase:N` label (which phase) and, optionally, its
+milestone (which release is expected to ship it).
 
 ### The roadmap phases
 
@@ -64,364 +60,250 @@ phase  (phase:N label + roadmap issue #79–#87)
 | 8 | [#86](https://github.com/starknet-innovation/bramble/issues/86) | Later / optional | Post-GTM |
 | — | [#87](https://github.com/starknet-innovation/bramble/issues/87) | Terminal track (test harness) | Out-of-GTM, in-scope |
 
-A milestone's description should name the phase it slices (e.g. "`v0.4` — first
-slice of Phase 3, Table-stakes parity, #81"). An issue carries **both** its
-`phase:N` label (which phase) **and** its milestone (which release ships it).
-
 ---
 
 ## The branch model
 
 ```
-main ──●───────────────────────────────●──────────────▶  (stable; tags vX.Y.0)
-        \                              /
-         \   release/v0.4             /  merge + tag v0.4.0
-          ●───●────●────●────●───────●
-              \   /\   /\   /
-               \ /  \ /  \ /   feature/… fix/… chore/…  (PRs target release/v0.4)
-                ●    ●    ●
+          feat/… fix/… chore/… docs/…   (short-lived, squash-merged)
+            ●──●       ●          ●──●──●
+           /    \     / \        /       \
+main ──●──●──────●───●───●──●───●─────────●──●──▶  (always releasable)
+                             ▲                 ▲
+                        tag v0.11.0       tag v0.11.1
+                 (after chore/release-v0.11.0 PR merges)
 ```
 
-- **`main`** — always releasable. Protected. Reached only by merging a
-  `release/**` branch (a release promotion) or a `hotfix/**` branch. Tagged
-  `vX.Y.0` at each release.
-- **`release/vX.Y`** — the single active release branch. Cut from `main` when a
-  release opens; deleted after it merges back. Exactly one at a time.
-- **`feature/<issue>-<desc>` / `fix/<issue>-<desc>` / `chore/<issue>-<desc>`** —
-  your working branches. Cut **from** the active release branch and merged
-  **back into** it via PR.
-- **`hotfix/<desc>`** — an urgent fix to production; branch from `main` (or the
-  affected release tag). See [Hotfixes & backports](#hotfixes--backports).
-- **`docs/<desc>`** — documentation-only changes.
+- **`main`** — the trunk. Protected; reached only through pull requests.
+  Every release is a tag on a `main` commit.
+- **Working branches** — cut from the latest `main`, merged back into `main`
+  through a squash-merged PR, then deleted. Recommended names:
 
-### Where you branch from and where PRs target
+  | Kind | Name | Example |
+  | --- | --- | --- |
+  | Feature | `feat/<issue>-<desc>` | `feat/28-external-allowances` |
+  | Bug fix | `fix/<issue>-<desc>` | `fix/27-price-host-fallback` |
+  | Chore / tooling | `chore/<issue>-<desc>` | `chore/94-ci-cache` |
+  | Docs only | `docs/<desc>` | `docs/clarify-migration` |
+  | Release bump | `chore/release-vX.Y.Z` | `chore/release-v0.11.0` |
 
-| You are doing… | Branch from | Branch name | PR targets |
-| --- | --- | --- | --- |
-| Feature work for the active release | `release/vX.Y` | `feature/<issue>-<desc>` | `release/vX.Y` |
-| A bug fix within the active release | `release/vX.Y` | `fix/<issue>-<desc>` | `release/vX.Y` |
-| Chore / tooling within the release | `release/vX.Y` | `chore/<issue>-<desc>` | `release/vX.Y` |
-| Shipping the release | — | `release/vX.Y` | `main` (merge commit; then tag) |
-| Urgent production fix | `main` or release tag | `hotfix/<desc>` | `main` (then forward-apply) |
-| Docs-only | `release/vX.Y` or `main` | `docs/<desc>` | matching base |
+  `<issue>` is the GitHub issue number; `<desc>` is a few kebab-case words.
+  Naming is advisory: `pr-guards` warns about an unusual name but never fails
+  on it.
 
-**`feature/` and `fix/` PRs must never target `main`** — they are release work
-and belong on the active `release/vX.Y` branch. CI **hard-blocks** them from
-`main` (see [Scope & naming enforcement](#scope--naming-enforcement)).
-`release/**` and `hotfix/**` are the normal promotion and hotfix paths into
-`main`. `chore/` and `docs/` PRs normally target the release branch too, but the
-guard **permits** them into `main` for repo plumbing and docs that aren't part
-of a release slice (this workflow-adoption PR is one such `chore/`).
+Do not create `release/` or `hotfix/` branches, and do not keep a branch alive
+for weeks. Rebase on (or merge) `main` often — at least daily while a branch is
+open — so conflicts stay small.
 
-### Naming conventions
+### Keeping unfinished work away from users
 
-- `feature/<issue>-<short-desc>` — e.g. `feature/28-external-allowances`
-- `fix/<issue>-<short-desc>` — e.g. `fix/27-price-host-fallback`
-- `chore/<issue>-<short-desc>` — e.g. `chore/94-roadmap-release-workflow`
-- `release/vX.Y` — e.g. `release/v0.4` (no patch component; the branch covers the whole `vX.Y` line)
-- `hotfix/<short-desc>` — e.g. `hotfix/vault-decrypt-panic`
-- `docs/<short-desc>` — e.g. `docs/clarify-migration`
+Because every merge to `main` is releasable, a change that is not ready for
+users must still be safe to ship. Either:
 
-`<issue>` is the GitHub issue number the branch addresses. `<short-desc>` is a
-few kebab-case words.
+- **leave it unwired** — land the building blocks with tests, and connect them
+  to a screen, message route, or dapp-facing API in a later PR; or
+- **put it behind a feature flag** — declare the flag in
+  `packages/features/flags/src/catalog.ts` with `enabled: false`. Bundled flags
+  stay off until a release deliberately turns them on; a remote document may
+  only kill a flag unless it is declared `toggle`, and only flags marked
+  `localOverride` appear under Settings › Experimental features. Flags toggle
+  code that ships; they never gate signing, key derivation, RPC endpoints,
+  contract addresses, fee ceilings, permission checks, or privacy-pool
+  parameters (`tests/conformance/feature-flag-isolation.test.ts`).
+
+Storage migrations, permission changes, and anything a user's vault depends on
+cannot hide behind a flag: once released they are one-way (RELEASING.md,
+section 8). Land them only when they are ready to ship.
 
 ---
 
-## Every PR into a release branch
+## Every PR into `main`
 
-A PR that targets `release/vX.Y` must:
+A PR should:
 
-1. **Reference its roadmap issue** — `#N`, or `Closes/Fixes/Resolves #N` when it
-   fully closes it. (Blocking — CI fails without a reference.)
-2. **Name its target release** — the base branch (`release/vX.Y`) and its milestone.
-3. **State the release acceptance criterion it satisfies** — which milestone/roadmap
-   criterion this advances.
-4. **Include tests** for the behavior it changes. Storage, permissions, signing,
+1. **Link its issue** — `#N`, or `Closes/Fixes/Resolves #N` when it fully
+   closes it. `pr-guards` warns when no issue is linked; docs and small chores
+   may go without one.
+2. **Be small and focused.** One behavior change per PR. Split large work into
+   a series of PRs that are each safe to release.
+3. **Include tests** for the behavior it changes. Storage, permissions, signing,
    and migration changes always require tests (see `CONTRIBUTING.md`).
-5. **Stay in scope.** If the work reveals new scope, it goes to the milestone /
-   roadmap as a new issue — never silently into an unrelated PR. Scope changes
-   are a planning decision, made on the milestone, not in a diff.
+4. **Stay in scope.** New scope found along the way becomes a new issue, not an
+   addition to an unrelated PR.
+5. **Not expose unfinished work** (see above).
 
-The pull-request template captures items 1–4 as fields and item 5 as a checkbox.
+The pull-request template captures these as fields and checkboxes.
+
+### Review
+
+No approval is required to merge. CODEOWNERS still auto-requests reviewers, and
+you should **wait for a review before merging** a change to a security-sensitive
+area: signing and key handling, the vault and storage migrations, the
+background, content script and provider, value-moving features (transactions,
+multisig, privacy), and `.github/workflows` or `scripts/`. This is team
+guidance, not a merge gate — the author decides, and owns the result.
+
+### Merging
+
+- Merge with **squash** once `pr-guards`, `fast-checks`, and
+  `release-validation` are green and the branch is up to date with `main`.
+- Any developer with write access may merge their own PR. Coding agents never
+  merge (see `AGENTS.md`).
+- Delete the head branch after merging (automatic when the repository setting
+  is on).
+- If a merge breaks `main`, fix forward with a new PR or revert it at once;
+  `main` must stay releasable.
 
 ---
 
 ## Layered CI
 
-Three tiers, each with a different speed/breadth trade-off. Files:
-`.github/workflows/ci.yml`, `release-integration.yml`, `nightly.yml`.
-Live mainnet tests are a separate scheduled workflow, `mainnet-e2e.yml`
-([docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md)); they are not a merge gate.
+Files: `.github/workflows/ci.yml`, `nightly.yml`, `ledger-e2e.yml`,
+`mainnet-e2e.yml`. Only the `ci.yml` jobs are merge gates.
 
-### 1. PR CI — fast gates + a gated full validation (`ci.yml`)
+### 1. PR CI (`ci.yml`)
 
-Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
-`main`). Three jobs make the fast/heavy split real:
+Trigger: every **`pull_request` into `main`**, and every **`push` to `main`**
+(after a merge).
 
-- **`pr-guards`** — the scope & naming guards (below), on a hosted
-  `ubuntu-latest` runner. Fast.
-- **`fast-checks`** — the fast, offline-capable gates that run on **every PR**:
-  Biome lint (`check:lint`), typecheck (`check:types`), the `check:files`
-  standards gate (which runs **both** file- and config-standards — there is no
-  separate `check:config` script) and the extension-manifest check
-  (`check:extension`), import-layer + cycle checks (`check:imports`,
-  `check:cycles`), unit + conformance tests (`bun test tests`), and the coverage
-  floor (`check:coverage`). Runs on `ubuntu-latest` — **no** crypto/contract
-  toolchain, **no** build, **no** E2E — so PR feedback is fast. It deliberately
-  does **not** run the aggregate `bun run check` (which chains the vendored
-  `check:argent`/`check:privacy`) or any heavy step.
-- **`release-validation`** — the **full heavy pipeline**:
-  `vendor:argent`, `vendor:privacy`, `bun run check`, coverage floor, `build`,
-  `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
-  `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
-  runner. It is **gated by a job-level `if:`** so it runs **only on same-repository
-  `release/**` and `hotfix/**` PRs into `main`** — the complete
-  release-validation suite before code reaches the stable branch. A fork branch
-  cannot opt into the self-hosted runner by choosing a trusted-looking name.
+- **`pr-guards`** — advisory checks on a hosted runner: warns when the branch
+  name does not follow the recommended pattern or no issue is linked. It never
+  fails on naming.
+- **`fast-checks`** — the fast, offline-capable gates on a hosted
+  `ubuntu-latest` runner: Biome lint (`check:lint`), typecheck (`check:types`),
+  the `check:files` standards gate (file and config standards together) and the
+  extension-manifest check (`check:extension`), import-layer and cycle checks
+  (`check:imports`, `check:cycles`), unit + conformance tests (`bun test tests`),
+  and the coverage floor (`check:coverage`). No vendor toolchain, build or E2E,
+  so feedback is fast.
+- **`release-validation`** — the **full heavy pipeline** on the self-hosted
+  CodeBuild runner: `vendor:argent`, `vendor:privacy`, `bun run check`, coverage
+  floor, `build`, `test:e2e`, `package:extension`, the Firefox package and AMO
+  validation (`check:firefox`), the `apps/terminal` typecheck and build, and the
+  dependency audit (`check:audit`). It runs on every **same-repository** PR into
+  `main` and again on every **push to `main`**, so the merged commit is
+  validated too. **Fork PRs skip it** before merge — a fork cannot reach the
+  self-hosted runner — and are covered by the post-merge run.
 
-So an everyday `feature/`/`fix/`/`chore/` PR into a release branch — and a
-`chore/`/`docs/` PR into `main` — runs **only `pr-guards` + `fast-checks`** and
-never pays for the heavy pipeline. The heavy pipeline runs when a release is
-promoted (`release/vX.Y` → `main`) or a hotfix lands (`hotfix/*` → `main`), and
-again post-merge and nightly (below).
+If a vendor step cannot complete (missing access or toolchain drift) it writes
+the reason to the run summary and **fails** — it never fakes success. The
+self-hosted job has read-only repository permission.
 
-> Note: because the `apps/terminal` build now lives in `release-validation`, the
-> terminal app is validated on release/hotfix→main promotion, not on every
-> release-branch PR or the extension-only post-merge/nightly jobs. If per-PR
-> terminal coverage is wanted, add a lightweight terminal typecheck to
-> `fast-checks`.
+### 2. Nightly — full suite (`nightly.yml`)
 
-### 2. Release-branch integration — broader, post-merge (`release-integration.yml`)
+Trigger: **scheduled** (`cron: 0 3 * * *`, 03:00 UTC) plus manual
+`workflow_dispatch`, against the **current `main` commit**.
 
-Trigger: **`push` to `release/**`** (i.e. after a PR merges into the release branch).
+Runs the full **E2E (Playwright)** suite, the **dependency audit**
+(`bun run check:audit`, re-run against the live advisory database so a new
+advisory is caught without a code change), the extension **build**, and the live
+**Sepolia** runs: the import-path scorecard (`tools/vendor-dataset/verify-sepolia.ts`,
+issue 821; seeds from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that step)
+and the sends and first deploys (issue 976; `BRAMBLE_SEPOLIA_TXN_SEED`). Each
+Sepolia step is skipped and reported as "Not run" while its secret is unset, and
+records and uploads nothing. When E2E fails, the run uploads `test-results/`
+(traces, screenshots, video) as `nightly-e2e-debug` for 7 days.
 
-Runs the heavier steps: verifies the published Krusty KMS package and the pinned
-Argent account-contract and Privacy SDK releases, builds the extension, and produces the
-reproducible package + checksum. The vendor steps need network access and their contract
-toolchains, so they
-run on the same self-hosted CodeBuild runner CI uses. If a vendor step can't
-complete (missing private-repo access or toolchain drift) it writes a clear
-explanation to the run summary and **fails honestly** — it never fakes success.
-The self-hosted job has read-only repository permission, and Rust is pinned to
-`1.96.1` rather than the moving `stable` channel.
-
-### 3. Nightly — full suite (`nightly.yml`)
-
-Trigger: **scheduled** (`cron: 0 3 * * *`) + manual `workflow_dispatch`, against
-the **active release branch**.
-
-Active-branch resolution: use repo variable **`vars.ACTIVE_RELEASE_BRANCH`** if
-set; otherwise the highest-semver `release/vX.Y` or patch release branch
-`release/vX.Y.Z`; if none exists, exit cleanly with a note. Manual runs must be
-dispatched from `main`. Any configured branch must match one of those exact
-forms and must already exist in this repository before a self-hosted runner is
-allocated. Release promotion branches remain `release/vX.Y`; the patch form is
-accepted here only so the audit suite can keep testing a shipped hotfix line.
-
-Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
-via `bun run check:audit` — also run in the PR CI `release-validation` job;
-nightly re-runs it against the live advisory database so a newly-published
-advisory is caught even without a code change), the extension **build**, the
-live **Sepolia import-path run** (`tools/vendor-dataset/verify-sepolia.ts`, issue
-821; its seeds come from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that one
-step; it is skipped and reported as "Not run" while that secret is unset, and it
-records and uploads nothing), and the live **Sepolia sends and first deploys**
-(issue 976; `BRAMBLE_SEPOLIA_TXN_SEED`, skipped the same way while unset). When
-E2E fails, the run uploads `test-results/` (traces, screenshots, video) as
-`nightly-e2e-debug` for 7 days; that upload runs before either Sepolia step.
-
-The report job's run summary lists **new failures**, **still failing**, **fixed
+The report job's summary lists **new failures**, **still failing**, **fixed
 since last run**, **flaky** (passed on a Playwright retry) and **not run**. The
-baseline is the open tracking issue: it keeps a hidden `nightly-state` line with
-what was failing last time, so with no open issue every failure counts as new.
+baseline is the open tracking issue, which keeps a hidden `nightly-state` line.
+On failure it creates or updates **one** issue, `Nightly: main — failing checks`,
+and closes it on the first green run. Source and dependencies
+run in a read-only self-hosted job; a separate hosted job holds the narrow
+`issues: write` permission and never checks out wallet code.
 
-On failure it creates-or-updates **one** tracking issue titled
-`Nightly: release/vX.Y — failing checks`, labeled `ci-cd` + `release`, assigned
-to the matching milestone when one exists, and closes it on the first green run. Source and dependencies execute in a
-read-only self-hosted job; a separate hosted job receives the narrow
-`issues: write` capability and never checks out release-branch code.
+### 3. Ledger E2E (`ledger-e2e.yml`)
+
+Runs the Speculos Ledger suite on PRs into `main` that touch Ledger code, on a
+nightly schedule against `main`, and on manual dispatch. See
+[tests/e2e/ledger/README.md](tests/e2e/ledger/README.md).
 
 ### 4. Mainnet E2E — live wallet (`mainnet-e2e.yml`)
 
-Trigger: **scheduled** (`cron: 0 6 * * *`, after nightly) and manual
-`workflow_dispatch` from `main`, against the same active release branch as
-nightly, once `vars.MAINNET_E2E_CONFIGURED` is `true`. A keyless job installs
-and builds the release commit; a separate CodeBuild job in the `mainnet-e2e`
-environment unpacks that build and runs `bun run test:mainnet` (plus
-`bun run test:e2e:mainnet` in the STRK20 tier) without printing test output.
-Hosted jobs running `main`'s code check the balance before and after. Once
-enabled, missing secrets or zero executed tests fail. Spend is capped before
-each signature and after the run, and a failure upserts one `ci-cd` issue.
-Setup is in [docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
+Trigger: **scheduled** daily at 06:00 UTC (after nightly) and manual
+`workflow_dispatch`, against the **current `main` commit**, once
+`vars.MAINNET_E2E_CONFIGURED` is `true`. It runs the live mainnet suites with
+spend caps checked before each signature and after the run. A failure upserts
+the issue `Mainnet E2E: main — failing checks`, and every run — pass or fail —
+posts a short result to Slack when the `SLACK_MAINNET_E2E_WEBHOOK_URL` secret is
+set. It is not a merge gate. Setup is in
+[docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
 
 ### What runs where
 
-"PR CI" is `ci.yml`; its `fast-checks` job runs on every PR, while
-`release-validation` runs only on `release/**`/`hotfix/**` → `main` PRs.
-
-| Check | PR CI · fast-checks (every PR) | PR CI · release-validation (release/hotfix→main) | Release integration (push release/**) | Nightly |
-| --- | :---: | :---: | :---: | :---: |
-| Lint, typecheck, file/config + manifest standards, import/cycle, unit/conformance tests, coverage | ✅ | ✅ | | |
-| Scope & naming guards (`pr-guards`) | ✅ | | | |
-| Verify Krusty package, vendor Argent/Privacy, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
-| Full E2E (Playwright) | | ✅ | | ✅ |
-| Dependency audit (`bun audit`) | | ✅ | | ✅ (live DB) |
-| Perf / regression | | | | ⚠️ placeholder (no suite exists yet) |
-
----
-
-## Scope & naming enforcement
-
-The `pr-guards` job in `ci.yml` (using `actions/github-script`) enforces the
-model. Two guards are **blocking** (they fail the check); one is **advisory**
-(annotation only).
-
-- **PR-target guard — BLOCKING (fail-closed).** Only an explicit allowlist of
-  head-branch categories may target `main`: `release/**` and `hotfix/**`
-  (promotion / hotfix paths), `chore/**` / `docs/**` (repo plumbing and docs
-  that aren't part of a release slice), and authenticated Dependabot PRs whose
-  head starts with `dependabot/`. A branch prefix alone never grants an
-  exception: head names are contributor-controlled, so `cursor/`, `codex/`,
-  `ai-findings-autofix/`, and `qa/` branches must still use one of the allowed
-  target categories.
-  **Everything else** — `feat/`, `feature/`, `fix/`, or any unknown/typo prefix
-  — is treated as feature-like release work: if it targets `main` the check
-  **fails** and tells you to retarget to the active `release/vX.Y` branch.
-  Feature work does not go straight to `main`; it is promoted via a release
-  branch so it passes through `release-validation`. (This is deliberately an
-  allowlist, not a blocklist of known feature prefixes, so a new or misspelled
-  prefix cannot slip past the guard and skip release-validation.)
-- **Linked-issue guard — BLOCKING.** If the base matches `release/**`, the PR
-  title or body must reference an issue (`#N` or `Closes/Fixes/Resolves #N`);
-  otherwise the check **fails**. Best-effort: it fetches the referenced issue's
-  milestone and, if it doesn't match the base branch's version, adds a **warning**
-  (it does not fail — to avoid false blocks).
-- **Branch-name guard — ADVISORY.** The head should match `feature/<n>-*`,
-  `fix/<n>-*`, `chore/<n>-*`, `release/vX.Y`, `hotfix/*`, or `docs/*`; otherwise
-  a non-blocking annotation is added. Known automation prefixes are skipped
-  here only; except for authenticated Dependabot, they do not bypass the
-  blocking target guard.
-
-> **Blocking in CI is merge-blocking only through the live ruleset.** The active
-> `main` and `release/*` rulesets require the guards described below. Those
-> server-side settings are still mutable by repository administrators, so each
-> release audit reads them back rather than inferring enforcement from YAML.
+| Check | `fast-checks` (every PR) | `release-validation` (same-repo PRs + push to `main`) | Nightly (`main`) |
+| --- | :---: | :---: | :---: |
+| Lint, typecheck, file/config + manifest standards, import/cycle, unit/conformance tests, coverage | ✅ | ✅ | |
+| Branch-name / linked-issue warnings (`pr-guards`) | ✅ (advisory) | | |
+| Verify Krusty package, vendor Argent/Privacy, extension build, package | | ✅ | ✅ (build) |
+| Firefox package + AMO validation | | ✅ | |
+| Full E2E (Playwright) | | ✅ | ✅ |
+| Dependency audit (`bun audit`) | | ✅ | ✅ (live DB) |
+| Live Sepolia import, sends, deploys | | | ✅ |
+| Perf / regression | | | ⚠️ placeholder (no suite exists yet) |
 
 ---
 
-## What blocks a release
+## Releasing
 
-A `release/vX.Y` branch may **not** be promoted to `main` until:
+Releases are cut from `main`. `RELEASING.md` is the runbook; in short:
 
-- Every roadmap issue in the milestone is **closed or explicitly deferred** (moved to a later milestone).
-- The release's **acceptance criteria are met**.
-- **Required PR CI is green** on the tip of the release branch.
-- The **nightly / full suite is green** on the release branch (E2E, audit, build).
-- There are **no unresolved release-blocking regressions** (see the nightly tracking issue).
-- **Release notes and version metadata are complete** — `package.json` and
-  `apps/extension/public/manifest.json` bumped in lockstep to `X.Y.0`, and the `CHANGELOG.md`
-  `[X.Y.0]` section is filled in (`bun run changelog`). The single-source gate
-  (`bun run check:release-version`) must pass: if the version does not match the
-  `release/vX.Y` branch, the auto-release **fails** rather than shipping a
-  mislabeled artifact (issue #59).
-
----
-
-## Release completion sequence
-
-The full checklist, from a scope-complete release branch to a published build.
-See `RELEASING.md` for the Chrome Web Store specifics.
-
-1. **Confirm scope.** All milestone issues closed or deferred; acceptance
-   criteria met; no open release-blocking regressions.
-2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
-   `X.Y.0` in lockstep; run `bun run check:files` and
+1. **Bump.** Open a `chore/release-vX.Y.Z` PR that bumps `package.json` and
+   `apps/extension/public/manifest.json` to `X.Y.Z` in lockstep and fills the
+   `CHANGELOG.md` `[X.Y.Z]` section (`bun run changelog`). Run
+   `bun run check:release-version` and
    `bun test tests/conformance/release-version-single-source.test.ts`.
-3. **Gates green.** Required PR CI green on the branch tip; nightly/full suite green.
-4. **Changelog.** Fill in the `CHANGELOG.md` `[X.Y.0]` section (`bun run changelog`);
-   it becomes the GitHub Release notes (#60).
-5. **RC tag (when appropriate).** Tag `vX.Y.0-rc.1` on the release branch for a
-   final validation pass (loads/installs cleanly, E2E green, package checksum
-   verified). Iterate `-rc.2`, … if needed.
-6. **Full validation.** Confirm the RC build against the acceptance criteria.
-7. **Promote.** Merge `release/vX.Y` → `main` as a **merge commit** (not squash —
-   preserve the release history). This is done explicitly by a maintainer.
-8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the
-   version from the merged branch, runs the single-source gate, tags `vX.Y.0` on
-   the merge commit, and cuts the GitHub Release (build, package, checksum,
-   notes) via the reusable `release-build.yml`. **No manual tag push** — push
-   `vX.Y.0` by hand only to backfill a release the automation missed.
-9. **Release notes / publish.** Confirm the GitHub Release notes; the optional
-   Chrome Web Store publish is a separate, gated manual dispatch (see `RELEASING.md`).
-10. **Close / archive the milestone.**
-11. **Cut the next release** branch from the updated `main` and set
-    `vars.ACTIVE_RELEASE_BRANCH` to it.
+2. **Merge** it once its checks are green, and confirm nightly is green on `main`
+   (no open `Nightly: main — failing checks` issue that blocks the release).
+3. **Tag.** A maintainer tags that merge commit and pushes the tag:
 
----
+   ```sh
+   git tag -s vX.Y.Z <sha>
+   git push origin vX.Y.Z
+   ```
 
-## Hotfixes & backports
+   `release.yml` calls `release-build.yml`, which re-checks the tag against the
+   version, builds and packages both browser targets, writes checksums, and
+   creates the GitHub Release. It refuses a tag whose commit is not on `main`.
+4. **Publish (optional).** The Chrome Web Store publish is a separate, gated
+   manual dispatch (RELEASING.md, sections 5–7).
+5. Close the matching milestone, if there is one.
 
-For an urgent production issue that can't wait for the normal release cadence:
+Release-candidate tags (`vX.Y.Z-rc.N`) are not built by `release.yml`: it
+ignores hyphenated tags. Validate a candidate by running the checks in
+RELEASING.md section 0 against the `main` commit you intend to tag.
 
-1. Branch **`hotfix/<desc>`** from `main` (or from the affected release tag if
-   the bug is specific to a shipped version).
-2. Fix + test on the hotfix branch; open a PR into `main`.
-3. Merge into `main` and tag the patched version (`vX.Y.Z`).
-4. **Forward-apply** the same fix to any active `release/vX.Y` branch that lacks
-   it (cherry-pick or merge). **Never leave a fix only on an older release
-   branch** — a fix that lands on `main` or an old release but not the active
-   release will regress the moment the active release ships.
+### Hotfixes
+
+There is no hotfix branch. Fix the bug on `main` through a normal PR
+(`fix/<issue>-<desc>`), then cut a patch release (`vX.Y.Z+1`) the same way.
+Always fix forward: never re-tag, re-publish or roll back to an older version
+(RELEASING.md, section 8).
 
 ---
 
 ## Branch protection & repository security settings
 
-The rules above are enforced in-repo by CI guards, CODEOWNERS, templates, and the
-workflow-security policy in `bun run check:files`. The GitHub rulesets must keep
-the following server-side baseline so a red guard is actually merge-blocking.
+CI, CODEOWNERS, templates, and the workflow-security policy in
+`bun run check:files` live in the repository. Merge enforcement lives in the
+GitHub ruleset for `main`, which repository administrators must keep aligned
+with this baseline. **When this model was adopted, admins had to update the
+live ruleset to match** (drop the required approvals and Code Owner review, drop
+any `release/*` ruleset, and delete the `ACTIVE_RELEASE_BRANCH` repository
+variable, which nothing reads any more).
 
-### `main` — branch protection / ruleset
-
-- **Require a pull request before merging.**
-- **Require status checks to pass** and **require branches to be up to date**.
-  Required checks: **`fast-checks`**, **`pr-guards`**, and
-  **`release-validation`**. GitHub documents that a job skipped by a
-  [job-level conditional reports success and does not block merging][skipped-job],
-  so ordinary `chore/`/`docs/` PRs remain mergeable while a release/hotfix
-  promotion cannot bypass the heavy gate.
-- **Require ≥ 1 approving review** (and "Require review from Code Owners" — see `.github/CODEOWNERS`).
-- **Dismiss stale approvals on push** and require approval from someone other
-  than the author of the most recent push.
-- **Require all review threads to be resolved.**
-- **Restrict direct pushes and configure no ruleset bypass actor.**
-- **Block force-pushes and deletions** of `main`.
-- **Require signed commits** — recommended if it is the org norm (this repo already
-  values verified signatures; `CONTRIBUTING.md` requires GPG-signed commits).
-
-The current owners are existing push-authorized maintainers other than the
-repository's primary author, so a PR author cannot be the only eligible code
-owner.
-
-### `release/*` — branch protection / ruleset
+### `main` — ruleset
 
 - **Require a pull request before merging.**
-- **Require status checks to pass:** **`fast-checks`** **and** **`pr-guards`**
-  (so the linked-issue guard is enforced). `release-validation` does not run on
-  release-branch PRs, so it is not a required check here.
-- **Require ≥ 1 approving review**, Code Owner review, and resolution of every
-  review thread.
-- **Dismiss stale approvals on push**, require approval of the latest push, and
-  configure no ruleset bypass actor.
-- **Block force-pushes and deletions** by non-maintainers.
-- Once a release branch is integrated into `main`, it is **immutable**. The
-  `pr-guards` check rejects attempts to reopen it (a merged promotion PR from
-  that branch into `main` is the signal), and the local hooks
-  (`git config core.hooksPath .githooks`) reject the commit and the push before
-  it reaches GitHub (a `main` merge commit with the branch tip as a parent is
-  theirs) — both fail closed when integration cannot be resolved. A freshly cut
-  branch is reachable from `main` but not integrated, so its first PR is fine. Create
-  the next patch release branch (`release/vX.Y.Z`) for follow-up work; it cuts
-  its own `X.Y.Z` release on promotion exactly as a minor branch does.
+- **Require status checks to pass:** `pr-guards`, `fast-checks`, and
+  `release-validation`, and **require branches to be up to date**. A job
+  skipped by a [job-level conditional reports success][skipped-job], so a fork
+  PR that skips `release-validation` stays mergeable.
+- **Required approvals: 0.** Do **not** require Code Owner review.
+- **Block force-pushes and deletions** of `main`, and configure **no bypass
+  actors**.
+- **Require signed commits** if it is the org norm (`CONTRIBUTING.md` asks for
+  signed commits).
 
 ### Repository settings
 
@@ -434,23 +316,12 @@ owner.
   protection; do not add CWS credentials until the plan supports it or a second
   eligible maintainer can be configured. The release workflow independently
   rejects publish dispatches not run from `main`.
-- Keep **automatically delete head branches** enabled so short-lived working
-  branches do not accumulate after merge.
-- **Default merge strategy:** set **squash** for day-to-day working-branch PRs
-  (one tidy commit per change on the release branch). **Exception:** promoting
-  `release/vX.Y` → `main` should be a **merge commit**, done explicitly, to
-  preserve release history. GitHub **cannot enforce a per-target merge strategy**,
-  so this is a documented convention, not an automated rule — the person doing
-  the promotion picks "Create a merge commit".
-- **Repo variable `ACTIVE_RELEASE_BRANCH`** — optionally set it to the current
-  `release/vX.Y` so the nightly workflow targets it explicitly instead of
-  auto-resolving the highest-semver branch.
+- Keep **automatically delete head branches** enabled.
+- **Default merge strategy: squash.**
 
-> **What CI can and cannot enforce.** The scope/naming guards, CODEOWNERS, and
-> templates live in the repo and take effect immediately. Required-check
-> enforcement, required reviews, push restrictions, signed-commit requirements,
-> auto-delete, and merge-strategy defaults are **admin-only repo settings** — the
-> repository security model depends on administrators keeping them aligned with
-> this baseline.
+> **What CI can and cannot enforce.** The guards, CODEOWNERS, and templates take
+> effect from the repository. Required checks, push restrictions, signed
+> commits, auto-delete, and the merge strategy are **admin-only settings**; each
+> release audit reads them back rather than inferring them from YAML.
 
 [skipped-job]: https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks

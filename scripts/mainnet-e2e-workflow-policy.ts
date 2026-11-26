@@ -4,13 +4,17 @@
  * The workflow holds a funded hot-wallet key and runs on the self-hosted
  * runner, so it is a reviewed policy rather than a baseline workflow.
  *
- * Jobs split by trust. `build` runs release-controlled install and build with
- * no secret. `execute` holds the key and may not install, build, check out,
- * or print raw test output. `preflight` and `post` run trusted `main` code
- * without the key or the release commit, and pass the spend baseline as a
- * job output the code under test cannot write. `execute` uses exactly the RPC
- * preflight validated: it compares a SHA-256 job output, re-checks HTTPS, the
- * shared hosts and the mainnet chain id, and never falls back.
+ * Every run tests main's commit, taken from the triggering event (schedule or
+ * a dispatch of the workflow from main; no input chooses it). Jobs split by
+ * trust. `build` installs and builds that commit with no secret. `execute`
+ * holds the key and may not install, build, check out, or print raw test
+ * output. `preflight` and `post` run checked-out `main` code without the key,
+ * and pass the spend baseline as a job output the code under test cannot
+ * write. `execute` uses exactly the RPC preflight validated: it compares a
+ * SHA-256 job output, re-checks HTTPS, the shared hosts and the mainnet chain
+ * id, and never falls back. `report` upserts an issue on failure and `notify`
+ * posts every enabled run's result to Slack; both are hosted, check nothing
+ * out and run one pinned script.
  *
  * The primary control is an exact-bytes pin (`mainnet-e2e-workflow-pin.ts`):
  * any edit fails until its reviewed SHA-256 is updated. Behind it, as defence
@@ -22,7 +26,8 @@
  * - `mainnet-e2e-workflow-execute.ts` and `mainnet-e2e-workflow-steps.ts`
  *   allowlist every step, its `if:` and its actions, and compare every
  *   decoded script whole (security scripts as named control blocks);
- * - `mainnet-e2e-workflow-scripts.ts` holds the display-only scripts;
+ * - `mainnet-e2e-workflow-scripts.ts` holds the display-only scripts, and
+ *   `mainnet-e2e-workflow-notify.ts` the Slack notifier step;
  * - `mainnet-e2e-workflow-secrets.ts` allows a secret only in its reviewed
  *   step env bindings, scanning every decoded string.
  */

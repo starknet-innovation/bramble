@@ -34,6 +34,6 @@ What actually happened (include any error text; do not paste secrets, seed phras
 
 ## Target release / milestone
 
-Which release should the fix land in? Use a milestone like `v0.4` (mapped to a
-`release/vX.Y` branch). Leave blank if unsure — a maintainer will triage it. A
+Which release should the fix ship in? Use a milestone for the planned version
+(e.g. `v0.11.1`). Leave blank if unsure — a maintainer will triage it. A
 release-blocking regression should say so here. See DEVELOPMENT.md.

@@ -128,5 +128,5 @@ Keep `name` in `wrangler.jsonc` as `bramble`: a different name deploys a new Wor
 live site unchanged.
 
 The website deploys independently of wallet releases. The production environment must allow
-only the `main` branch; replace the old release-branch policy when adopting this workflow.
+only the `main` branch.
 Manual deployment: `gh workflow run website-deploy.yml --ref main`.

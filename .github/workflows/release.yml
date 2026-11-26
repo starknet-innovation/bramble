@@ -8,9 +8,9 @@ name: Release
 # skips cleanly until the four CWS_* secrets exist in the `chrome-web-store`
 # environment. The manual runbook and prerequisites live in RELEASING.md.
 #
-# The automatic release-on-merge path (a release/hotfix branch merged into main)
-# lives in auto-release.yml; it calls the SAME reusable build so the heavy
-# pipeline is defined once.
+# Trunk-based releases: a version-bump PR merges into `main`, then a maintainer
+# pushes `vX.Y.Z` on that `main` commit. `prepare` refuses any tag whose commit
+# is not reachable from `main`, so nothing built off a side branch can ship.
 on:
   push:
     tags:
@@ -103,6 +103,14 @@ jobs:
           commit_sha="$(git rev-list -n1 "${tag}^{commit}" 2>/dev/null || true)"
           if [[ ! "$commit_sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Release tag ${tag} did not resolve to an immutable commit."
+            exit 1
+          fi
+          # Releases are cut from `main` only. Fetch main's current tip and
+          # refuse a tag whose commit is not one of its ancestors. Any failure
+          # to establish ancestry (fetch error, unknown commit) refuses too.
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor "$commit_sha" refs/remotes/origin/main; then
+            echo "::error::Release tag ${tag} points at ${commit_sha}, which is not reachable from main. Releases are cut only from commits on main."
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"

@@ -135,14 +135,15 @@ voluntarily; support must never ask for any other wallet export.
 4. Reproduce with a fresh Chrome profile and only synthetic accounts. Do not import user material.
 5. Prefer an operational mitigation (healthy upstream, lower rollout, disabled service) when it does
    not weaken signing, validation, privacy, or vault controls.
-6. For code, branch `hotfix/<description>` from the affected release tag, make the smallest reviewed
-   fix, bump both versions, and run the complete release validation in `RELEASING.md`.
-7. Publish the higher version to trusted testers first. Promote only after the original reproduction
-   and smoke suite pass. Forward-apply the fix to the active release branch.
+6. For code, open a `fix/` PR into `main` with the smallest fix and get it reviewed before merging,
+   then cut a patch release from `main` (bump both versions, tag `vX.Y.Z`) with the complete
+   release validation in `RELEASING.md`. There are no hotfix branches; fix forward.
+7. Publish the higher version to trusted testers first. Widen the rollout only after the original
+   reproduction and smoke suite pass.
 8. Close with timeline, root cause, affected versions, evidence, follow-ups, and an explicit statement
    that no wallet secrets were collected.
 
-The hotfix mechanics are executable and covered by
+The patch-release mechanics are executable and covered by
 `tests/conformance/release-version-single-source.test.ts`; each quarterly drill runs that test plus
 the package checksum and records the command output in a private incident-drill issue.
 

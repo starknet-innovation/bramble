@@ -62,6 +62,22 @@ bun run verify:sepolia:deploys # live Sepolia first deploy of each account type 
   permission) exit zero there. Those are held at source level by
   `tests/scripts/firefox-manifest.test.ts`, which runs inside `bun run check`.
 
+## Branching and merging
+
+Trunk-based: `main` is the only long-lived branch and is always releasable. Full guide:
+`DEVELOPMENT.md`; releases: `RELEASING.md`.
+
+- Branch from the latest `origin/main` (`feat/<issue>-<desc>`, `fix/<issue>-<desc>`,
+  `chore/<issue>-<desc>`, `docs/<desc>`) and open the PR into `main`. Never push to `main`.
+- Keep a PR small and single-purpose; rebase on `main` rather than letting a branch drift.
+- Link the issue, include tests, and keep unfinished user-facing work unwired or behind a
+  feature flag (`packages/features/flags/src/catalog.ts`, bundled `enabled: false`).
+- Never create `release/` or `hotfix/` branches. A hotfix is an ordinary PR into `main`.
+- An agent never merges a PR, creates or pushes a tag, or cuts a release unless the user
+  explicitly asks for that specific action. Merging and tagging are the developer's call.
+- For signing, vault, background, provider, privacy, or workflow changes, say in the PR
+  that a human review is recommended before merge.
+
 ## Layout
 
 - `apps/extension` — MV3 static pages, entrypoints, browser storage adapter, privileged background

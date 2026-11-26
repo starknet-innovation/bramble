@@ -1,6 +1,6 @@
 /**
  * The Ledger E2E workflow's nightly target (scripts/ledger-e2e-nightly-target.ts):
- * a scheduled run tests the active release branch at an immutable commit.
+ * a scheduled run tests `main` at an immutable commit.
  * Mutation cases change one piece of the real workflow and expect the policy
  * to name it; behaviour cases run the pinned script under bash with a fake
  * `git ls-remote`.
@@ -16,7 +16,7 @@ import { workflowSecurityPolicyFailures } from "../../scripts/workflow-security-
 const WORKFLOW = "ledger-e2e.yml";
 const PATH = `.github/workflows/${WORKFLOW}`;
 const EXPRESSION = "$" + "{{";
-const FIRST = `${PATH} must resolve the nightly release commit first, exactly as reviewed`;
+const FIRST = `${PATH} must resolve the nightly main commit first, exactly as reviewed`;
 const SECOND = `${PATH} must check out the resolved nightly commit second`;
 const COMMANDS = `${PATH} job speculos must run exactly the reviewed commands, in order`;
 const REF = `          ref: ${EXPRESSION} steps.target.outputs.revision }}\n`;
@@ -33,7 +33,7 @@ const failuresAfter = async (search: string, replacement: string) =>
 
 const resolveStep = async (): Promise<string> => {
   const source = (await readWorkflowSources())[WORKFLOW] ?? "";
-  const start = source.indexOf("      - name: Resolve the nightly release commit\n");
+  const start = source.indexOf("      - name: Resolve the nightly main commit\n");
   const end = source.indexOf(CHECKOUT);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
@@ -86,15 +86,15 @@ describe("Ledger E2E nightly target policy", () => {
     ).toContain(SECOND);
   });
 
-  test("rejects a widened source for the branch name", async () => {
+  test("rejects a widened or configurable source for the tested ref", async () => {
     for (const [search, replacement] of [
-      [`${EXPRESSION} vars.ACTIVE_RELEASE_BRANCH }}`, `${EXPRESSION} github.head_ref }}`],
       [
         `          EVENT_NAME: ${EXPRESSION} github.event_name }}\n`,
-        `          EVENT_NAME: ${EXPRESSION} github.event_name }}\n          GH_REF: main\n`,
+        `          EVENT_NAME: ${EXPRESSION} github.event_name }}\n          ACTIVE_RELEASE_BRANCH: ${EXPRESSION} vars.ACTIVE_RELEASE_BRANCH }}\n`,
       ],
       ["        id: target\n", "        id: nightly\n"],
-      ["'refs/heads/release/*'", "'refs/heads/*'"],
+      ["'refs/heads/main')", "'refs/heads/*')"],
+      ['$2 == "refs/heads/main"', '$2 ~ "refs/heads/"'],
     ] as const) {
       const failures = await failuresAfter(search, replacement);
       expect(failures).toContain(FIRST);
@@ -104,10 +104,8 @@ describe("Ledger E2E nightly target policy", () => {
   test("rejects dropping any of the pattern, existence or commit checks", async () => {
     for (const [search, replacement] of [
       ['if [ "$EVENT_NAME" != "schedule" ]', 'if [ "$EVENT_NAME" = "never" ]'],
-      ['if [[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]', "if false"],
       ['if [ -z "$revision" ]', "if false"],
       ['if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]', "if false"],
-      ["sort -V | tail -1", "head -1"],
       ["set -euo pipefail\n", "set -eu\n"],
     ] as const) {
       const failures = await failuresAfter(search, replacement);
@@ -127,13 +125,7 @@ describe("Ledger E2E nightly target policy", () => {
 });
 
 const SHA = (digit: string) => digit.repeat(40);
-const HEADS = [
-  `${SHA("1")}\trefs/heads/release/v0.10.9`,
-  `${SHA("2")}\trefs/heads/release/v0.10.10`,
-  `${SHA("3")}\trefs/heads/release/v0.9.20`,
-  `${SHA("4")}\trefs/heads/release/v1.0-rc`,
-  `${SHA("5")}\trefs/heads/release/experiment`,
-].join("\n");
+const HEADS = `${SHA("1")}\trefs/heads/main`;
 
 type Run = { exitCode: number; output: string; stderr: string; gitCalls: string };
 
@@ -174,55 +166,46 @@ const runResolve = async (env: Record<string, string>, heads = HEADS, gitFails =
 describe("Ledger E2E nightly target script", () => {
   test("outside a schedule it outputs an empty revision and reads nothing", async () => {
     for (const event of ["pull_request", "push", "workflow_dispatch"]) {
-      const run = await runResolve({ EVENT_NAME: event, ACTIVE_RELEASE_BRANCH: "release/v0.10.9" });
+      const run = await runResolve({ EVENT_NAME: event });
       expect(run.exitCode).toBe(0);
       expect(run.output).toBe("revision=\n");
       expect(run.gitCalls).toBe("");
     }
   });
 
-  test("a schedule picks the highest-semver release branch at its commit", async () => {
+  test("a schedule resolves main to its commit", async () => {
     const run = await runResolve({ EVENT_NAME: "schedule" });
     expect(run.exitCode).toBe(0);
-    expect(run.output).toBe(`revision=${SHA("2")}\n`);
+    expect(run.output).toBe(`revision=${SHA("1")}\n`);
     expect(run.gitCalls).toBe(
-      "ls-remote --heads https://github.com/starknet-innovation/bramble.git refs/heads/release/*\n",
+      "ls-remote --heads https://github.com/starknet-innovation/bramble.git refs/heads/main\n",
     );
   });
 
-  test("vars.ACTIVE_RELEASE_BRANCH wins when it names an existing release branch", async () => {
+  test("a configured release branch cannot redirect it", async () => {
     const run = await runResolve({
       EVENT_NAME: "schedule",
-      ACTIVE_RELEASE_BRANCH: "release/v0.10.9",
+      ACTIVE_RELEASE_BRANCH: "release/v0.10",
     });
-    expect(run.exitCode).toBe(0);
     expect(run.output).toBe(`revision=${SHA("1")}\n`);
   });
 
-  test("fails closed on a bad, missing or unreadable branch, never falling back to main", async () => {
-    for (const branch of [
-      "main",
-      "release/v1.0-rc",
-      "release/experiment",
-      "release/v0.10.9 ",
-      "refs/heads/release/v0.10.9",
-      "release/v0.10.9;true",
-      "release/v9.9.9",
+  test("fails closed on a missing, look-alike, unreadable or short main", async () => {
+    for (const heads of [
+      "",
+      `${SHA("2")}\trefs/heads/release/v0.10`,
+      `${SHA("2")}\trefs/heads/main-old`,
+      `${SHA("2")}\trefs/heads/x/main`,
     ]) {
-      const run = await runResolve({ EVENT_NAME: "schedule", ACTIVE_RELEASE_BRANCH: branch });
+      const run = await runResolve({ EVENT_NAME: "schedule" }, heads);
       expect(run.exitCode).toBe(1);
       expect(run.output).toBe("");
+      expect(run.stderr).toContain("main does not exist");
     }
-    const none = await runResolve({ EVENT_NAME: "schedule" }, `${SHA("5")}\trefs/heads/release/x`);
-    expect(none.exitCode).toBe(1);
-    expect(none.stderr).toContain("No release/* branch exists");
     const unreadable = await runResolve({ EVENT_NAME: "schedule" }, HEADS, true);
     expect(unreadable.exitCode).not.toBe(0);
     expect(unreadable.output).toBe("");
-    const short = await runResolve(
-      { EVENT_NAME: "schedule" },
-      "abc123\trefs/heads/release/v0.10.9",
-    );
+    const short = await runResolve({ EVENT_NAME: "schedule" }, "abc123\trefs/heads/main");
     expect(short.exitCode).toBe(1);
     expect(short.stderr).toContain("did not resolve to an immutable commit");
   });

@@ -21,6 +21,7 @@
 
 import { isAlias, isScalar, parseDocument, visit } from "yaml";
 import { EXECUTE_CONDITION, jobFailures, rootFailures } from "./mainnet-e2e-workflow-jobs";
+import { SLACK_ENVIRONMENT } from "./mainnet-e2e-workflow-notify";
 import { mainnetE2eSecretFailures } from "./mainnet-e2e-workflow-secrets";
 import { isRecord, record } from "./mainnet-e2e-workflow-shape";
 import { sourceCharacterFailures } from "./workflow-source-characters";
@@ -39,6 +40,7 @@ export const GASLESS_CONDITION_FAILURE =
 /** Which environment each secret-holding job reads; any other job reads none. */
 const ENVIRONMENTS: Readonly<Record<string, string>> = {
   execute: "mainnet-e2e",
+  notify: SLACK_ENVIRONMENT,
   post: "mainnet-e2e-balance",
   preflight: "mainnet-e2e-balance",
 };

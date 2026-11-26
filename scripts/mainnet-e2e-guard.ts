@@ -4,7 +4,7 @@
  * Local runs, where `CI` is unset, are unchanged. Any other CI is refused.
  * GitHub Actions may opt in only when the runner itself reports the reviewed
  * Mainnet E2E workflow on `main` in this repository, and the workflow has
- * named the `mainnet-e2e` environment. A release-branch test cannot grant
+ * named the `mainnet-e2e` environment. A test on another branch cannot grant
  * itself that context: `GITHUB_WORKFLOW_REF` is set by the runner from the
  * workflow file that was dispatched. The check does not inspect secrets and
  * its refusal text never echoes the environment.

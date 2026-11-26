@@ -1,45 +1,35 @@
 name: Nightly
 
-# Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
+# Full-suite nightly run against the current `main` commit (DEVELOPMENT.md).
 # This is the heaviest tier of the layered CI model: full E2E (Playwright),
 # the live Sepolia import-path run (issue 821), live Sepolia sends and first
 # deploys (issue 976), dependency audit and the extension build. The report job
 # sorts failures into new, still failing and fixed against the open tracking
-# issue, upserts that ONE issue for the release, and closes it once green.
+# issue, upserts that ONE issue for `main`, and closes it once green.
 #
-# Active-branch resolution order:
-#   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
-#   2. otherwise the highest-semver `release/vX.Y[.Z]` branch;
-#   3. if neither exists, exit cleanly with a note (nothing to run).
+# `main` is resolved to an immutable commit once, on a hosted runner, and the
+# self-hosted job detaches onto exactly that commit.
 on:
   schedule:
     # 03:00 UTC daily.
     - cron: "0 3 * * *"
   workflow_dispatch:
-    inputs:
-      branch:
-        description: "Override the release branch to run against (e.g. release/v0.4). Blank = auto-resolve."
-        type: string
-        default: ""
 
 permissions:
   contents: read
 
 jobs:
-  # Resolve which release branch to test. Runs on a hosted runner; read-only.
+  # Resolve `main` to the commit to test. Runs on a hosted runner; read-only.
   resolve:
     runs-on: ubuntu-latest
     outputs:
-      branch: ${{ steps.pick.outputs.branch }}
       revision: ${{ steps.pick.outputs.revision }}
     steps:
-      - name: Resolve active release branch
+      - name: Resolve main commit
         id: pick
         env:
           GH_TOKEN: ${{ github.token }}
-          ACTIVE_RELEASE_BRANCH: ${{ vars.ACTIVE_RELEASE_BRANCH }}
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_BRANCH: ${{ github.event.inputs.branch }}
           TRIGGER_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
@@ -47,56 +37,16 @@ jobs:
             echo "::error::Nightly manual runs must use the workflow from main."
             exit 1
           fi
-          available="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name')"
-          candidate=""
-          if [ -n "${INPUT_BRANCH:-}" ]; then
-            echo "Using workflow_dispatch input: $INPUT_BRANCH"
-            candidate="$INPUT_BRANCH"
-          elif [ -n "${ACTIVE_RELEASE_BRANCH:-}" ]; then
-            echo "Using vars.ACTIVE_RELEASE_BRANCH: $ACTIVE_RELEASE_BRANCH"
-            candidate="$ACTIVE_RELEASE_BRANCH"
-          else
-            echo "Auto-resolving the highest-semver release/* branch ..."
-            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$' || true)"
-            if [ -z "$branches" ]; then
-              echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."
-              {
-                echo "### Nightly: no active release branch"
-                echo ""
-                echo "No \`release/*\` branch exists and \`vars.ACTIVE_RELEASE_BRANCH\` is not set."
-                echo "Exiting cleanly — nothing to test."
-              } >> "$GITHUB_STEP_SUMMARY"
-              echo "branch=" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -V | tail -1)"
-            candidate="release/v$best"
-          fi
-
-          # A workflow input or repo variable is untrusted configuration. Permit
-          # only the canonical release namespace and require an exact branch in
-          # this repository before any self-hosted runner checks it out.
-          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "::error::Nightly branch must match release/vX.Y or release/vX.Y.Z exactly."
-            exit 1
-          fi
-          if ! grep -Fxq -- "$candidate" <<< "$available"; then
-            echo "::error::Nightly branch '$candidate' does not exist in $GITHUB_REPOSITORY."
-            exit 1
-          fi
-          encoded_candidate="${candidate//\//%2F}"
-          revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"
+          revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
           if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Nightly branch did not resolve to an immutable commit."
+            echo "::error::main did not resolve to an immutable commit."
             exit 1
           fi
-          echo "Resolved: $candidate at $revision"
-          echo "branch=$candidate" >> "$GITHUB_OUTPUT"
+          echo "Resolved: main at $revision"
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
   nightly:
     needs: resolve
-    if: needs.resolve.outputs.branch != ''
     concurrency: { group: sepolia-tx, cancel-in-progress: false } # no overlap racing for S-TXN nonces
     permissions:
       contents: read
@@ -122,7 +72,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check out resolved release commit
+      - name: Check out resolved main commit
         env:
           REVISION: ${{ needs.resolve.outputs.revision }}
           FETCH_TOKEN: ${{ github.token }}
@@ -228,7 +178,7 @@ jobs:
       # records no tape and uploads nothing: this is a public repository, and
       # a run's network traffic is not for publishing (replay is local-only).
       # Until the secret is configured the gate is skipped: the summary lists it
-      # under "Not run" and says not to promote, and it is never shown as passed.
+      # under "Not run" and says not to release, and it is never shown as passed.
       # Any other skip (an earlier hard failure) counts as failing. Only a
       # boolean leaves this step; the secret itself reaches the live step alone.
       - name: Sepolia seeds configured
@@ -249,7 +199,7 @@ jobs:
             exit 1
           fi
           if [ ! -f tools/vendor-dataset/verify-sepolia.ts ]; then
-            echo "::error::This release branch predates the Sepolia runner (issue 821)."
+            echo "::error::This commit predates the Sepolia runner (issue 821)."
             exit 1
           fi
           umask 077
@@ -270,7 +220,7 @@ jobs:
             value="${value%"${value##*[![:space:]]}"}"
             if [ -n "$value" ]; then echo "::add-mask::$value"; fi
           done < "$seeds"
-          # The newest committed scorecard, if this branch has one (dated names sort in order).
+          # The newest committed scorecard, if this commit has one (dated names sort in order).
           set -- "$RUNNER_TEMP/sepolia/scorecard.json"
           for previous in tools/vendor-dataset/verification-sepolia-*.json; do
             if [ -f "$previous" ]; then set -- "$RUNNER_TEMP/sepolia/scorecard.json" "$previous"; fi
@@ -296,7 +246,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f tools/vendor-dataset/sepolia-bank-runway.ts ]; then
-            echo "::error::This release branch predates the Sepolia send run (issue 976)."
+            echo "::error::This commit predates the Sepolia send run (issue 976)."
             exit 1
           fi
           umask 077
@@ -340,10 +290,10 @@ jobs:
 
   # Source and dependencies execute only in the read-only self-hosted job above.
   # This hosted job receives issue write permission and runs trusted workflow
-  # script only; it never checks out or evaluates the selected release branch.
+  # script only; it never checks out or evaluates the tested commit.
   report:
     needs: [resolve, nightly]
-    if: always() && needs.resolve.outputs.branch != ''
+    if: always() && needs.resolve.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -352,7 +302,7 @@ jobs:
       - name: Report and track
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          BRANCH: ${{ needs.resolve.outputs.branch }}
+          REVISION: ${{ needs.resolve.outputs.revision }}
           VENDOR: ${{ needs.nightly.outputs.vendor }}
           BUILD: ${{ needs.nightly.outputs.build }}
           AUDIT: ${{ needs.nightly.outputs.audit }}
@@ -369,7 +319,7 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const env = process.env;
-            const branch = env.BRANCH;
+            const revision = String(env.REVISION || "").slice(0, 40);
             const gates = [
               { name: "Verify upstreams (Argent+Privacy)", outcome: env.VENDOR },
               { name: "Extension build", outcome: env.BUILD },
@@ -386,7 +336,7 @@ jobs:
             const notRun = gates.filter((g) => g.secret && g.outcome === "skipped" && g.configured === "false");
             const failingGates = gates.filter((g) => !notRun.includes(g) && g.outcome !== "success");
 
-            // Test titles come from release-branch code: untrusted. Keep them
+            // Test titles come from the tested code: untrusted. Keep them
             // strings, cap them, and render them only inside code spans.
             const strings = (value, max = 20) =>
               Array.isArray(value) ? value.filter((t) => typeof t === "string").slice(0, max) : [];
@@ -408,7 +358,7 @@ jobs:
 
             // The open tracking issue is the baseline: a hidden state line lists
             // what was failing last time. No open issue means nothing is known.
-            const title = `Nightly: ${branch} — failing checks`;
+            const title = "Nightly: main — failing checks";
             const open = await github.paginate(github.rest.issues.listForRepo, {
               owner, repo, state: "open", labels: "ci-cd", per_page: 100,
             });
@@ -422,7 +372,7 @@ jobs:
             const runUrl = `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`;
             const section = (heading, lines) => (lines.length ? ["", `### ${heading}`, ...lines] : []);
             const report = [
-              `Nightly run for \`${branch}\`: ${runUrl}`,
+              `Nightly run for \`main\` at ${code(revision)}: ${runUrl}`,
               ...section("New failures", newly.map(show)),
               ...section("Still failing", still.map(show)),
               ...section("Fixed since last run", fixed.map(show)),
@@ -430,9 +380,9 @@ jobs:
               ...section("Not run", notRun.map((g) => `- ${g.name}: the ${g.secret} secret is not configured`)),
               "",
               failing.length
-                ? "Do not promote this branch to `main` until it is green. \"Sepolia bank low\" means refill the bank, not a wallet bug."
+                ? "Do not cut a release from `main` until it is green. \"Sepolia bank low\" means refill the bank, not a wallet bug."
                 : notRun.length
-                  ? "Do not promote this branch to `main` until every gate has run (tools/vendor-dataset/README.md)."
+                  ? "Do not cut a release from `main` until every gate has run (tools/vendor-dataset/README.md)."
                   : "All gates passed. Continue with RELEASING.md.",
             ];
             await core.summary.addRaw(report.join("\n")).write();
@@ -455,7 +405,7 @@ jobs:
             const body = [
               ...report,
               "",
-              "This issue is updated by `.github/workflows/nightly.yml` each night and closed when the branch is green.",
+              "This issue is updated by `.github/workflows/nightly.yml` each night and closed when `main` is green.",
               `<!-- nightly-state: ${state} -->`,
             ].join("\n");
 
@@ -464,23 +414,8 @@ jobs:
               core.info(`Updated tracking issue #${existing.number}.`);
               return;
             }
-            // Best-effort: assign the milestone matching the branch version.
-            let milestoneNumber;
-            const version = branch.replace(/^release\//, "");
-            try {
-              const milestones = await github.paginate(github.rest.issues.listMilestones, {
-                owner, repo, state: "all", per_page: 100,
-              });
-              const milestone = milestones.find(
-                (item) => item.title === version || item.title === version.replace(/^v/, ""),
-              );
-              if (milestone) milestoneNumber = milestone.number;
-            } catch (error) {
-              core.warning(`Could not list milestones: ${error.status || error.message}`);
-            }
             const created = await github.rest.issues.create({
               owner, repo, title, body,
               labels: ["ci-cd", "release"],
-              ...(milestoneNumber ? { milestone: milestoneNumber } : {}),
             });
             core.info(`Created tracking issue #${created.data.number}.`);

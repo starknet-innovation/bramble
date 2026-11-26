@@ -23,16 +23,16 @@ Read these in order before your first change:
    commands, the workspace layout, the hard rules enforced by `bun run check`, and
    the "reuse before writing" anti-drift notes.
 3. **[CONTRIBUTING.md](https://github.com/starknet-innovation/bramble/blob/main/CONTRIBUTING.md)** — the binding architecture and
-   security rules, the branch/release/PR workflow, and the taste bar.
+   security rules, a summary of the trunk-based PR workflow, and the taste bar.
 4. **[docs/ARCHITECTURE.md](../architecture/)** — the deep tour: trust
    boundaries, the pinned account/multisig class hashes, the dApp provider
    surface, storage migrations, and the design system.
 5. **[docs/MODULAR_ARCHITECTURE.md](../modular-architecture/)** — the implemented
    package graph, internal capability layout, typed invariants, and enforcement gates.
-6. **[DEVELOPMENT.md](https://github.com/starknet-innovation/bramble/blob/main/DEVELOPMENT.md)** — day-to-day developer workflow.
+6. **[DEVELOPMENT.md](https://github.com/starknet-innovation/bramble/blob/main/DEVELOPMENT.md)** — the trunk-based developer workflow: branches, PRs into `main`, CI, and releases.
 7. **[docs/security-audit/](../security-audit/)** — threat model, methodology,
    findings, and the directory-by-directory reviews.
-8. **[RELEASING.md](https://github.com/starknet-innovation/bramble/blob/main/RELEASING.md)** — how a release is cut and promoted.
+8. **[RELEASING.md](https://github.com/starknet-innovation/bramble/blob/main/RELEASING.md)** — how a release is tagged on `main` and published.
 
 For the *why* behind any rule, `CONTRIBUTING.md` and `AGENTS.md` are canonical;
 this page only helps you find them.

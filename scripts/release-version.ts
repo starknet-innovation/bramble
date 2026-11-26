@@ -1,14 +1,15 @@
 /**
  * Single source of truth for the release version, and the gate that keeps the
- * tag, artifact, and changelog from drifting away from it (issue #59).
+ * release tag and artifact from drifting away from it (issue #59).
  *
  * The release version is defined once in `package.json` (`version`);
  * `apps/extension/public/manifest.json` mirrors it and `check-config-standards` /
  * `check-extension-manifest` already forbid the two from diverging. What was
  * missing — and why `v0.4.0` shipped as `mc-wallet-0.3.0.zip` — is a gate tying
- * the *tag* to that value. `evaluateRelease` is that gate: given the package and
- * manifest versions, the merged head branch, and (on the release path) the tag,
- * it derives the one canonical version and refuses any mismatch.
+ * the *tag* to that value. Releases are cut from `main` by pushing `vX.Y.Z` on
+ * the commit that bumped the version, and `evaluateRelease` is the gate the
+ * release build runs: given the package and manifest versions and the tag, it
+ * derives the one canonical version and refuses any mismatch.
  *
  * The exported functions are PURE (no I/O) so they can be unit tested without a
  * checkout or a git remote; only `main()` reads `package.json` /
@@ -19,27 +20,10 @@ import { readFile } from "node:fs/promises";
 /** A release version string, `X.Y.Z`. */
 export const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 
-/**
- * A release branch: `release/vX.Y` for a minor line, or `release/vX.Y.Z` for a
- * patch line cut after `release/vX.Y` was integrated into `main` (issue #302 —
- * an integrated release branch is immutable, so follow-up work moves to the
- * next patch branch, which must therefore be able to cut its own release).
- */
-export const RELEASE_BRANCH = /^release\/v(\d+)\.(\d+)(?:\.(\d+))?$/;
-
-/** A hotfix branch, `hotfix/<desc>`. */
-export const HOTFIX_BRANCH = /^hotfix\/.+/;
-
-/** How a promotion into `main` maps to a release: from a release or a hotfix branch, or not at all. */
-export type ReleaseKind = "release" | "hotfix" | "none";
-
 /** A resolved release: the canonical version and the tag that must carry it. */
 export interface GateResult {
   readonly version: string;
   readonly tag: string;
-  readonly release: boolean;
-  readonly kind: ReleaseKind;
-  readonly notes: readonly string[];
 }
 
 /** Outcome of the gate: either a resolved release, or the reasons it is invalid. */
@@ -51,35 +35,12 @@ export type ReleaseEvaluation =
 export interface GateInput {
   readonly packageVersion: unknown;
   readonly manifestVersion: unknown;
-  /** The merged head branch, when resolving an auto-release on a push to `main`. */
-  readonly headRef?: string | undefined;
   /** The tag being released, when asserting it on the build path. */
   readonly releaseTag?: string | undefined;
-  /**
-   * Release tags that already exist (e.g. from `git ls-remote --tags`). Used to
-   * fail a hotfix promotion closed when it resolves to an already-cut tag —
-   * i.e. the hotfix forgot to bump the version. Empty/omitted disables the check.
-   */
-  readonly existingTags?: readonly string[] | undefined;
 }
 
 /** The tag that must carry a given version. */
 export const tagForVersion = (version: string): string => `v${version}`;
-
-/**
- * The version a release branch cuts — `X.Y.0` for `release/vX.Y`, `X.Y.Z` for
- * `release/vX.Y.Z` — or `null` if the name is not a release branch.
- */
-export const versionFromReleaseBranch = (branch: string): string | null => {
-  const match = RELEASE_BRANCH.exec(branch);
-  return match ? `${match[1]}.${match[2]}.${match[3] ?? "0"}` : null;
-};
-
-/** Whether a branch is a release branch (either a minor or a patch line). */
-export const isReleaseBranch = (branch: string): boolean => RELEASE_BRANCH.test(branch);
-
-/** Whether a branch is a hotfix promotion. */
-export const isHotfixBranch = (branch: string): boolean => HOTFIX_BRANCH.test(branch);
 
 /**
  * Resolves the single release version from the two mirrored sources. Returns the
@@ -111,77 +72,36 @@ export const resolveSingleSourceVersion = (
 };
 
 /**
- * The release gate. Derives the one canonical version from the mirrored sources,
- * then — if a merged head branch is supplied — decides whether the push is a
- * release/hotfix promotion and cross-checks the branch-implied version against
- * it, and — if a tag is supplied — asserts the tag carries exactly that version.
- * Any drift is returned as a problem rather than silently accepted.
+ * The release gate. Derives the one canonical version from the mirrored
+ * sources and — if a tag is supplied — asserts the tag carries exactly that
+ * version. Any drift is returned as a problem rather than silently accepted.
  */
 export const evaluateRelease = (input: GateInput): ReleaseEvaluation => {
   const single = resolveSingleSourceVersion(input.packageVersion, input.manifestVersion);
   if (!single.ok) {
     return { ok: false, problems: single.problems };
   }
-
   const { version } = single;
-  const problems: string[] = [];
-  const notes: string[] = [];
-  let release = false;
-  let kind: ReleaseKind = "none";
-
-  if (input.headRef !== undefined) {
-    const branchVersion = versionFromReleaseBranch(input.headRef);
-    if (branchVersion !== null) {
-      release = true;
-      kind = "release";
-      if (branchVersion !== version) {
-        problems.push(
-          `release branch ${input.headRef} implies version ${branchVersion} but package/manifest is ${version}; bump package.json and apps/extension/public/manifest.json to ${branchVersion} before promoting`,
-        );
-      }
-    } else if (isHotfixBranch(input.headRef)) {
-      release = true;
-      kind = "hotfix";
-      // A hotfix has no branch-implied version to cross-check, so the only
-      // signal that the promotion forgot to bump is that its resolved tag
-      // already exists. Fail closed on that (like the release-branch arm fails
-      // on a stale version) so a forgotten bump surfaces here instead of hitting
-      // the idempotent tag-skip and going green having released nothing.
-      const hotfixTag = tagForVersion(version);
-      if ((input.existingTags ?? []).includes(hotfixTag)) {
-        problems.push(
-          `hotfix promotion ${input.headRef} resolves to ${version}, whose tag ${hotfixTag} already exists — the hotfix did not bump package.json/apps/extension/public/manifest.json; bump to a new version before promoting`,
-        );
-      } else {
-        notes.push(`hotfix promotion ${input.headRef}: releasing package version ${version}`);
-      }
-    } else {
-      notes.push(`head ${input.headRef} is not a release/hotfix promotion; no release will be cut`);
-    }
-  }
-
   const tag = tagForVersion(version);
   if (input.releaseTag !== undefined && input.releaseTag !== tag) {
-    problems.push(
-      `tag ${input.releaseTag} does not match the single-source version ${version} (expected ${tag})`,
-    );
+    return {
+      ok: false,
+      problems: [
+        `tag ${input.releaseTag} does not match the single-source version ${version} (expected ${tag})`,
+      ],
+    };
   }
-
-  return problems.length === 0
-    ? { ok: true, result: { version, tag, release, kind, notes } }
-    : { ok: false, problems };
+  return { ok: true, result: { version, tag } };
 };
 
 const readJson = async (path: string): Promise<Record<string, unknown>> =>
   JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 
 /**
- * CLI entrypoint. Reads the mirrored versions, applies the gate to the
- * environment (`HEAD_REF` on the auto-release path, `RELEASE_TAG` on the build
- * path, `EXISTING_TAGS` — the whitespace-separated already-cut tags — so a
- * hotfix that forgot to bump fails closed), writes `release`/`version`/`tag`/
- * `kind` to `GITHUB_OUTPUT` when present, and exits non-zero on any drift.
- * Returns the process exit code.
+ * CLI entrypoint. Reads the mirrored versions, applies the gate to
+ * `RELEASE_TAG` from the environment (the release build sets it), writes
+ * `version`/`tag` to `GITHUB_OUTPUT` when present, and exits non-zero on any
+ * drift. Returns the process exit code.
  */
 export const main = async (
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -191,9 +111,7 @@ export const main = async (
   const evaluation = evaluateRelease({
     packageVersion: packageJson["version"],
     manifestVersion: manifestJson["version"],
-    headRef: env["HEAD_REF"] === "" ? undefined : env["HEAD_REF"],
     releaseTag: env["RELEASE_TAG"] === "" ? undefined : env["RELEASE_TAG"],
-    existingTags: (env["EXISTING_TAGS"] ?? "").split(/\s+/).filter((tag) => tag.length > 0),
   });
 
   if (!evaluation.ok) {
@@ -204,12 +122,7 @@ export const main = async (
   }
 
   const { result } = evaluation;
-  for (const note of result.notes) {
-    console.log(`release-version: ${note}`);
-  }
-  console.log(
-    `release-version: version ${result.version}, tag ${result.tag}, release ${result.release} (${result.kind})`,
-  );
+  console.log(`release-version: version ${result.version}, tag ${result.tag}`);
 
   const outputPath = env["GITHUB_OUTPUT"];
   if (outputPath !== undefined && outputPath !== "") {
@@ -218,7 +131,7 @@ export const main = async (
       .catch(() => "");
     await Bun.write(
       Bun.file(outputPath),
-      `${existing}release=${result.release}\nversion=${result.version}\ntag=${result.tag}\nkind=${result.kind}\n`,
+      `${existing}version=${result.version}\ntag=${result.tag}\n`,
     );
   }
   return 0;

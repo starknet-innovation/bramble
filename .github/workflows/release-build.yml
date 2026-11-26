@@ -1,11 +1,9 @@
 name: Release build
 
-# Reusable release build (issue #58/#59/#60). Called by BOTH release paths so
-# the heavy pipeline is defined once, never duplicated:
-#   - release.yml       — a human `vX.Y.Z` tag push, or a manual Chrome Web
-#                         Store dispatch (create_release=false, build only).
-#   - auto-release.yml  — a release/hotfix branch merged into `main`, which
-#                         computes the version, creates the tag, then calls this.
+# Reusable release build (issue #58/#59/#60), called by release.yml for a
+# maintainer's `vX.Y.Z` tag push on a `main` commit, or for a manual Chrome Web
+# Store dispatch (create_release=false, build only). The caller has already
+# verified that the tag's commit is reachable from `main`.
 #
 # It builds and packages the extension exactly as CI does, ASSERTS the tag
 # matches the single-source version (the gate that was missing when v0.4.0
@@ -105,8 +103,8 @@ jobs:
       - name: Verify checksum file
         working-directory: artifacts
         run: sha256sum -c ./*.zip.sha256
-      # Release notes (issue #60): prefer the CHANGELOG.md section maintained on
-      # the release branch; fall back to a deterministic section generated from
+      # Release notes (issue #60): prefer the CHANGELOG.md section added by the
+      # version-bump PR on main; fall back to a deterministic section generated from
       # the commit range since the previous tag. Both go through the same tested
       # generator (scripts/generate-changelog.ts). TAG is passed via env (never
       # interpolated into the shell) and is a workflow input, not event data.
@@ -161,8 +159,8 @@ jobs:
       # and leave the human's title/notes untouched; otherwise we create it with
       # the derived notes.
       #
-      # The check-then-create is a TOCTOU: two builds for the same tag (a manual
-      # tag-push racing an auto-release cut) could both see "no release" and both
+      # The check-then-create is a TOCTOU: two builds for the same tag (a tag
+      # push racing a re-run of the same tag) could both see "no release" and both
       # try to create it, and `gh release create` fails if the Release appears in
       # between. We treat that as a lost race, not a failure — fall back to
       # attaching our assets to the now-existing Release. If create failed for

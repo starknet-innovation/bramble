@@ -1,19 +1,10 @@
 name: Mainnet E2E
 
-# Live mainnet E2E for the active release branch, 06:00 UTC. Manual dispatch only from main;
-# never a PR or fork; runs never overlap (nonce). preflight/post: trusted main code, RPC secret,
-# baseline and RPC hash as job outputs. build: release commit, no secret. execute: the key, no
-# install or build, test output withheld. See docs/MAINNET_E2E_CI.md.
+# Live mainnet E2E for main's commit; one trust boundary per job. See docs/MAINNET_E2E_CI.md.
 on:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
-    inputs:
-      branch:
-        description: "Override the release branch to run against (e.g. release/v0.10.9). Blank = auto-resolve."
-        type: string
-        default: ""
-
 permissions:
   contents: read
 
@@ -28,14 +19,11 @@ jobs:
       branch: ${{ steps.pick.outputs.branch }}
       revision: ${{ steps.pick.outputs.revision }}
     steps:
-      - name: Resolve active release branch
+      - name: Resolve main to its commit
         id: pick
         env:
-          GH_TOKEN: ${{ github.token }}
-          ACTIVE_RELEASE_BRANCH: ${{ vars.ACTIVE_RELEASE_BRANCH }}
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_BRANCH: ${{ github.event.inputs.branch }}
           TRIGGER_REF: ${{ github.ref }}
+          TRIGGER_SHA: ${{ github.sha }}
           REPOSITORY_FORK: ${{ github.event.repository.fork }}
         run: |
           set -euo pipefail
@@ -45,44 +33,15 @@ jobs:
             echo "revision=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/main" ]; then
-            echo "::error::Mainnet E2E manual runs must use the workflow from main."; exit 1
+          if [ "$TRIGGER_REF" != "refs/heads/main" ]; then
+            echo "::error::Mainnet E2E runs only the workflow and commit from main."; exit 1
           fi
-          available="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name')"
-          candidate=""
-          if [ -n "${INPUT_BRANCH:-}" ]; then
-            echo "Using workflow_dispatch input: $INPUT_BRANCH"
-            candidate="$INPUT_BRANCH"
-          elif [ -n "${ACTIVE_RELEASE_BRANCH:-}" ]; then
-            echo "Using vars.ACTIVE_RELEASE_BRANCH: $ACTIVE_RELEASE_BRANCH"
-            candidate="$ACTIVE_RELEASE_BRANCH"
-          else
-            echo "Auto-resolving the highest-semver release/* branch ..."
-            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$' || true)"
-            if [ -z "$branches" ]; then
-              echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."
-              echo "branch=" >> "$GITHUB_OUTPUT"
-              echo "revision=" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -V | tail -1)"
-            candidate="release/v$best"
+          if [[ ! "$TRIGGER_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Mainnet E2E did not resolve main to an immutable commit."; exit 1
           fi
-
-          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "::error::Mainnet E2E branch must match release/vX.Y or release/vX.Y.Z exactly."; exit 1
-          fi
-          if ! grep -Fxq -- "$candidate" <<< "$available"; then
-            echo "::error::Mainnet E2E branch '$candidate' does not exist in $GITHUB_REPOSITORY."; exit 1
-          fi
-          encoded_candidate="${candidate//\//%2F}"
-          revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"
-          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Mainnet E2E branch did not resolve to an immutable commit."; exit 1
-          fi
-          echo "Resolved: $candidate at $revision"
-          echo "branch=$candidate" >> "$GITHUB_OUTPUT"
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "Resolved: main at $TRIGGER_SHA"
+          echo "branch=main" >> "$GITHUB_OUTPUT"
+          echo "revision=$TRIGGER_SHA" >> "$GITHUB_OUTPUT"
 
   gate:
     needs: resolve
@@ -156,7 +115,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check out resolved release commit
+      - name: Check out the resolved main commit
         env:
           REVISION: ${{ needs.resolve.outputs.revision }}
           FETCH_TOKEN: ${{ github.token }}
@@ -440,7 +399,6 @@ jobs:
       - name: Upsert mainnet tracking issue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          BRANCH: ${{ needs.resolve.outputs.branch }}
           REVISION: ${{ needs.resolve.outputs.revision }}
           ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
           TIER: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'strk20' || 'standard' }}
@@ -455,17 +413,16 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const branch = process.env.BRANCH || "unknown";
             const amount = (value) => /^-?[0-9]{1,12}(\.[0-9]{1,18})?$/.test(value || "") ? value : "unavailable";
             const felt = (value) => /^0x[0-9a-fA-F]{1,64}$/.test(value || "") ? value : "unavailable";
             const verdicts = ["ok", "above-maximum", "below-minimum", "over-cap", "unavailable"];
             const verdict = verdicts.includes(process.env.VERDICT) ? process.env.VERDICT : "unavailable";
             const tier = process.env.TIER === "strk20" || process.env.TIER === "standard" ? process.env.TIER : "unavailable";
             const revision = /^[0-9a-f]{40}$/.test(process.env.REVISION || "") ? process.env.REVISION : "unavailable";
-            const title = `Mainnet E2E: ${branch} — failing checks`;
+            const title = "Mainnet E2E: main — failing checks";
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
             const body = [
-              `Automated mainnet E2E run for \`${branch}\` failed or the hot wallet is outside its spend policy.`,
+              "Automated mainnet E2E run for `main` failed or the hot wallet is outside its spend policy.",
               "",
               `**Run:** ${runUrl}`,
               `**Commit:** \`${revision}\``,
@@ -481,19 +438,62 @@ jobs:
               `| USDC | ${amount(process.env.USDC_BEFORE)} | ${amount(process.env.USDC_AFTER)} | ${amount(process.env.USDC_DELTA)} |`,
               "",
               "below-minimum: fund the hot wallet. above-maximum: move the excess off. over-cap: this run spent more than the per-run cap.",
-              "Upserted by .github/workflows/mainnet-e2e.yml. Close once the branch is green.",
+              "Upserted by .github/workflows/mainnet-e2e.yml. Close once main is green.",
             ].join("\n");
-            const existingList = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: "open", labels: "ci-cd", per_page: 100,
-            });
+            const existingList = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: "open", labels: "ci-cd", per_page: 100 });
             const existing = existingList.find((item) => item.title === title && !item.pull_request);
             if (existing) {
               await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
               core.info(`Updated tracking issue #${existing.number}.`);
             } else {
-              const created = await github.rest.issues.create({
-                owner, repo, title, body,
-                labels: ["ci-cd", "release"],
-              });
+              const created = await github.rest.issues.create({ owner, repo, title, body, labels: ["ci-cd"] });
               core.info(`Created tracking issue #${created.data.number}.`);
             }
+
+  notify:
+    needs: [resolve, gate, preflight, build, execute, post]
+    if: always() && needs.gate.outputs.run == 'true'
+    environment:
+      name: mainnet-e2e-slack
+    permissions: {}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the result to Slack
+        id: slack
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SLACK_MAINNET_E2E_WEBHOOK_URL: ${{ secrets.SLACK_MAINNET_E2E_WEBHOOK_URL }}
+          REVISION: ${{ needs.resolve.outputs.revision }}
+          RESULTS: ${{ needs.preflight.result }} ${{ needs.build.result }} ${{ needs.execute.result }} ${{ needs.post.result }}
+          PLAYWRIGHT: ${{ needs.execute.outputs.playwright }}
+          GASLESS: ${{ needs.execute.outputs.gasless }}
+          VERDICT: ${{ needs.post.outputs.verdict }}
+          STRK_DELTA: ${{ needs.post.outputs.strk_delta }}
+          USDC_DELTA: ${{ needs.post.outputs.usdc_delta }}
+        with:
+          script: |
+            const env = process.env;
+            const webhook = env.SLACK_MAINNET_E2E_WEBHOOK_URL || "";
+            if (webhook === "") return core.notice("Slack is not configured: set SLACK_MAINNET_E2E_WEBHOOK_URL in the mainnet-e2e-slack environment.");
+            core.setSecret(webhook);
+            if (!/^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_\/-]+$/.test(webhook)) return core.setFailed("SLACK_MAINNET_E2E_WEBHOOK_URL must be a https://hooks.slack.com/services/ URL.");
+            const result = (value) => ["success", "failure", "cancelled", "skipped"].includes(value) ? value : "unavailable";
+            const outcome = (value) => value === "passed" || value === "failed" ? value : "not run";
+            const amount = (value) => /^-?[0-9]{1,12}(\.[0-9]{1,18})?$/.test(value || "") ? value : "unavailable";
+            const verdict = ["ok", "above-maximum", "below-minimum", "over-cap"].includes(env.VERDICT) ? env.VERDICT : "unavailable";
+            const revision = /^[0-9a-f]{40}$/.test(env.REVISION || "") ? env.REVISION.slice(0, 7) : "unavailable";
+            const results = (env.RESULTS || "").split(" ");
+            const jobs = ["preflight", "build", "tests", "post-run balance"].map((name, index) => [name, result(results.length === 4 ? results[index] : "")]);
+            const passed = jobs.every(([, value]) => value === "success") && verdict === "ok";
+            const text = [
+              `Mainnet E2E ${passed ? "pass" : "FAIL"} on main at \`${revision}\``,
+              `Jobs: ${jobs.map(([name, value]) => `${name} ${value}`).join(", ")}`,
+              `Playwright ${outcome(env.PLAYWRIGHT)}, gasless ${outcome(env.GASLESS)}`,
+              `Balance ${verdict}. Spent ${amount(env.STRK_DELTA)} STRK, ${amount(env.USDC_DELTA)} USDC.`,
+              `<${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}|View run>`,
+            ].join("\n");
+            const request = { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, unfurl_links: false }), redirect: "error", signal: AbortSignal.timeout(20000) };
+            const status = await fetch(webhook, request).then((response) => response.status, () => 0);
+            if (status >= 200 && status < 300) core.info("Posted the mainnet E2E result to Slack.");
+            else core.warning(`Slack did not accept the mainnet E2E result (HTTP ${status}); the run result is unchanged.`);

@@ -69,7 +69,7 @@ const CONFINED: readonly Confined[] = [
             exit 1
           fi
           if [ ! -f tools/vendor-dataset/verify-sepolia.ts ]; then
-            echo "::error::This release branch predates the Sepolia runner (issue 821)."
+            echo "::error::This commit predates the Sepolia runner (issue 821)."
             exit 1
           fi
           umask 077
@@ -90,7 +90,7 @@ const CONFINED: readonly Confined[] = [
             value="\${value%"\${value##*[![:space:]]}"}"
             if [ -n "$value" ]; then echo "::add-mask::$value"; fi
           done < "$seeds"
-          # The newest committed scorecard, if this branch has one (dated names sort in order).
+          # The newest committed scorecard, if this commit has one (dated names sort in order).
           set -- "$RUNNER_TEMP/sepolia/scorecard.json"
           for previous in tools/vendor-dataset/verification-sepolia-*.json; do
             if [ -f "$previous" ]; then set -- "$RUNNER_TEMP/sepolia/scorecard.json" "$previous"; fi
@@ -120,7 +120,7 @@ const CONFINED: readonly Confined[] = [
         run: |
           set -euo pipefail
           if [ ! -f tools/vendor-dataset/sepolia-bank-runway.ts ]; then
-            echo "::error::This release branch predates the Sepolia send run (issue 976)."
+            echo "::error::This commit predates the Sepolia send run (issue 976)."
             exit 1
           fi
           umask 077

@@ -25,8 +25,7 @@ that is expected offline. Run the rest of the gates and say so.
 
 Contributors can enable the local hooks — a pre-push hook running the
 offline-fast checks (types, lint, file/config standards, extension manifest,
-unit tests), plus the release-branch immutability guard that refuses commits and
-pushes on a `release/v*` branch already integrated into `main`:
+unit tests):
 
 ```bash
 git config core.hooksPath .githooks
@@ -57,26 +56,24 @@ than its size suggests. Add tests with any new module rather than lowering the f
 
 ## Workflow: branches, releases, and PRs
 
-Work follows a **roadmap-driven, release-branch** model. The full, canonical
-guide is **[DEVELOPMENT.md](DEVELOPMENT.md)** — read it before opening your first
-PR. In short:
+Bramble uses **trunk-based development**. The full, canonical guide is
+**[DEVELOPMENT.md](DEVELOPMENT.md)** — read it before opening your first PR. In
+short:
 
-- `main` is always the latest stable, releasable version. **Do not push work to it.**
-- Each release is a small slice of one roadmap phase, tracked as a **milestone**
-  (`v0.4`, …) mapped 1:1 to a **`release/vX.Y`** branch cut from `main`. A phase
-  (`phase:N` label + tracking issue #79–#87) spans several releases.
-- Cut working branches from the **active release branch** and open PRs **against
-  that release branch — not `main`**:
-  - `feature/<issue>-<desc>`, `fix/<issue>-<desc>`, `chore/<issue>-<desc>`
-  - `release/vX.Y`, `hotfix/<desc>`, `docs/<desc>`
-- A PR into a release branch must reference its roadmap issue (`#N` /
-  `Closes #N`), name its target release, state which acceptance criterion it
-  satisfies, include tests, and stay in scope. CI's `pr-guards` job hard-blocks
-  a `feature/`/`fix/` PR aimed at `main` and a release-branch PR with no linked
-  issue (`chore/` and `docs/` may target `main` for plumbing that isn't part of
-  a release slice).
-- Releases are promoted to `main` via `release/**` (a **merge commit**, tagged
-  `vX.Y.0`) and urgent fixes via `hotfix/**`. See DEVELOPMENT.md and RELEASING.md.
+- `main` is the only long-lived branch and is always releasable. Never push to
+  it directly.
+- Branch from the latest `main` (`feat/<issue>-<desc>`, `fix/<issue>-<desc>`,
+  `chore/<issue>-<desc>`, `docs/<desc>`; naming is advisory) and open a small PR
+  straight into `main`. Rebase on `main` often and merge within a day or two.
+- Link the issue (`#N` / `Closes #N`), include tests, and stay in scope.
+  Unfinished user-facing work stays unwired or behind a feature flag.
+- PRs are squash-merged. Once `pr-guards`, `fast-checks`, and
+  `release-validation` are green, any developer with write access may merge
+  their own PR. No approval is required, but get a review before merging changes
+  to signing, the vault, the background, the provider, privacy, or workflows.
+- Releases are a version-bump PR into `main` followed by a `vX.Y.Z` tag on that
+  commit; hotfixes are normal PRs into `main` plus a patch release. There are no
+  `release/` or `hotfix/` branches. See DEVELOPMENT.md and RELEASING.md.
 
 ### Branch hygiene (delete-on-merge)
 
@@ -88,7 +85,7 @@ history.
   branch contains the PR's intended changes, the source branch is dead weight.
   Delete it
   (`git push origin --delete <branch>`, or the "Delete branch" button GitHub
-  shows on a merged PR). This applies to every `feature/`, `fix/`, `chore/`,
+  shows on a merged PR). This applies to every `feat/`, `fix/`, `chore/`,
   and `docs/` branch, and to `qa/*` triage branches.
 - **Never delete a branch whose work is not yet on its target.** Check the
   merged PR and compare its intended diff with the target branch. Do not rely
@@ -96,8 +93,7 @@ history.
   without preserving the source commit as an ancestor. A superseded-but-unmerged
   branch is deleted only after confirming its changes are preserved elsewhere;
   otherwise keep it and document the gap.
-- **Long-lived branches are exempt:** `main` and any active `release/vX.Y`
-  branch are never pruned.
+- **`main` is exempt:** it is the only long-lived branch and is never pruned.
 - Maintainers may enable GitHub's repository setting *Settings → General →
   "Automatically delete head branches"* to make this automatic on merge; when it
   is off, the deletion is manual per this convention.

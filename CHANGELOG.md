@@ -4,7 +4,7 @@ All notable changes to Bramble are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Sections are maintained on the active `release/vX.Y` branch during release prep
+Sections are filled in the `chore/release-vX.Y.Z` pull request into `main`
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. Older entries are kept in [CHANGELOG_ARCHIVE_0.10.md](CHANGELOG_ARCHIVE_0.10.md) (v0.10.5), [CHANGELOG_ARCHIVE_0.9.md](CHANGELOG_ARCHIVE_0.9.md) (v0.9.0–v0.10.4) and [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md) (before v0.9.0).
 See DEVELOPMENT.md and RELEASING.md.
