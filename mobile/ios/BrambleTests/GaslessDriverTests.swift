@@ -50,7 +50,7 @@ final class GaslessDriverTests: XCTestCase {
         XCTAssertEqual(transport.count, 1)
     }
 
-    func testALedgerRelaySignatureGoesThroughTheDeviceAndARefusalCanBeRetried() async {
+    func testALedgerRelaySignatureGoesThroughTheDeviceAndARefusalCanBeRetried() async throws {
         let transport = ScriptedTransport()
         let apdu = Data([0x5a, 0x02])
         let fee = ScriptedFee(
@@ -62,7 +62,10 @@ final class GaslessDriverTests: XCTestCase {
         )
         let signer = await ScriptedSigner(again: [true])
         let driver = GaslessDriver(transport: transport, signer: signer)
-        let outcome = await driver.submit(fee, offer: Self.offer, prices: nil)
+        let account = try ozRecord(unlockedCore(), .sepolia, 1)
+        let outcome = await driver.submit(fee, offer: Self.offer, prices: nil, account: account)
+        let shown = await signer.accounts
+        XCTAssertEqual(shown, [account, account], "the Ledger sheet names the reviewed plan's account")
         XCTAssertEqual(outcome, .submitted(hash: "0x7a1ce5", explorerUrl: nil))
         let answer = StepReply.device(reply: ScriptedSigner.okay)
         XCTAssertEqual(fee.deviceReplies, [answer, .retryDevice, answer])
@@ -207,6 +210,7 @@ private final class ScriptedFee: GaslessFeeProtocol, @unchecked Sendable {
 private final class ScriptedSigner: DeviceSigning {
     private var again: [Bool]
     private(set) var finished = 0
+    private(set) var accounts: [AccountRecord?] = []
 
     init(again: [Bool]) {
         self.again = again
@@ -216,9 +220,12 @@ private final class ScriptedSigner: DeviceSigning {
     static let accepted: UInt8 = 0x90
     static let okay = Data([accepted, 0])
 
-    func exchange(_: Data) -> StepReply? { .device(reply: Self.okay) }
+    func exchange(_: Data, for account: AccountRecord?) -> StepReply? {
+        accounts.append(account)
+        return .device(reply: Self.okay)
+    }
 
-    func refused(_: String) -> Bool { again.isEmpty ? false : again.removeFirst() }
+    func refused(_: String, for _: AccountRecord?) -> Bool { again.isEmpty ? false : again.removeFirst() }
 
     func finish() { finished += 1 }
 }

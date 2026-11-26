@@ -35,7 +35,7 @@ extension WalletStore {
         return DeployFlowModel(
             core: core,
             network: networkInfo,
-            accountId: account.id,
+            account: account,
             transport: rpc.transport
         ) { [weak self] plan in
             self?.plans.append(plan)

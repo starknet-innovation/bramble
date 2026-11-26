@@ -45,6 +45,8 @@ final class StakingActionModel: Identifiable {
     private let feeBalance: String?
     private let clock: @Sendable () -> UInt64
     private let track: (TransferPlan) -> Void
+    /// The record `prepare` builds the plan for, shown as the Ledger's signer; nil shows none.
+    private let account: AccountRecord?
     private var driver: SendDriver?
 
     /// `prepare` is the core's `prepareStaking` for this action; the store's `makeStakingAction` fills it.
@@ -56,6 +58,7 @@ final class StakingActionModel: Identifiable {
         transport: RpcTransport,
         feeBalance: String?,
         clock: @escaping @Sendable () -> UInt64,
+        account: AccountRecord? = nil,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ },
         prepare: @escaping () throws -> StakingPreparation
     ) {
@@ -67,6 +70,7 @@ final class StakingActionModel: Identifiable {
         self.feeBalance = feeBalance
         self.clock = clock
         self.track = track
+        self.account = account
         start = prepare
     }
 
@@ -96,7 +100,7 @@ final class StakingActionModel: Identifiable {
             let staking = try preparation.plan(nowSeconds: clock(), feeBalance: feeBalance)
             track(staking.plan)
             sentence = staking.review
-            let started = SendDriver(plan: staking.plan, network: network, transport: transport)
+            let started = SendDriver(plan: staking.plan, network: network, transport: transport, account: account)
             driver = started
             show(try await started.run(from: .start))
         } catch let error as StakingError {

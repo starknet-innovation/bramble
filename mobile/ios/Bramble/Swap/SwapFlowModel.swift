@@ -48,7 +48,9 @@ final class SwapFlowModel {
 
     let network: NetworkInfo
     private let core: WalletCore
-    private let accountId: String
+    /// The account the plan is built for, and shown as the Ledger's signer.
+    private let account: AccountRecord
+    private var accountId: String { account.id }
     private let preferences: TokenPreferences
     /// Base units per tracked token id, from the portfolio's loaded balances.
     private let balances: [String: String]
@@ -64,7 +66,7 @@ final class SwapFlowModel {
     init(
         core: WalletCore,
         network: NetworkInfo,
-        accountId: String,
+        account: AccountRecord,
         preferences: TokenPreferences,
         balances: [String: String],
         prices: PriceView?,
@@ -75,7 +77,7 @@ final class SwapFlowModel {
     ) {
         self.core = core
         self.network = network
-        self.accountId = accountId
+        self.account = account
         self.preferences = preferences
         self.balances = balances
         self.prices = prices
@@ -214,7 +216,7 @@ final class SwapFlowModel {
             let plan = try swap.plan(feeBalance: feeBalance)
             self.swap = nil
             track(plan)
-            let started = SendDriver(plan: plan, network: network, transport: rpc)
+            let started = SendDriver(plan: plan, network: network, transport: rpc, account: account)
             driver = started
             if showReview(try await started.run(from: .start), from: started) { swapReview = judged }
         } catch {

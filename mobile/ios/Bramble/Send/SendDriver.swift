@@ -16,11 +16,21 @@ actor SendDriver {
     let plan: TransferPlan
     private let endpoint: RpcEndpoint
     private let signer: (any DeviceSigning)?
+    private let account: AccountRecord?
 
     /// `signer` nil signs on the app's Bluetooth Ledger (`LedgerSigner.shared`) when the plan asks.
-    init(plan: TransferPlan, network: NetworkInfo, transport: RpcTransport, signer: (any DeviceSigning)? = nil) {
+    /// `account` is the record the caller built `plan` for, shown on the Ledger sheet as the
+    /// signer; nil shows none. Never pass any other record.
+    init(
+        plan: TransferPlan,
+        network: NetworkInfo,
+        transport: RpcTransport,
+        account: AccountRecord? = nil,
+        signer: (any DeviceSigning)? = nil
+    ) {
         self.plan = plan
         endpoint = RpcEndpoint(network: network, transport: transport)
+        self.account = account
         self.signer = signer
     }
 
@@ -68,13 +78,13 @@ actor SendDriver {
             case let .device(apdu):
                 let ledger = await deviceSigner()
                 using(ledger)
-                guard let answer = await ledger.exchange(apdu) else { return cancelled() }
+                guard let answer = await ledger.exchange(apdu, for: account) else { return cancelled() }
                 reply = answer
 
             case let .deviceRetry(reason):
                 let ledger = await deviceSigner()
                 using(ledger)
-                guard await ledger.refused(reason) else { return cancelled() }
+                guard await ledger.refused(reason, for: account) else { return cancelled() }
                 reply = .retryDevice
 
             default:

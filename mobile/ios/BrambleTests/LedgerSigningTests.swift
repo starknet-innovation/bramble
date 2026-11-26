@@ -23,11 +23,26 @@ final class LedgerSigningTests: XCTestCase {
         try await rig.pick(ledger)
         try await until { if case .confirming = rig.signer.stage { true } else { false } }
         XCTAssertEqual(rig.signer.stage, .confirming(hash: Self.padded(Self.transferHash)))
+        XCTAssertEqual(rig.signer.account, rig.record, "the signer is the plan's account, not the active one")
+        let line = LedgerSignCopy.signer(try XCTUnwrap(rig.signer.account))
+        XCTAssertEqual(line, "Signing with \(rig.record.shortAddress) · Account 0")
+        XCTAssertNil(LedgerSignCopy.connectNote(rig.signer.stage))
         let step = try await signing.value
         XCTAssertEqual(step, .broadcast(hash: Self.transferHash))
         XCTAssertEqual(rig.node.posts.filter(\.write).map(\.method), ["starknet_addInvokeTransaction"])
         XCTAssertEqual(rig.signer.stage, .idle, "the sheet closes once the plan leaves the device")
         XCTAssertTrue(try XCTUnwrap(rig.devices.made.last).closed, "the link closes when the send ends")
+    }
+
+    func testTheConnectStageSaysTheTransactionIsPausedAndNamesTheSigner() async throws {
+        let rig = try await rig()
+        let signing = rig.confirm()
+        try await until { rig.signer.stage == .scanning }
+        XCTAssertEqual(LedgerSignCopy.connectNote(rig.signer.stage), "The transaction is safely paused.")
+        XCTAssertEqual(rig.signer.account?.address, rig.record.address)
+        rig.signer.cancel()
+        XCTAssertNil(rig.signer.account, "the sheet forgets the signer when it closes")
+        _ = try await signing.value
     }
 
     func testAnApprovedDeploymentIsSignedOnTheDevice() async throws {
@@ -141,6 +156,7 @@ final class LedgerSigningTests: XCTestCase {
 
     private struct Rig {
         let core: WalletCore
+        let record: AccountRecord
         let signer: LedgerSigner
         let devices: Connections
         let node: MockNode
@@ -172,6 +188,16 @@ final class LedgerSigningTests: XCTestCase {
             keys: [LedgerKey(scheme: .bramble, accountIndex: 0, publicKeyX: key)]
         ).first)
         let record = try core.createLedgerWallet(password: testPassword, request: candidate.request)
+        if key == Self.key0 {
+            // A second Ledger account, made active: the plan below is for one that is not.
+            let other = try XCTUnwrap(ledgerAccountCandidates(
+                network: .sepolia,
+                family: .openZeppelin,
+                keys: [LedgerKey(scheme: .bramble, accountIndex: 1, publicKeyX: Self.key1)]
+            ).first)
+            _ = try core.addLedgerAccount(request: other.request)
+            XCTAssertNotEqual(try core.activeAccount()?.id, record.id)
+        }
         let node = MockNode()
         node.deployed = !deploy
         node.deployEstimate = [
@@ -200,10 +226,12 @@ final class LedgerSigningTests: XCTestCase {
             devices.made.append(device)
             return devices.hold ? HeldLedgerDevice(device) : device
         }
-        let driver = SendDriver(plan: plan, network: network, transport: node, signer: signer)
+        let driver = SendDriver(plan: plan, network: network, transport: node, account: record, signer: signer)
         let reviewed = try await driver.run(from: .start)
         XCTAssertEqual(reviewed, .review)
-        return Rig(core: core, signer: signer, devices: devices, node: node, driver: driver, driverPlan: plan)
+        return Rig(
+            core: core, record: record, signer: signer, devices: devices, node: node, driver: driver, driverPlan: plan
+        )
     }
 
     private static func signRequest(_ hash: String) throws -> Data {

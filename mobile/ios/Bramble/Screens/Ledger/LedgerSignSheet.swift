@@ -1,3 +1,4 @@
+import BrambleCore
 import SwiftUI
 
 /// The words of the Ledger signing sheet: the extension's `ledgerSign.*` signing text
@@ -12,8 +13,33 @@ enum LedgerSignCopy {
     static let cancel = "Cancel transaction"
     static let tryAgain = "Try again"
     static let copyHash = "Copy transaction hash"
+    static let signingWith = "Signing with"
+    static let copyAddress = "Copy signing account address"
+    /// Under the connect stages: nothing has been signed or sent while the Ledger is found.
+    static let paused = "The transaction is safely paused."
     /// Hex digits per group, as the extension renders the hash for comparison.
     static let hashGroup = 4
+
+    /// `ledgerSign.account`: the account's index on the Ledger.
+    static func account(_ index: UInt32) -> String { "Account \(index)" }
+
+    /// The signer line as one sentence (its accessibility label): "Signing with 0x1234…abcd ·
+    /// Account 0"; the index only for a Ledger record.
+    static func signer(_ account: AccountRecord) -> String {
+        let index = account.ledger ? " · " + Self.account(account.accountIndex) : ""
+        return "\(signingWith) \(account.shortAddress)\(index)"
+    }
+
+    /// The line under the connect stages; nil once a Ledger is connecting.
+    static func connectNote(_ stage: LedgerSigner.Stage) -> String? {
+        switch stage {
+        case .bluetooth, .scanning:
+            paused
+
+        default:
+            nil
+        }
+    }
 
     static func title(_ stage: LedgerSigner.Stage) -> String {
         switch stage {
@@ -56,6 +82,7 @@ struct LedgerSignSheet: View {
                 Text(LedgerSignCopy.title(signer.stage))
                     .brambleText(BrambleTypeScale.title, weight: BrambleWeight.semibold)
                     .accessibilityAddTraits(.isHeader)
+                if let account = signer.account { signerLine(account) }
                 content
                 actions
             }
@@ -73,10 +100,12 @@ struct LedgerSignSheet: View {
 
         case let .bluetooth(state):
             StatusLine(text: LedgerCopy.bluetooth(state), tone: state == .unknown ? .muted : .danger)
+            StatusLine(text: LedgerSignCopy.connectNote(signer.stage))
 
         case .scanning:
             StatusLine(text: LedgerCopy.lede)
             LedgerDeviceList(devices: signer.devices) { signer.choose($0) }
+            StatusLine(text: LedgerSignCopy.connectNote(signer.stage))
 
         case let .connecting(device):
             StatusLine(text: "Connecting to \(device.name)…")
@@ -93,6 +122,25 @@ struct LedgerSignSheet: View {
             StatusLine(text: message, tone: .danger)
                 .accessibilityAddTraits(.isStaticText)
             StatusLine(text: LedgerSignCopy.notSigned)
+        }
+    }
+
+    /// `signerLine`: "Signing with", the account's 6…4 address with its copy control, and its
+    /// index on the Ledger.
+    private func signerLine(_ account: AccountRecord) -> some View {
+        HStack(spacing: BrambleSpace.xs) {
+            Text(LedgerSignCopy.signingWith).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+            Text(account.shortAddress)
+                .brambleText(BrambleTypeScale.caption, mono: true)
+                .accessibilityLabel(LedgerSignCopy.signer(account))
+                .accessibilityIdentifier("ledger-sign-account")
+            CopyButton(value: account.address, label: LedgerSignCopy.copyAddress)
+            if account.ledger {
+                Text(LedgerSignCopy.account(account.accountIndex))
+                    .brambleText(BrambleTypeScale.caption)
+                    .foregroundStyle(skin.muted)
+            }
+            Spacer(minLength: 0)
         }
     }
 

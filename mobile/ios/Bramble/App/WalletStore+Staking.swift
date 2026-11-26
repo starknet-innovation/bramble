@@ -48,6 +48,8 @@ extension WalletStore {
             transport: rpc.transport,
             feeBalance: balances["STRK"],
             clock: model.clock,
+            // The record whose id `prepareStaking` is given below, matched exactly.
+            account: allRecords.first { $0.id == accountId },
             track: { [weak self] plan in self?.plans.append(plan) },
             prepare: {
                 try core.prepareStaking(

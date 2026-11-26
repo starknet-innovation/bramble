@@ -7,11 +7,12 @@ import Observation
 @MainActor
 protocol DeviceSigning: AnyObject, Sendable {
     /// The plan's reply to `apdu` (`StepReply.device` or `.deviceFailure`), connecting first when
-    /// no device is connected; nil once the person cancelled.
-    func exchange(_ apdu: Data) async -> StepReply?
+    /// no device is connected; nil once the person cancelled. `account` is the record the plan was
+    /// built for, shown as the signer; nil shows none.
+    func exchange(_ apdu: Data, for account: AccountRecord?) async -> StepReply?
     /// Shows the core's refusal code and waits: true when the person tries again, false when they
     /// cancel.
-    func refused(_ reason: String) async -> Bool
+    func refused(_ reason: String, for account: AccountRecord?) async -> Bool
     /// The plan left the device: close the link and the sheet.
     func finish()
 }
@@ -56,6 +57,8 @@ final class LedgerSigner: DeviceSigning {
 
     private(set) var stage = Stage.idle
     private(set) var devices: [LedgerDevice] = []
+    /// The account the plan was built for, given by the code that built it; nil shows no signer.
+    private(set) var account: AccountRecord?
     /// The sheet is up while a plan waits on the device.
     var active: Bool { stage != .idle }
 
@@ -73,8 +76,9 @@ final class LedgerSigner: DeviceSigning {
         connector = connect
     }
 
-    func exchange(_ apdu: Data) async -> StepReply? {
+    func exchange(_ apdu: Data, for account: AccountRecord?) async -> StepReply? {
         if stage == .idle { cancelled = false }
+        self.account = account
         guard !cancelled else { return nil }
         if device == nil {
             device = await connect()
@@ -96,8 +100,9 @@ final class LedgerSigner: DeviceSigning {
         }
     }
 
-    func refused(_ reason: String) async -> Bool {
+    func refused(_ reason: String, for account: AccountRecord?) async -> Bool {
         guard !cancelled else { return false }
+        self.account = account
         if reason == Self.wrongDevice {
             // Another Ledger is needed: the next attempt lists them again.
             device?.close()
@@ -147,6 +152,7 @@ final class LedgerSigner: DeviceSigning {
         picking = nil
         decide(false)
         stage = .idle
+        account = nil
     }
 
     private func decide(_ again: Bool) {

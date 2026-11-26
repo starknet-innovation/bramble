@@ -57,9 +57,15 @@ struct GaslessDriver: Sendable {
     /// if the caller goes away: the core filed its row first, so a lost answer stays guarded. A
     /// cancelled task stops at its next pause, never cutting the core's delay short, and reads as
     /// unknown (Android's cancellation, which posts nothing more either).
-    func submit(_ fee: any GaslessFeeProtocol, offer: GaslessOffer, prices: PriceView?) async -> Outcome {
+    /// `account` is the record the reviewed plan was built for, shown as the Ledger's signer.
+    func submit(
+        _ fee: any GaslessFeeProtocol,
+        offer: GaslessOffer,
+        prices: PriceView?,
+        account: AccountRecord? = nil
+    ) async -> Outcome {
         var device: (any DeviceSigning)?
-        let outcome = await submit(fee, offer: offer, prices: prices) { device = $0 }
+        let outcome = await submit(fee, offer: offer, prices: prices, account: account) { device = $0 }
         await device?.finish()
         return outcome
     }
@@ -68,6 +74,7 @@ struct GaslessDriver: Sendable {
         _ fee: any GaslessFeeProtocol,
         offer: GaslessOffer,
         prices: PriceView?,
+        account: AccountRecord?,
         using: (any DeviceSigning) -> Void
     ) async -> Outcome {
         do {
@@ -90,13 +97,13 @@ struct GaslessDriver: Sendable {
                 case let .device(apdu):
                     let ledger = await deviceSigner()
                     using(ledger)
-                    guard let answer = await ledger.exchange(apdu) else { return Self.cancelled }
+                    guard let answer = await ledger.exchange(apdu, for: account) else { return Self.cancelled }
                     step = try fee.advanceDevice(reply: answer, nowMs: clock())
 
                 case let .deviceRetry(reason):
                     let ledger = await deviceSigner()
                     using(ledger)
-                    guard await ledger.refused(reason) else { return Self.cancelled }
+                    guard await ledger.refused(reason, for: account) else { return Self.cancelled }
                     step = try fee.advanceDevice(reply: .retryDevice, nowMs: clock())
                 }
             }

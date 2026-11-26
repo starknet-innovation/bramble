@@ -35,7 +35,9 @@ final class DeployFlowModel {
 
     private let core: WalletCore
     private let network: NetworkInfo
-    private let accountId: String
+    /// The account the plan is built for, and shown as the Ledger's signer.
+    private let account: AccountRecord
+    private var accountId: String { account.id }
     private let transport: RpcTransport
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
@@ -43,13 +45,13 @@ final class DeployFlowModel {
     init(
         core: WalletCore,
         network: NetworkInfo,
-        accountId: String,
+        account: AccountRecord,
         transport: RpcTransport,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
     ) {
         self.core = core
         self.network = network
-        self.accountId = accountId
+        self.account = account
         self.transport = transport
         self.track = track
     }
@@ -91,7 +93,7 @@ final class DeployFlowModel {
             return
         }
         track(plan)
-        let started = SendDriver(plan: plan, network: network, transport: transport)
+        let started = SendDriver(plan: plan, network: network, transport: transport, account: account)
         driver = started
         do {
             let step = try await started.run(from: .start)

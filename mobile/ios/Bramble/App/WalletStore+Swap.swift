@@ -16,7 +16,7 @@ extension WalletStore {
         return SwapFlowModel(
             core: core,
             network: networkInfo,
-            accountId: account.id,
+            account: account,
             preferences: portfolio.preferences,
             balances: held,
             prices: portfolio.priceView,
