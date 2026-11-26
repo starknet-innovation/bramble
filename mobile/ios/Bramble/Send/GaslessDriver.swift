@@ -27,6 +27,12 @@ struct GaslessDriver: Sendable {
     /// The host's wall clock in epoch milliseconds.
     var clock: @Sendable () -> UInt64 = { UInt64(Date().timeIntervalSince1970 * millisecondsPerSecond) }
 
+    /// Opens the core's offer round for `plan` off the main actor; nil when the core offers none.
+    func round(_ plan: TransferPlan, prices: PriceView?, balances: [GaslessBalance]) async -> GaslessOffers? {
+        let nowMs = clock()
+        return await Task.detached { plan.gaslessOffers(prices: prices, balances: balances, nowMs: nowMs) }.value
+    }
+
     /// Runs the offer round to its end: the offers the review may show beside STRK, possibly
     /// none. A cancelled round, or a step the core refuses, offers nothing.
     func offers(_ fee: any GaslessFeeProtocol, first: GaslessOfferStep) async -> [GaslessOffer] {
@@ -37,8 +43,7 @@ struct GaslessDriver: Sendable {
                 return offers
 
             case let .post(post):
-                await pause(post.delayMs)
-                guard !Task.isCancelled else { return [] }
+                guard (try? await pause(post.delayMs)) != nil else { return [] }
                 let outcome = await transport.perform(post.request)
                 guard let next = try? fee.acceptOfferReply(outcome: outcome) else { return [] }
                 step = next
@@ -47,7 +52,9 @@ struct GaslessDriver: Sendable {
     }
 
     /// The person's choice, run to its end. Once the core has signed, the execute is posted even
-    /// if the caller goes away: the core filed its row first, so a lost answer stays guarded.
+    /// if the caller goes away: the core filed its row first, so a lost answer stays guarded. A
+    /// cancelled task stops at its next pause, never cutting the core's delay short, and reads as
+    /// unknown (Android's cancellation, which posts nothing more either).
     func submit(_ fee: any GaslessFeeProtocol, offer: GaslessOffer, prices: PriceView?) async -> Outcome {
         do {
             var step = try fee.choose(offer: offer, prices: prices, nowMs: clock())
@@ -57,20 +64,21 @@ struct GaslessDriver: Sendable {
                     return .submitted(hash: hash, explorerUrl: explorerUrl)
 
                 case let .post(post):
-                    await pause(post.delayMs)
+                    try await pause(post.delayMs)
                     let outcome = await transport.perform(post.request)
                     step = try fee.acceptSubmitReply(outcome: outcome, nowMs: clock())
 
                 case let .wait(delayMs):
                     // The core posts again only if the wallet is still unlocked after the pause.
-                    await pause(delayMs)
+                    try await pause(delayMs)
                     step = try fee.resume()
                 }
             }
         } catch let error as GaslessFeeError {
             return Self.outcome(error)
         } catch {
-            // Not the core's refusal, so the execute may have gone out: say so, never "locked".
+            // Not the core's refusal (a stray error, or cancellation at a pause), so the execute
+            // may have gone out: say so, never "locked".
             return .unknown(SendCopy.failureIndeterminate)
         }
     }
@@ -91,8 +99,9 @@ struct GaslessDriver: Sendable {
         }
     }
 
-    private func pause(_ delayMs: UInt64) async {
-        guard delayMs > 0 else { return }
-        try? await Task.sleep(for: .milliseconds(Int(delayMs)))
+    /// Waits the core's delay; throws `CancellationError` instead of cutting it short.
+    private func pause(_ delayMs: UInt64) async throws {
+        if delayMs > 0 { try await Task.sleep(for: .milliseconds(Int(delayMs))) }
+        try Task.checkCancellation()
     }
 }

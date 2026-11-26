@@ -59,6 +59,31 @@ final class GaslessDriverTests: XCTestCase {
         XCTAssertEqual(transport.count, 0, "a locked resume posts nothing")
     }
 
+    func testAStrayErrorAfterThePostReadsAsUnknown() async {
+        let transport = ScriptedTransport()
+        let fee = ScriptedFee(
+            chosen: { .post(post: Self.post) },
+            submitSteps: [{ throw CocoaError(.coderInvalidValue) }]
+        )
+        let outcome = await GaslessDriver(transport: transport).submit(fee, offer: Self.offer, prices: nil)
+        XCTAssertEqual(outcome, .unknown(SendCopy.failureIndeterminate))
+        XCTAssertEqual(transport.count, 1, "the execute went out before the failure")
+    }
+
+    func testACancelledChoiceStopsAtThePauseAsUnknown() async {
+        let transport = ScriptedTransport()
+        // Labelled: a bare trailing closure would bind to `resumed`, not `chosen`.
+        let fee = ScriptedFee(
+            chosen: { .post(post: GaslessPost(request: Self.request, delayMs: 60_000)) },
+            submitSteps: []
+        )
+        let task = Task { await GaslessDriver(transport: transport).submit(fee, offer: Self.offer, prices: nil) }
+        task.cancel()
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .unknown(SendCopy.failureIndeterminate))
+        XCTAssertEqual(transport.count, 0, "the core's delay is never cut short")
+    }
+
     func testAChoiceTheRoundDidNotMakeSendsNothing() async {
         let transport = ScriptedTransport()
         let outcome = await GaslessDriver(transport: transport).submit(ScriptedFee(), offer: Self.offer, prices: nil)

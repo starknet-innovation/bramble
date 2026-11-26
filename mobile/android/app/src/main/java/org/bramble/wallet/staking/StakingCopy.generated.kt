@@ -63,4 +63,7 @@ object StakingCopy {
     const val validatorName = "Validator"
     const val validatorNoTokens = "No tokens you track can be staked here."
     const val validatorUnlockAccount = "Unlock an account on this network to stake."
+
+    /** The most validators the list holds, however many pages load (`MAX_LISTED_VALIDATORS`). */
+    const val maxListedValidators = 500
 }

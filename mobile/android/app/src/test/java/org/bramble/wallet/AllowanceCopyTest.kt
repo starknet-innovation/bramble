@@ -85,4 +85,12 @@ class AllowanceCopyTest {
         assertEquals(lockLine, RevokeFlowModel.shown(RevokeException.Locked()))
         assertFalse(lockLine == friendlyError("wallet is locked"))
     }
+
+    @Test
+    fun hashKeptOnlyIfItMayHaveLanded() {
+        assertTrue(SendFailureText.mayHaveReachedChain(SendFailureCode.SUBMISSION_INDETERMINATE))
+        assertTrue(SendFailureText.mayHaveReachedChain(SendFailureCode.DEPLOYMENT_THEN_INVOKE_UNCONFIRMED))
+        assertFalse(SendFailureText.mayHaveReachedChain(SendFailureCode.LOCKED))
+        assertFalse(SendFailureText.mayHaveReachedChain(SendFailureCode.NODE_ERROR))
+    }
 }

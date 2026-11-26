@@ -126,7 +126,13 @@ internal fun MultisigProposeScreen(
             }
         }
         BrambleField(MultisigTxText.TO, "0x…", recipient, { recipient = it }, kind = SecretKind.ADDRESS)
-        BrambleField(MultisigTxText.AMOUNT_TO_SEND, "0", amount, { amount = it }, kind = SecretKind.AMOUNT)
+        BrambleField(
+            MultisigTxText.AMOUNT_TO_SEND,
+            "0",
+            amount,
+            { amount = it.replace(',', '.') },
+            kind = SecretKind.AMOUNT,
+        )
         PillButton(
             control.label(MultisigTxText.REVIEW_TRANSACTION, request),
             icon = BrambleIconName.SEND,

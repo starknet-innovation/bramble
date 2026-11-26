@@ -1,7 +1,9 @@
 package org.bramble.wallet.send
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.bramble.core.GaslessFeeException
 import org.bramble.core.GaslessFeeInterface
 import org.bramble.core.GaslessOffer
@@ -74,7 +76,7 @@ class GaslessDriver(
             val outcome = transport.perform(step.post.request)
             step =
                 try {
-                    fee.acceptOfferReply(outcome)
+                    core { fee.acceptOfferReply(outcome) }
                 } catch (ignored: GaslessFeeException) {
                     null
                 }
@@ -94,7 +96,7 @@ class GaslessDriver(
         prices: PriceView?,
     ): Outcome =
         try {
-            var step = fee.choose(offer, prices, now())
+            var step = core { fee.choose(offer, prices, now()) }
             var outcome: Outcome? = null
             while (outcome == null) {
                 when (val current = step) {
@@ -104,13 +106,14 @@ class GaslessDriver(
 
                     is GaslessSubmitStep.Post -> {
                         pause(current.post.delayMs)
-                        step = fee.acceptSubmitReply(transport.perform(current.post.request), now())
+                        val reply = transport.perform(current.post.request)
+                        step = core { fee.acceptSubmitReply(reply, now()) }
                     }
 
                     is GaslessSubmitStep.Wait -> {
                         // The core posts again only if the wallet is still unlocked after the pause.
                         pause(current.delayMs)
-                        step = fee.resume()
+                        step = core { fee.resume() }
                     }
                 }
             }
@@ -125,6 +128,9 @@ class GaslessDriver(
         }
 
     private fun now(): ULong = clock().toULong()
+
+    /** Core calls sign and write the journal, so they stay off the caller's (main) thread, as [SendDriver]. */
+    private suspend fun <T> core(call: () -> T): T = withContext(Dispatchers.Default) { call() }
 
     private suspend fun pause(delayMs: ULong) {
         if (delayMs > 0u) delay(delayMs.toLong())

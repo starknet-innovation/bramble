@@ -273,11 +273,11 @@ final class SendFlowModel {
 
     func retryFee() async {
         guard let driver, stage == .review else { return }
-        await driver.releaseEndpoint()
         // A new estimate voids the offers made for the old one.
         gaslessFee = nil
         gaslessOffers = []
         stage = .reviewing
+        await driver.releaseEndpoint()
         await settle { try await driver.run(from: .retryEstimate) }
         await offerGasless()
     }
@@ -415,7 +415,7 @@ extension SendFlowModel {
         let prices = await gasless.prices(network.tokens.map(\.address))
         let held = network.tokens.map { GaslessBalance(tokenAddress: $0.address, balance: balances[$0.symbol]) }
         guard stage == .review, driver?.plan === plan,
-              let round = plan.gaslessOffers(prices: prices, balances: held, nowMs: gasless.driver.clock())
+              let round = await gasless.driver.round(plan, prices: prices, balances: held)
         else { return }
         let offers = await gasless.driver.offers(round.fee, first: round.step)
         guard stage == .review, driver?.plan === plan else { return }
@@ -430,6 +430,8 @@ extension SendFlowModel {
         stage = .authorizing
         let prices = await gasless.prices(network.tokens.map(\.address))
         let outcome = await gasless.driver.submit(fee, offer: offer, prices: prices)
+        // Closed while the execute was out (`dropPlan`): the core's row carries it from here.
+        guard gaslessFee === fee else { return }
         // `choose` closed the STRK plan; the review stays for the receipt.
         driver?.plan.cancel()
         driver = nil

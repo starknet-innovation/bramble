@@ -101,12 +101,16 @@ internal class RevokeFlowModel(
 
     private var driver: SendDriver? = null
 
+    /** Bumped by each preparation and each pre-submit close, so a stale one drops its result. */
+    private var epoch = 0
+
     /**
      * Prepares and reviews the revoke: on open, and again after a failure that sent nothing.
      * [feeBalance] is the STRK base units the host last read for the account; null is "unknown".
      */
     suspend fun prepare(feeBalance: String?) {
         close()
+        val started = ++epoch
         review = null
         risks = emptyList()
         message = null
@@ -120,13 +124,17 @@ internal class RevokeFlowModel(
                 links.reads.drive(AllowanceReads(revoke::nextCalls, revoke::accept, revoke::restart), network)
                 withContext(Dispatchers.Default) { revoke.plan(feeBalance) }
             } catch (error: RevokeException) {
-                message = shown(error)
-                stage = Stage.REFUSED
+                if (started == epoch) {
+                    message = shown(error)
+                    stage = Stage.REFUSED
+                }
                 return
             }
+        // A newer preparation or a close overtook this one: its plan is never tracked or shown.
+        if (started != epoch) return plan.cancel()
         links.track(plan)
-        val started = SendDriver(plan, network, links.transport).also { driver = it }
-        settle(started, StepReply.Start)
+        val fresh = SendDriver(plan, network, links.transport).also { driver = it }
+        settle(fresh, StepReply.Start)
     }
 
     /** The Cost box's retry: re-estimates on a freshly proven endpoint. */
@@ -146,22 +154,30 @@ internal class RevokeFlowModel(
         settle(driver, StepReply.Confirm)
     }
 
-    /** Stops the open plan, if any. */
+    /**
+     * Stops the open plan, if any. Before submitting, a preparation in flight is abandoned too;
+     * once submitting, the write settles as Send's does.
+     */
     fun close() {
         driver?.plan?.cancel()
         driver = null
+        if (stage == Stage.PREPARING || stage == Stage.REVIEW) epoch++
     }
 
     private suspend fun settle(
         driver: SendDriver,
         reply: StepReply,
     ) {
+        val started = epoch
         val step =
             try {
                 driver.run(reply)
             } catch (ignored: SendException) {
                 // Closed (a lock, dismissal) after the signed write may have left: the core says so.
-                return fail(driver.plan.interruptedFailure() ?: SendFailure(SendFailureCode.LOCKED, null, null))
+                if (started == epoch) {
+                    fail(driver.plan.interruptedFailure() ?: SendFailure(SendFailureCode.LOCKED, null, null))
+                }
+                return
             }
         if (this.driver !== driver) return
         when (step) {
@@ -210,7 +226,7 @@ internal class RevokeFlowModel(
 
     private fun fail(failure: SendFailure) {
         message = SendFailureText.message(failure)
-        hash = failure.hash ?: hash
+        if (SendFailureText.mayHaveReachedChain(failure.code)) hash = failure.hash ?: hash
         driver = null
         stage = Stage.FAILED
     }

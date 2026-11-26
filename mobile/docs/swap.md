@@ -1,6 +1,6 @@
 # Mobile swap (M20)
 
-Status: screens on wallet-core `v0.7.0` (X4, wallet-core #109). The core owns the swap; the apps
+Status: screens on wallet-core `v0.8.0` (X4, wallet-core #109). The core owns the swap; the apps
 own the screens, the store wiring and the tests.
 
 ## What the core does
@@ -52,7 +52,7 @@ keeps its words, since it names a security fact.
 
 ## Not done
 
-- **Quote expiry.** Neither the core (`v0.7.0`) nor the extension exposes one. A stale quote fails
+- **Quote expiry.** Neither the core (`v0.8.0`) nor the extension exposes one. A stale quote fails
   at the build ("avnu couldn't prepare this swap. Get a fresh quote and try again.") and the
   person refreshes.
 - **Slippage control.** The extension has none ("slippage comes from a fixed control"); mobile

@@ -17,7 +17,11 @@ private const val MS_PER_SECOND = 1_000
 val WalletStore.stakingAvailable: Boolean
     get() = activeRecord != null && stakingRefusal(network) == null
 
-/** `canStakeToken`: STRK, compared by address, where staking is available. */
+/**
+ * Stake on the token screen: STRK only, compared by address, where staking is available. The
+ * extension's `canStakeToken` also offers any token a loaded staking row lists; the token screen
+ * has no staking rows loaded, so this offers STRK alone.
+ */
 fun WalletStore.canStake(tokenAddress: String): Boolean {
     val strk = networkInfo.tokens.firstOrNull { it.symbol == "STRK" }?.let { validateRecipient(it.address) }
     return stakingAvailable && strk != null && validateRecipient(tokenAddress) == strk

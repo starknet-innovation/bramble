@@ -62,4 +62,6 @@ enum StakingCopy {
     static let validatorName = "Validator"
     static let validatorNoTokens = "No tokens you track can be staked here."
     static let validatorUnlockAccount = "Unlock an account on this network to stake."
+    /// The most validators the list holds, however many pages load (`MAX_LISTED_VALIDATORS`).
+    static let maxListedValidators = 500
 }

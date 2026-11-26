@@ -45,7 +45,7 @@ sealed interface StakingLoad<out T> {
  * Starkscan's validator list, page by page, in its own order.
  *
  * @property entries every validator listed so far.
- * @property nextCursor the next page's cursor, or null on the last.
+ * @property nextCursor the next page's cursor; null on the last page or at the list's cap.
  * @property moreError a later page that failed, one line under the list (which stays).
  * @property incomplete the snapshot was incomplete, so it offers no validator.
  */
@@ -231,24 +231,30 @@ class StakingModel internal constructor(
         val page = stakingDirectoryView(network.network, reads.transport.perform(request), tokens)
         return StakingLoad.Loaded(
             when (page) {
+                // The extension's `appendDirectoryPage`: an incomplete page replaces the list, so
+                // nothing from an earlier page stays selectable.
                 is DirectoryView.Incomplete -> {
-                    base.copy(
-                        nextCursor = null,
-                        incomplete = cursor == null,
-                        moreError = StakingCopy.directoryIncomplete.takeIf { cursor != null },
-                    )
+                    StakingDirectory(incomplete = true)
                 }
 
                 is DirectoryView.Ready -> {
-                    base.copy(entries = base.entries + page.entries, nextCursor = page.nextCursor, moreError = null)
+                    // The core dedups within a page; a staker an earlier page listed is dropped.
+                    val seen = base.entries.mapTo(HashSet()) { it.staker }
+                    val entries = base.entries + page.entries.filter { it.staker !in seen }
+                    val full = entries.size >= StakingCopy.maxListedValidators
+                    StakingDirectory(
+                        entries = entries.take(StakingCopy.maxListedValidators),
+                        nextCursor = page.nextCursor.takeUnless { full },
+                    )
                 }
             },
         )
     }
 
-    /** The paste field's Open: a valid Starknet address opens that validator. */
+    /** The paste field's Open: a valid non-zero Starknet address opens that validator. */
     suspend fun openPasted() {
-        val staker = validateRecipient(pasteInput)
+        // The core accepts 0x0 as a felt; the extension's `stakerAddress` refuses it as a staker.
+        val staker = validateRecipient(pasteInput)?.takeUnless { it == "0x0" }
         if (staker == null) {
             pasteError = StakingCopy.directoryInvalidAddress
             return
