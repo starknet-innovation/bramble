@@ -28,18 +28,9 @@ class SendDriver(
     val plan: TransferPlan,
     network: NetworkInfo,
     /** How each step's bytes move: [RpcClient.https] unless a test passes a fixture node. */
-    private val transport: RpcPost = RpcClient.https,
+    transport: RpcPost = RpcClient.https,
 ) {
-    private val urls = network.rpcUrls.map(::URL)
-    private val networkId = network.network
-
-    /** The endpoint bound for the rest of the plan once it proved the chain, or null before. */
-    var endpoint: URL? = null
-        private set
-
-    /** How many signed writes were posted; once non-zero the endpoint is never released. */
-    var writesSent = 0
-        private set
+    private val bound = RpcEndpoint(network, transport)
 
     /** Advances from [reply] until the plan needs the user: Review, Broadcast, Finished, Failed. */
     suspend fun run(
@@ -53,7 +44,7 @@ class SendDriver(
                 when (step) {
                     is SendStep.Rpc -> {
                         onStep(step)
-                        exchange(step.id, step.body, step.purpose, step.isWrite)
+                        bound.exchange(step.id, step.body, step.purpose, step.isWrite)
                     }
 
                     is SendStep.Wait -> {
@@ -69,13 +60,39 @@ class SendDriver(
     }
 
     /** Lets a review retry probe the endpoints again; refused once a write has been sent. */
-    fun releaseEndpoint() {
+    fun releaseEndpoint() = bound.release()
+}
+
+/**
+ * One plan's endpoint binding, shared by every sans-IO plan the core hands out ([SendDriver],
+ * the multisig plans): the first `ChainId` step binds the first endpoint that proves the chain,
+ * every later step goes to that endpoint with no failover, and a write is posted exactly once,
+ * never retried, never redirected.
+ */
+class RpcEndpoint(
+    network: NetworkInfo,
+    private val transport: RpcPost,
+) {
+    private val urls = network.rpcUrls.map(::URL)
+    private val networkId = network.network
+
+    /** The endpoint bound for the rest of the plan once it proved the chain, or null before. */
+    var endpoint: URL? = null
+        private set
+
+    /** How many signed writes were posted; once non-zero the endpoint is never released. */
+    var writesSent = 0
+        private set
+
+    /** Lets a retry probe the endpoints again; refused once a write has been sent. */
+    fun release() {
         if (writesSent == 0) endpoint = null
     }
 
     private fun now(): ULong = System.currentTimeMillis().toULong()
 
-    private suspend fun exchange(
+    /** Sends one step and returns the reply the plan reads; every failure is a `TransportFailure`. */
+    suspend fun exchange(
         id: ULong,
         body: String,
         purpose: RpcPurpose,
@@ -98,7 +115,7 @@ class SendDriver(
         write: Boolean,
     ): StepReply {
         if (write) writesSent += 1
-        return runCatching { post(url, body, write) }
+        return runCatching { transport.post(url, body, write) }
             .map { StepReply.Rpc(id, it, now()) as StepReply }
             .getOrElse { StepReply.TransportFailure(id, now()) }
     }
@@ -108,7 +125,7 @@ class SendDriver(
             urls.firstOrNull { url ->
                 runCatching {
                     rpcVerifyChainId(
-                        post(url, rpcChainIdRequest(0u), false),
+                        transport.post(url, rpcChainIdRequest(0u), false),
                         0u,
                         networkId,
                     )
@@ -122,7 +139,7 @@ class SendDriver(
     ): StepReply {
         var mismatch: String? = null
         for (url in urls) {
-            val text = runCatching { post(url, body, false) }.getOrNull() ?: continue
+            val text = runCatching { transport.post(url, body, false) }.getOrNull() ?: continue
             if (runCatching { rpcVerifyChainId(text, id, networkId) }.getOrDefault(false)) {
                 endpoint = url
                 return StepReply.Rpc(id, text, now())
@@ -131,10 +148,4 @@ class SendDriver(
         }
         return mismatch?.let { StepReply.Rpc(id, it, now()) } ?: StepReply.TransportFailure(id, now())
     }
-
-    private fun post(
-        url: URL,
-        body: String,
-        write: Boolean,
-    ): String = transport.post(url, body, write)
 }

@@ -3,10 +3,12 @@ package org.bramble.wallet
 import android.graphics.Bitmap
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasClickAction
@@ -18,6 +20,7 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.printToString
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.replaceText
@@ -34,6 +37,7 @@ import org.bramble.core.AccountFamily
 import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletStatus
 import org.bramble.wallet.design.secretFieldTag
+import org.bramble.wallet.ui.wallet.FLOATING_DOCK_TAG
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -130,9 +134,7 @@ class Robot(
     ) {
         val matcher = hasText(text) and hasClickAction()
         waitFor(matcher, timeoutMs)
-        val node = rule.onAllNodes(matcher)[0]
-        runCatching { node.performScrollTo() }
-        node.assertIsEnabled().performClick()
+        scrollIntoView(rule.onAllNodes(matcher)[0]).assertIsEnabled().performClick()
         rule.waitForIdle()
     }
 
@@ -143,11 +145,38 @@ class Robot(
     ) {
         val matcher = hasContentDescription(label) and hasClickAction()
         waitFor(matcher, timeoutMs)
-        val node = rule.onAllNodes(matcher)[0]
-        // A click is a touch at the node's bounds: a control scrolled off screen must come back first.
-        runCatching { node.performScrollTo() }
-        node.assertIsEnabled().performClick()
+        scrollIntoView(rule.onAllNodes(matcher)[0]).assertIsEnabled().performClick()
         rule.waitForIdle()
+    }
+
+    /**
+     * A click is a touch at the node's bounds, so a control must be on screen and not under the
+     * floating dock. performScrollTo stops at the viewport's edge, which the dock covers, and a
+     * touch there lands on a dock item instead: scroll on until the node clears the dock.
+     */
+    private fun scrollIntoView(node: SemanticsNodeInteraction): SemanticsNodeInteraction {
+        runCatching { node.performScrollTo() }
+        val dockTop =
+            rule
+                .onAllNodes(hasTestTag(FLOATING_DOCK_TAG))
+                .fetchSemanticsNodes()
+                .firstOrNull()
+                ?.boundsInRoot
+                ?.top ?: return node
+        val target = node.fetchSemanticsNode()
+        val overlap = target.boundsInRoot.bottom - dockTop
+        val scroller =
+            generateSequence(target.parent) { it.parent }.firstOrNull {
+                SemanticsActions.ScrollBy in
+                    it.config
+            }
+        if (overlap > 0 && scroller != null) {
+            rule
+                .onNode(SemanticsMatcher("scroll container") { it.id == scroller.id })
+                .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, overlap) }
+            rule.waitForIdle()
+        }
+        return node
     }
 
     /** Types into the secret field labelled [label], replacing what it held. */
@@ -243,8 +272,9 @@ class Robot(
     /** The home screen, whose account name is the core's address-derived nickname. */
     fun waitForHome(timeoutMs: Long = 20_000) = waitForText("Tokens", timeoutMs)
 
+    /** Restore reads mainnet RPC like the search does, so it gets the search's budget. */
     fun finishAndCheckHome() {
-        waitForText("You’re all set", 20_000)
+        waitForText("You’re all set", 120_000)
         snapshot("complete")
         tap("Open Bramble")
         waitForHome()

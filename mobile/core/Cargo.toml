@@ -20,9 +20,8 @@ path = "src/bin/uniffi-bindgen.rs"
 # The mobile wallet core (vault, accounts, send, portfolio, history, privacy, multisig coordination,
 # the UniFFI surface): wallet-core's `bramble-core` with its `mobile` feature and without the
 # extension's raw-key and phrase exports. Crate, lib and UniFFI module names are mobile's
-# (`bramble_core`, `BrambleCore`, `org.bramble.core`). Krusty KMS comes only through it. Pinned
-# to the release that holds the 2.7 port (wallet-core PR #50).
-bramble-core = { git = "https://github.com/starknet-innovation/wallet-core", tag = "v0.7.0", default-features = false, features = ["mobile"] }
+# (`bramble_core`, `BrambleCore`, `org.bramble.core`). Krusty KMS comes only through it.
+bramble-core = { git = "https://github.com/starknet-innovation/wallet-core", tag = "v0.9.0", default-features = false, features = ["mobile"] }
 # The Swift and Kotlin bindings generator, at the version bramble-core exports through.
 uniffi = { version = "=0.31.2", features = ["cli"] }
 

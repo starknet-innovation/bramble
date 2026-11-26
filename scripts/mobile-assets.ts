@@ -16,6 +16,12 @@ import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/network
 import { COMMON_WORDS } from "../packages/foundation/wallet-model/src/preferences/guessable";
 import { SIDEPANEL_STYLES } from "../packages/presentation/wallet-ui/src/sidepanel/styles/index";
 import { ACCOUNTS_JSON_PATH, renderAccountsCatalog } from "./mobile-assets/accounts";
+import {
+  ALLOWANCE_COPY_KOTLIN_PATH,
+  ALLOWANCE_COPY_SWIFT_PATH,
+  renderKotlinAllowanceCopy,
+  renderSwiftAllowanceCopy,
+} from "./mobile-assets/allowance-copy";
 import { renderAndroidTokenLogos } from "./mobile-assets/android-token-logos";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { parseCss } from "./mobile-assets/css";
@@ -32,6 +38,12 @@ import {
 } from "./mobile-assets/rpc-fixtures";
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
+import {
+  renderKotlinSwapCopy,
+  renderSwiftSwapCopy,
+  SWAP_COPY_KOTLIN_PATH,
+  SWAP_COPY_SWIFT_PATH,
+} from "./mobile-assets/swap-copy";
 import { renderSwift, renderSwiftLayout } from "./mobile-assets/swift";
 import { renderVectorAssets, tokenLogoAddresses } from "./mobile-assets/vectors";
 
@@ -166,12 +178,16 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [POLICY_JSON_PATH, renderPolicyJson()],
     [SWIFT_COPY_PATH, renderSwiftCopy()],
     [KOTLIN_COPY_PATH, renderKotlinCopy()],
+    [SWAP_COPY_SWIFT_PATH, renderSwiftSwapCopy()],
+    [SWAP_COPY_KOTLIN_PATH, renderKotlinSwapCopy()],
     [RPC_FIXTURES_PATH, renderRpcFixtures()],
     [KOTLIN_RPC_FIXTURES_PATH, renderKotlinRpcFixtures()],
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],
     [MULTISIG_JSON_PATH, renderMultisigConstants()],
     [TOKEN_REGISTRY_JSON_PATH, renderTokenRegistry()],
     [PRIVACY_JSON_PATH, renderPrivacyRouting()],
+    [ALLOWANCE_COPY_SWIFT_PATH, renderSwiftAllowanceCopy()],
+    [ALLOWANCE_COPY_KOTLIN_PATH, renderKotlinAllowanceCopy()],
     [COMMON_PASSWORDS_PATH, `${COMMON_WORDS}\n`],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],

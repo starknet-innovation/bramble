@@ -8,6 +8,9 @@ enum class Flow {
     /** The send journey. */
     SEND,
 
+    /** The swap journey. */
+    SWAP,
+
     /** Account names, receipts, and groups. */
     MANAGE_ACCOUNTS,
 
@@ -52,4 +55,7 @@ enum class Flow {
 
     /** Scan the token registry for held tokens. */
     DISCOVER_TOKENS,
+
+    /** The allowance manager and its revoke, from Settings' "Token allowances" row. */
+    ALLOWANCES,
 }
