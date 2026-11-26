@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// `importAccountChooser`: the second stage of "Import an existing account". Mobile imports a
-/// private key; another recovery phrase is shown as coming, as onboarding shows what it lacks.
-/// "Find my other accounts" and "Ready Ledger account" are left out, as Ledger is on Add account.
+/// private key or a Ready Ledger account; another recovery phrase is shown as coming, as
+/// onboarding shows what it lacks. "Find my other accounts" is left out.
 struct ImportAccountChooser: View {
     let back: () -> Void
     let importKey: () -> Void
+    let readyLedger: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Drawer.gap) {
@@ -20,6 +21,12 @@ struct ImportAccountChooser: View {
                     title: "Private key",
                     detail: "Import a single account from its raw Starknet key.",
                     action: importKey
+                )
+                OptionCard(
+                    icon: .shield,
+                    title: LedgerCopy.readyTitle,
+                    detail: LedgerCopy.readyDetail,
+                    action: readyLedger
                 )
             }
             Spacer(minLength: 0)

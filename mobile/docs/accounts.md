@@ -70,7 +70,7 @@ the difference with **Decision**.
 | Option | Mobile |
 | --- | --- |
 | Regular account: "Create the next account from this wallet's recovery phrase." | **Yes.** OZ at `next_account_index(network)`, set active, toast "Account added". |
-| Ledger account / Restore a Ready Ledger account | Hidden (Ledger over BLE is Phase 2, out of scope). |
+| Ledger account / Restore a Ready Ledger account | Over Bluetooth (P8): Bramble's scheme as Bramble and Argent accounts; Ready's as Argent (the core refuses Braavos). |
 | Multisig account | Slot left for the nostr-multisig workstream; hidden here. |
 | Import an existing account → Private key | **Yes** (wallet-core P3, `importPrivateKey`): "Import private key", Bramble (OpenZeppelin) only, set active, toast "Account imported". No Ready contract choice and no salt: the core imports neither. The onboarding "Private key" option stays disabled, since the core cannot create a wallet from a key alone. |
 | Import an existing account → Recovery phrase | Out of scope: needs multi-seed vaults (`seedId`). |

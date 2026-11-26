@@ -267,7 +267,7 @@ struct FolderPicker: View {
 /// the Ready Multisig gateway, and "Import an existing account", which leads to
 /// `importAccountChooser` and the private-key form.
 struct AddAccountChooser: View {
-    private enum Stage { case add, ledger, importChooser, importKey }
+    private enum Stage { case add, ledger, readyLedger, importChooser, importKey }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -283,10 +283,17 @@ struct AddAccountChooser: View {
             chooser
 
         case .ledger:
-            LedgerAddAccountFlow(back: { stage = .add }, added: added)
+            LedgerAddAccountFlow(route: .bramble, back: { stage = .add }, added: added)
+
+        case .readyLedger:
+            LedgerAddAccountFlow(route: .ready, back: { stage = .importChooser }, added: added)
 
         case .importChooser:
-            ImportAccountChooser(back: { stage = .add }, importKey: { stage = .importKey })
+            ImportAccountChooser(
+                back: { stage = .add },
+                importKey: { stage = .importKey },
+                readyLedger: { stage = .readyLedger }
+            )
 
         case .importKey:
             ImportKeyForm(back: { stage = .importChooser }, imported: added)

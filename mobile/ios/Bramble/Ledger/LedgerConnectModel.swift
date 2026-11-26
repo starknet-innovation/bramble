@@ -19,13 +19,15 @@ extension LedgerBleDriver: LedgerExchanging {
 }
 
 /// Connect a Ledger and pick its accounts (the extension's `onboard-session.ts`): wait for
-/// Bluetooth, list Ledgers, connect to the one chosen, read a page of keys at Bramble's scheme
-/// (`LedgerKeyReader`), place them (`ledgerAccountCandidates`), and keep the person's picks, one
-/// more page at a time.
+/// Bluetooth, list Ledgers, connect to the one chosen, read a page of keys at each of the route's
+/// schemes (`LedgerKeyReader`), place them per family (`ledgerAccountCandidates`), check each
+/// address on chain and preselect the active ones, and keep the person's picks, one more page at
+/// a time.
 ///
 /// Trust boundary: every device byte goes to the core unread; a refusal is the core's code,
-/// shown through `FriendlyError` (its Ledger table). Public keys and addresses only: nothing here
-/// signs or writes the vault. Failure ends the connection; Retry starts again from the list.
+/// shown through `FriendlyError` (its Ledger table). On-chain state is untrusted and only decides
+/// what is listed and preselected. Public keys and addresses only: nothing here signs or writes
+/// the vault. Failure ends the connection; Retry starts again from the list.
 @MainActor
 @Observable
 final class LedgerConnectModel {
@@ -44,15 +46,17 @@ final class LedgerConnectModel {
 
     private(set) var stage = Stage.bluetooth(.unknown)
     private(set) var devices: [LedgerDevice] = []
-    private(set) var candidates: [LedgerCandidate] = []
-    /// Picked candidates, by address.
+    private(set) var rows: [LedgerRow] = []
+    /// Picked rows, by address.
     private(set) var selected: Set<String> = []
     private(set) var loadingMore = false
 
     private let scanner: any LedgerScanning
     private let connector: (UUID) async throws -> any LedgerExchanging
-    private let place: ([LedgerKey]) throws -> [LedgerCandidate]
+    private let place: ([LedgerKey], AccountFamily) throws -> [LedgerCandidate]
+    private let describe: @Sendable (String) async -> LedgerActivity
     private let existing: Set<String>
+    let route: LedgerRoute
     private let pageSize: UInt32
     private var device: (any LedgerExchanging)?
     private var nextIndex: UInt32 = 0
@@ -60,17 +64,22 @@ final class LedgerConnectModel {
     private var epoch = 0
 
     /// `existing`: addresses the wallet already holds, offered but never selectable. `place` turns
-    /// a page of keys into candidates (the network and family).
+    /// a page of keys into one family's candidates on the network; `describe` reads an address's
+    /// on-chain state.
     init(
+        route: LedgerRoute,
         scanner: any LedgerScanning,
         connect: @escaping (UUID) async throws -> any LedgerExchanging,
-        place: @escaping ([LedgerKey]) throws -> [LedgerCandidate],
+        place: @escaping ([LedgerKey], AccountFamily) throws -> [LedgerCandidate],
+        describe: @escaping @Sendable (String) async -> LedgerActivity,
         existing: Set<String>,
         pageSize: UInt32 = LedgerConnectModel.pageSize
     ) {
+        self.route = route
         self.scanner = scanner
         connector = connect
         self.place = place
+        self.describe = describe
         self.existing = Set(existing.map { $0.lowercased() })
         self.pageSize = pageSize
         scanner.changed = { [weak self] in self?.bluetoothChanged() }
@@ -79,16 +88,17 @@ final class LedgerConnectModel {
 
     /// The requests the picked accounts make, in the order they were read.
     var chosen: [LedgerAccountRequest] {
-        candidates.filter { selected.contains($0.address) }.map(\.request)
+        rows.filter { $0.selectable && selected.contains($0.id) }.map(\.candidate.request)
     }
 
-    func isExisting(_ candidate: LedgerCandidate) -> Bool {
-        existing.contains(candidate.address.lowercased())
+    /// The picker's groups for this route.
+    var groups: [LedgerGroup] {
+        LedgerGroup.groups(rows, route: route)
     }
 
-    func toggle(_ candidate: LedgerCandidate) {
-        guard !isExisting(candidate) else { return }
-        if selected.remove(candidate.address) == nil { selected.insert(candidate.address) }
+    func toggle(_ row: LedgerRow) {
+        guard row.selectable else { return }
+        if selected.remove(row.id) == nil { selected.insert(row.id) }
     }
 
     /// Connects to `device` and reads the first page.
@@ -110,6 +120,7 @@ final class LedgerConnectModel {
             return
         }
         self.device = connected
+        // The device OS gate (`LEDGER_OS_MIN`) belongs here once the core exports it: wallet-core #191.
         stage = .reading
         await readPage()
     }
@@ -125,7 +136,7 @@ final class LedgerConnectModel {
     /// After a failure: drop the connection and what was read, and list Ledgers again.
     func retry() {
         close()
-        candidates = []
+        rows = []
         selected = []
         nextIndex = 0
         stage = .bluetooth(.unknown)
@@ -164,20 +175,57 @@ final class LedgerConnectModel {
             return
         }
         let flow = epoch
-        let outcome = await Self.read(scheme: .bramble, from: nextIndex, count: pageSize, over: device)
-        guard flow == epoch else { return }
-        switch outcome {
-        case let .success(keys):
-            do {
-                candidates += try place(keys)
-                nextIndex += UInt32(keys.count)
-                stage = .picking
-            } catch {
-                fail("unexpected-device-error")
-            }
+        var pages: [(LedgerScheme, [LedgerKey])] = []
+        for scheme in route.schemes {
+            let outcome = await Self.read(scheme: scheme, from: nextIndex, count: pageSize, over: device)
+            guard flow == epoch else { return }
+            switch outcome {
+            case let .success(keys):
+                pages.append((scheme, keys))
 
-        case let .failure(refusal):
-            fail(refusal.reason)
+            case let .failure(refusal):
+                fail(refusal.reason)
+                return
+            }
+        }
+        let placed: [LedgerCandidate]
+        do {
+            placed = try pages.flatMap { scheme, keys in
+                try LedgerRoute.families(scheme).flatMap { try place(keys, $0) }
+            }
+        } catch {
+            fail("unexpected-device-error")
+            return
+        }
+        rows += placed.map { candidate in
+            LedgerRow(candidate: candidate, activity: nil, existing: existing.contains(candidate.address.lowercased()))
+        }
+        nextIndex += UInt32(pages.first?.1.count ?? 0)
+        stage = .picking
+        await check(placed.map(\.address), flow: flow)
+    }
+
+    /// Reads each address's on-chain state, then selects every active, selectable row
+    /// (`applyDescribed`).
+    private func check(_ addresses: [String], flow: Int) async {
+        let read = describe
+        let found = await withTaskGroup(of: (String, LedgerActivity).self) { group in
+            for address in addresses {
+                group.addTask { await (address, read(address)) }
+            }
+            var results: [String: LedgerActivity] = [:]
+            for await (address, activity) in group { results[address] = activity }
+            return results
+        }
+        guard flow == epoch else { return }
+        rows = rows.map { row in
+            guard let activity = found[row.id] else { return row }
+            var updated = row
+            updated.activity = activity
+            return updated
+        }
+        for row in rows where found[row.id] != nil && row.active && row.selectable {
+            selected.insert(row.id)
         }
     }
 

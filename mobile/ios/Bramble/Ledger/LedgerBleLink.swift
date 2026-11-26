@@ -45,30 +45,35 @@ final class LedgerBleLink: NSObject, LedgerLink {
     /// Connects to the Ledger `id` (from `ledgers`), finds its service's characteristics and
     /// subscribes to notifications, within `connectTimeoutMs`. Pairing, when the device asks for
     /// it, happens here (the system prompts). On any failure the link is closed; Bluetooth off or
-    /// an unknown device is `.disconnected`. A new link first waits for Bluetooth's state.
+    /// an unknown device is `.disconnected`. A new link first waits for Bluetooth's state, within the
+    /// same timeout.
     func connect(_ id: UUID) async throws {
-        if let manager = bluetooth(), manager.state == .unknown || manager.state == .resetting {
-            await withCheckedContinuation { waitingForState = $0 }
-        }
-        guard let manager = bluetooth(), manager.state == .poweredOn, !closed,
-              let target = manager.retrievePeripherals(withIdentifiers: [id]).first
-        else {
-            close()
-            throw LedgerLinkError.disconnected
-        }
-        peripheral = target
-        target.delegate = self
         do {
             let abandon: @Sendable () -> Void = { Task { @MainActor in self.close() } }
-            try await withTimeout(Self.connectTimeoutMs, onTimeout: abandon) { try await self.open() }
+            try await withTimeout(Self.connectTimeoutMs, onTimeout: abandon) { try await self.open(id) }
         } catch {
             close()
             throw error
         }
     }
 
-    private func open() async throws {
-        guard let central, let target = peripheral else { throw LedgerLinkError.disconnected }
+    /// Waits for Bluetooth's first state (bounded by `connect`'s timeout, which closes the link and
+    /// so ends the wait), then finds the peripheral.
+    private func target(_ id: UUID) async throws -> CBPeripheral {
+        if let manager = bluetooth(), manager.state == .unknown || manager.state == .resetting, !closed {
+            await withCheckedContinuation { waitingForState = $0 }
+        }
+        guard let manager = bluetooth(), manager.state == .poweredOn, !closed,
+              let target = manager.retrievePeripherals(withIdentifiers: [id]).first
+        else { throw LedgerLinkError.disconnected }
+        return target
+    }
+
+    private func open(_ id: UUID) async throws {
+        let target = try await target(id)
+        peripheral = target
+        target.delegate = self
+        guard let central else { throw LedgerLinkError.disconnected }
         try await wait { central.connect(target) }
         try await wait { target.discoverServices(services) }
         guard let service = target.services?.first(where: { services.contains($0.uuid) }),
@@ -119,6 +124,8 @@ final class LedgerBleLink: NSObject, LedgerLink {
         guard !closed else { return }
         closed = true
         inbox.removeAll()
+        waitingForState?.resume()
+        waitingForState = nil
         if let peripheral { central?.cancelPeripheralConnection(peripheral) }
         fail(LedgerLinkError.disconnected)
     }

@@ -1,8 +1,9 @@
 import BrambleCore
 import SwiftUI
 
-/// Onboarding's Ledger step: connect and pick, then the passphrase step creates the wallet. The
-/// connection ends when the picks are taken or the step leaves the screen.
+/// Onboarding's Ledger step: connect and pick, reading both Bramble's and Ready's schemes as the
+/// extension's first-run setup does, then the passphrase step creates the wallet. The connection
+/// ends when the picks are taken or the step leaves the screen.
 struct LedgerOnboardingStep: View {
     @Environment(WalletStore.self) private var store
     let back: () -> Void
@@ -10,8 +11,7 @@ struct LedgerOnboardingStep: View {
     @State private var model: LedgerConnectModel?
 
     var body: some View {
-        let stage = model?.stage ?? .bluetooth(.unknown)
-        OnboardingStep(back: back, icon: .shield, title: LedgerCopy.title(stage), lede: LedgerCopy.lede(stage)) {
+        OnboardingStep(back: back, icon: .shield, title: LedgerCopy.title(model), lede: LedgerCopy.lede(model)) {
             if let model { LedgerConnectContent(model: model) }
         } cta: {
             if let model {
@@ -21,26 +21,31 @@ struct LedgerOnboardingStep: View {
                 }
             }
         }
-        .onAppear { if model == nil { model = .live(network: store.network, existing: []) } }
+        .onAppear {
+            if model == nil {
+                model = .live(route: .firstRun, network: store.networkInfo, rpc: store.rpc, existing: [])
+            }
+        }
         .onDisappear { model?.close() }
     }
 }
 
-/// Add account's "Ledger account": connect, pick, then add the picks to the wallet.
+/// Add account's "Ledger account" (Bramble's scheme) and Import's "Ready Ledger account"
+/// (Ready's): connect, pick, then add the picks to the wallet.
 struct LedgerAddAccountFlow: View {
     @Environment(WalletStore.self) private var store
+    let route: LedgerRoute
     let back: () -> Void
     let added: () -> Void
     @State private var model: LedgerConnectModel?
     @State private var adding = false
 
     var body: some View {
-        let stage = model?.stage ?? .bluetooth(.unknown)
         VStack(alignment: .leading, spacing: BrambleMetrics.Drawer.gap) {
-            FlowHeader(title: LedgerCopy.title(stage), back: back)
+            FlowHeader(title: LedgerCopy.title(model), back: back)
             ScrollView {
                 VStack(alignment: .leading, spacing: BrambleMetrics.Onboarding.fieldsGap) {
-                    StatusLine(text: stage == .picking ? nil : LedgerCopy.lede)
+                    StatusLine(text: LedgerCopy.lede(model))
                     if let model { LedgerConnectContent(model: model) }
                 }
             }
@@ -48,7 +53,11 @@ struct LedgerAddAccountFlow: View {
                 LedgerConnectAction(model: model, title: addTitle(model), busy: adding) { add($0) }
             }
         }
-        .onAppear { if model == nil { model = .live(network: store.network, existing: store.heldAddresses) } }
+        .onAppear {
+            if model == nil {
+                model = .live(route: route, network: store.networkInfo, rpc: store.rpc, existing: store.heldAddresses)
+            }
+        }
         .onDisappear { model?.close() }
     }
 
