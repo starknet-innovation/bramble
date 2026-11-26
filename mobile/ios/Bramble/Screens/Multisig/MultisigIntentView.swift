@@ -1,9 +1,10 @@
 import BrambleCore
 import SwiftUI
 
-/// One frozen signing intent (`intentCard` in `multisig-views.ts`): the core's summary, its
-/// signatures and maximum fee, the exact calls, and the one action its state allows. Every
-/// refusal is the core's; a stale or already-sent intent is never signed or sent again here.
+/// One frozen signing intent (`intentCard` in `multisig-views.ts`): the core's summary, each call's
+/// summary, the risk panel, its signatures and maximum fee, the exact calls, and the one action its
+/// state allows. Every refusal is the core's; a stale or already-sent intent is never signed or
+/// sent again here, and one whose signers no longer match the chain is neither signed nor sent.
 struct MultisigIntentView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -47,13 +48,17 @@ struct IntentCard: View {
     @State private var result: String?
     @State private var failed = false
     @State private var technical = false
+    /// The core's review, read when the card shows and again whenever the intent changes.
+    @State private var review: MultisigIntentReview?
+    @State private var reviewed = false
 
     var body: some View {
         let available = store.coordination.availableSigners(for: intent)
         let (action, note) = MultisigTxText.action(
             intent,
             canSign: !available.isEmpty,
-            holdsSigner: store.coordination.holdsSigner(for: intent)
+            holdsSigner: store.coordination.holdsSigner(for: intent),
+            signers: reviewed ? SignerCheck(review) : .reading
         )
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             VStack(alignment: .leading, spacing: BrambleSpace.sm) {
@@ -61,10 +66,16 @@ struct IntentCard: View {
                 if intent.state == .stale {
                     Text("Out of date").brambleText(BrambleTypeScale.caption).foregroundStyle(skin.danger)
                 }
+                ForEach(Array((review?.calls ?? []).enumerated()), id: \.offset) { _, call in
+                    Text(call.summary).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                }
                 facts
             }
             .padding(BrambleSpace.lg)
             .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous))
+            if reviewed, isOpen(intent) {
+                SendRisksPanel(messages: MultisigTxText.risks(review))
+            }
             if let hash = intent.broadcastTransactionHash {
                 KeyValueRow(label: MultisigTxText.submittedKicker, value: hash, copyLabel: MultisigTxText.copyHash)
             }
@@ -84,6 +95,11 @@ struct IntentCard: View {
             controls(action, available: available)
             StatusLine(text: result, tone: failed ? .danger : .positive)
             Disclosure(title: MultisigTxText.technical, isOpen: $technical) { calls }
+        }
+        .task(id: intent) {
+            reviewed = false
+            review = await store.coordination.review(intent)
+            reviewed = true
         }
     }
 
@@ -130,6 +146,11 @@ struct IntentCard: View {
     private var calls: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.sm) {
             KeyValueRow(label: MultisigTxText.hash, value: intent.transactionHash, copyLabel: MultisigTxText.copyHash)
+            KeyValueRow(
+                label: MultisigCopy.technicalSender,
+                value: intent.sender,
+                copyLabel: MultisigCopy.technicalCopySender
+            )
             KeyValueRow(label: MultisigTxText.nonce, value: nil, copyLabel: "", status: intent.nonce)
             ForEach(Array(intent.calls.enumerated()), id: \.offset) { index, call in
                 VStack(alignment: .leading, spacing: BrambleSpace.xs) {

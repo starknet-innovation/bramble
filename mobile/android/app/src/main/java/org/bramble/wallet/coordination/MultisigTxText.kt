@@ -3,6 +3,7 @@ package org.bramble.wallet.coordination
 import org.bramble.core.AccountRecord
 import org.bramble.core.IntentState
 import org.bramble.core.MultisigIntent
+import org.bramble.core.MultisigIntentReview
 import org.bramble.core.MultisigTxFailure
 import org.bramble.core.StaleReason
 import org.bramble.core.argentSignerGuid
@@ -100,9 +101,33 @@ internal object MultisigTxText {
     /**
      * `intentAction`: what the intent card offers and the note beside it. Mobile proposes a fresh
      * transaction from the composer rather than re-pricing a stale one, so a stale card says it is
-     * out of date and, when fully signed, offers the unchanged-fee retry only.
+     * out of date and, when fully signed, offers the unchanged-fee retry only. [fresh] is the card's
+     * review (`MultisigIntentReview.hasFreshAuthority`): false, or a review that could not be read,
+     * offers nothing to sign or submit, as the extension's card; null (still reading) offers nothing
+     * yet.
      */
     fun action(
+        intent: MultisigIntent,
+        canSign: Boolean,
+        holdsSigner: Boolean,
+        fresh: Boolean? = true,
+    ): Pair<IntentAction, String?> =
+        if (isOpen(intent) && fresh != true) {
+            IntentAction.NONE to if (fresh == false) MultisigCopy.noteSignersChanged else null
+        } else {
+            stateAction(intent, canSign, holdsSigner)
+        }
+
+    /**
+     * The card's risk panel (`reviewPanel`): the core's flags, then, unless the chain's signers
+     * still match the intent, the extension's signers-changed sentence. A review that could not be
+     * read says the same, since nothing proves the signers still match.
+     */
+    fun risks(review: MultisigIntentReview?): List<String> =
+        review?.riskFlags.orEmpty().map { it.message } +
+            if (review?.hasFreshAuthority == true) emptyList() else listOf(MultisigCopy.cardSignersChanged)
+
+    private fun stateAction(
         intent: MultisigIntent,
         canSign: Boolean,
         holdsSigner: Boolean,

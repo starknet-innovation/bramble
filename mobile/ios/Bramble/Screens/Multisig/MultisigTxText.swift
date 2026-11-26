@@ -82,8 +82,19 @@ enum MultisigTxText {
 
     /// `intentAction`: what the intent card offers and the note beside it. Mobile proposes a fresh
     /// transaction from the composer rather than re-pricing a stale one, so a stale card says it is
-    /// out of date and, when fully signed, offers the unchanged-fee retry only.
-    static func action(_ intent: MultisigIntent, canSign: Bool, holdsSigner: Bool) -> (IntentAction, String?) {
+    /// out of date and, when fully signed, offers the unchanged-fee retry only. `signers` is the
+    /// card's review (`MultisigIntentReview.hasFreshAuthority`): `.changed`, which a review that
+    /// could not be read also is, offers nothing to sign or submit, as the extension's card;
+    /// `.reading` offers nothing yet.
+    static func action(
+        _ intent: MultisigIntent,
+        canSign: Bool,
+        holdsSigner: Bool,
+        signers: SignerCheck = .match
+    ) -> (IntentAction, String?) {
+        if isOpen(intent), signers != .match {
+            return (.nothing, signers == .changed ? MultisigCopy.noteSignersChanged : nil)
+        }
         switch intent.state {
         case .ready:
             return (.submit, nil)
@@ -110,6 +121,14 @@ enum MultisigTxText {
         case .submitted, .accepted, .rejected:
             return (.nothing, "Nothing left to do here.")
         }
+    }
+
+    /// The card's risk panel (`reviewPanel`): the core's flags, then, unless the chain's signers
+    /// still match the intent, the extension's signers-changed sentence. A review that could not be
+    /// read says the same, since nothing proves the signers still match.
+    static func risks(_ review: MultisigIntentReview?) -> [String] {
+        (review?.riskFlags.map(\.message) ?? [])
+            + (review?.hasFreshAuthority == true ? [] : [MultisigCopy.cardSignersChanged])
     }
 
     /// How a plan ended, in the extension's words. Send's generated copy where the failure is the
@@ -147,6 +166,13 @@ enum MultisigTxText {
             SendCopy.failureDefault
         }
     }
+}
+
+/// Whether the chain's signers still match an intent, as the card's review last said.
+enum SignerCheck: Equatable {
+    case reading, match, changed
+
+    init(_ review: MultisigIntentReview?) { self = review?.hasFreshAuthority == true ? .match : .changed }
 }
 
 /// The one action an intent card offers.

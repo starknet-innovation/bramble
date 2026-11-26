@@ -2,7 +2,11 @@ package org.bramble.wallet.coordination
 
 import org.bramble.core.IntentState
 import org.bramble.core.MultisigIntent
+import org.bramble.core.MultisigIntentReview
 import org.bramble.core.MultisigTxFailure
+import org.bramble.core.ReviewText
+import org.bramble.core.RiskFlag
+import org.bramble.core.RiskFlagCode
 import org.bramble.core.StaleReason
 import org.bramble.wallet.send.SendCopy
 import org.junit.Assert.assertEquals
@@ -26,6 +30,7 @@ class MultisigTxTextTest {
         staleReason = stale,
         summary = "Transfer 1.5 STRK to 0x1234…5678",
         transactionHash = "0x2",
+        sender = "0x1",
         nonce = "0x5",
         threshold = 2u,
         signerGuids = listOf("0xa", "0xb"),
@@ -71,6 +76,40 @@ class MultisigTxTextTest {
         assertTrue(lead!!.startsWith("The network refused this version"))
         assertTrue(isOpen(refused))
         assertFalse(isOpen(intent(IntentState.SUBMITTED, 2)))
+    }
+
+    /**
+     * The card's review (`MultisigIntentReview`): while the chain's signers match, its flags and
+     * the state's action; once they moved, or when the review could not be read, nothing to sign
+     * or submit and the extension's signers-changed sentence after the flags.
+     */
+    @Test
+    fun signersThatMovedOfferNothing() {
+        val flag =
+            RiskFlag(
+                RiskFlagCode.SELF_TRANSFER,
+                "Sending to yourself",
+                ReviewText("review.flag.selfTransfer", emptyList()),
+            )
+        val fresh = MultisigIntentReview(calls = emptyList(), riskFlags = listOf(flag), hasFreshAuthority = true)
+        val moved = fresh.copy(hasFreshAuthority = false)
+        val collecting = intent(IntentState.COLLECTING, 1)
+        assertEquals(listOf("Sending to yourself"), MultisigTxText.risks(fresh))
+        assertEquals(IntentAction.SIGN to null, MultisigTxText.action(collecting, true, true, fresh = true))
+        assertEquals(
+            listOf(
+                "Sending to yourself",
+                "The on-chain signers no longer match this transaction. Signing and submission are disabled.",
+            ),
+            MultisigTxText.risks(moved),
+        )
+        assertEquals(listOf(MultisigCopy.cardSignersChanged), MultisigTxText.risks(null))
+        for (state in listOf(IntentState.COLLECTING, IntentState.READY, IntentState.STALE)) {
+            val (action, note) = MultisigTxText.action(intent(state, 2), true, true, fresh = false)
+            assertEquals(IntentAction.NONE, action)
+            assertEquals(MultisigCopy.noteSignersChanged, note)
+            assertEquals(IntentAction.NONE to null, MultisigTxText.action(intent(state, 2), true, true, fresh = null))
+        }
     }
 
     @Test

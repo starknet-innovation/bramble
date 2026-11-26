@@ -29,6 +29,12 @@ import { TOAST_SOURCE } from "./mobile-assets/feedback";
 import { renderFriendlyErrors } from "./mobile-assets/friendly-errors";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { MULTISIG_JSON_PATH, renderMultisigConstants } from "./mobile-assets/multisig";
+import {
+  MULTISIG_COPY_KOTLIN_PATH,
+  MULTISIG_COPY_SWIFT_PATH,
+  renderKotlinMultisigCopy,
+  renderSwiftMultisigCopy,
+} from "./mobile-assets/multisig-copy";
 import { PRIVACY_JSON_PATH, renderPrivacyRouting } from "./mobile-assets/privacy";
 import {
   KOTLIN_RPC_FIXTURES_PATH,
@@ -196,6 +202,8 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [PRIVACY_JSON_PATH, renderPrivacyRouting()],
     [ALLOWANCE_COPY_SWIFT_PATH, renderSwiftAllowanceCopy()],
     [ALLOWANCE_COPY_KOTLIN_PATH, renderKotlinAllowanceCopy()],
+    [MULTISIG_COPY_SWIFT_PATH, renderSwiftMultisigCopy()],
+    [MULTISIG_COPY_KOTLIN_PATH, renderKotlinMultisigCopy()],
     [COMMON_PASSWORDS_PATH, `${COMMON_WORDS}\n`],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],

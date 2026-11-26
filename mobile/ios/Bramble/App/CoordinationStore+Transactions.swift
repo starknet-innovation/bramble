@@ -77,6 +77,22 @@ extension CoordinationStore {
         return hash
     }
 
+    /// The intent card's review (`multisig_intent_review`, the extension's `intentCard`): each frozen
+    /// call's summary and flags under the person's tokens, and whether a fresh read of the
+    /// multisig's authority still holds the intent's signers. Nil when the core refuses (a locked
+    /// wallet, an intent gone); an unreachable chain comes back with `hasFreshAuthority` false.
+    /// Either way the card offers neither Sign nor Submit.
+    func review(_ intent: MultisigIntent) async -> MultisigIntentReview? {
+        let network = wallet.networkInfo, transport = rpc, walletCore = core
+        let tokens = wallet.portfolio.preferences
+        guard let read = try? await ChainReads.authority(of: intent.sender, on: network, via: transport) else {
+            return nil
+        }
+        return try? await work {
+            try walletCore.multisigIntentReview(intentId: intent.id, tokens: tokens, read: read)
+        }
+    }
+
     /// Imports a co-signer's package for `record` against a fresh read of it. The core drops the
     /// package's own summary and lifecycle and reviews the calls itself.
     func importIntent(_ package: String, into record: MultisigRecord) async throws -> MultisigIntent {

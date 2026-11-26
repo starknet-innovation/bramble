@@ -224,6 +224,78 @@ final class MultisigTransactionsTests: XCTestCase {
     }
 }
 
+/// The intent card's review (`multisig_intent_review`, wallet-core #146) through the app's own
+/// authority read: each call's summary and the core's flags, and whether the chain's signers still
+/// match. Signers that moved, or a review that could not be read, offer neither Sign nor Submit and
+/// add the extension's sentence after the flags.
+extension MultisigTransactionsTests {
+    private func review(_ wallet: Wallet, _ id: String) async throws -> MultisigIntentReview {
+        let read = try await ChainReads.authority(of: wallet.address, on: wallet.network, via: wallet.node)
+        return try wallet.core.multisigIntentReview(intentId: id, tokens: TokenPreferences(persisted: nil), read: read)
+    }
+
+    func testTheCardsReviewOffersSigningOnlyWhileTheSignersMatch() async throws {
+        let wallet = try wallet()
+        guard case .proposed(let id) = try await propose(wallet) else {
+            XCTFail("proposed")
+            return
+        }
+        let intent = try XCTUnwrap(try wallet.stored().first { $0.id == id })
+        XCTAssertEqual(digits(intent.sender), digits(wallet.address))
+
+        let fresh = try await review(wallet, id)
+        XCTAssertTrue(fresh.hasFreshAuthority)
+        XCTAssertEqual(fresh.calls.map(\.entrypoint), ["transfer"])
+        XCTAssertFalse(fresh.calls[0].summary.isEmpty)
+        XCTAssertEqual(MultisigTxText.risks(fresh), fresh.riskFlags.map(\.message))
+        XCTAssertEqual(MultisigTxText.action(intent, canSign: true, holdsSigner: true, signers: .match).0, .sign)
+
+        wallet.node.threshold = 1
+        let moved = try await review(wallet, id)
+        XCTAssertFalse(moved.hasFreshAuthority)
+        XCTAssertEqual(moved.calls, fresh.calls, "the calls are reviewed the same either way")
+        XCTAssertEqual(MultisigTxText.risks(moved), moved.riskFlags.map(\.message) + [MultisigCopy.cardSignersChanged])
+        XCTAssertEqual(
+            MultisigCopy.cardSignersChanged,
+            "The on-chain signers no longer match this transaction. Signing and submission are disabled."
+        )
+        let (action, note) = MultisigTxText.action(intent, canSign: true, holdsSigner: true, signers: .changed)
+        XCTAssertEqual(action, .nothing)
+        XCTAssertEqual(note, MultisigCopy.noteSignersChanged)
+
+        // Unread (still reading) offers nothing yet; unreadable says the signers are unproven.
+        XCTAssertEqual(MultisigTxText.action(intent, canSign: true, holdsSigner: true, signers: .reading).0, .nothing)
+        XCTAssertEqual(MultisigTxText.risks(nil), [MultisigCopy.cardSignersChanged])
+        XCTAssertEqual(wallet.node.writes, 0, "reviewing never writes")
+    }
+
+    /// A flag the core raises is listed in its own words: a transfer to the multisig itself.
+    func testTheCardsPanelListsTheCoresFlags() async throws {
+        let wallet = try wallet()
+        guard case let .transfer(tokenId, _, amount) = try transfer(wallet) else {
+            XCTFail("a transfer")
+            return
+        }
+        let read = try await ChainReads.authority(of: wallet.address, on: wallet.network, via: wallet.node)
+        let plan = try wallet.core.proposeMultisigTransaction(
+            read: read,
+            request: .transfer(tokenId: tokenId, recipient: wallet.address, amount: amount),
+            tokens: TokenPreferences(persisted: nil),
+            confirmResend: false
+        )
+        let step = try await MultisigTxDriver.run(plan, network: wallet.network, transport: wallet.node)
+        guard case .proposed(let id) = step else {
+            XCTFail("proposed, got \(step)")
+            return
+        }
+        let review = try await review(wallet, id)
+        XCTAssertEqual(review.riskFlags.map(\.code), [.selfTransfer])
+        XCTAssertEqual(review.calls.first?.flags.map(\.code), [.selfTransfer])
+        XCTAssertEqual(MultisigTxText.risks(review), review.riskFlags.map(\.message))
+        XCTAssertFalse(MultisigTxText.risks(review)[0].isEmpty)
+    }
+}
+
 /// A fake node for one multisig: its authority, the recorded nonce and fee estimate, no known
 /// transaction hashes until `landed` (then every status read answers accepted on L2), and the
 /// recorded acceptance of the one write. Counts writes.
@@ -234,7 +306,7 @@ final class MultisigNode: RpcTransport, @unchecked Sendable {
 
     private let lock = NSLock()
     private let classHash: String
-    private let threshold: Int
+    private var currentThreshold: Int
     private let guids: [String]
     private let estimate: Any
     private let accepted: Any
@@ -246,6 +318,11 @@ final class MultisigNode: RpcTransport, @unchecked Sendable {
         get { lock.withLock { currentNonce } }
         set { lock.withLock { currentNonce = newValue } }
     }
+    /// The threshold the chain reports; changing it moves the signers away from any intent.
+    var threshold: Int {
+        get { lock.withLock { currentThreshold } }
+        set { lock.withLock { currentThreshold = newValue } }
+    }
     var writes: Int { lock.withLock { writeCount } }
     var landed: Bool {
         get { lock.withLock { hasLanded } }
@@ -255,7 +332,7 @@ final class MultisigNode: RpcTransport, @unchecked Sendable {
     init(account: [String: Any], proposal: [String: Any]) throws {
         classHash = try fixtureValue(account, "classHash")
         let config: [String: Any] = try fixtureValue(account, "currentConfig")
-        threshold = try fixtureValue(config, "threshold")
+        currentThreshold = try fixtureValue(config, "threshold")
         let keys: [String] = try fixtureValue(config, "signerPublicKeys")
         guids = try keys.map { key in try argentSignerGuid(publicKey: key) }
         estimate = try Self.recorded(proposal, "prepare", "starknet_estimateFee")
