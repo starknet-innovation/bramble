@@ -36,6 +36,7 @@ import org.bramble.wallet.design.LocalToastAnchor
 import org.bramble.wallet.design.TOAST_LIFETIME_MS
 import org.bramble.wallet.design.Toast
 import org.bramble.wallet.design.brambleTween
+import org.bramble.wallet.ui.ledger.LedgerSignSheet
 import org.bramble.wallet.ui.onboarding.OnboardingFlow
 import org.bramble.wallet.ui.wallet.WalletShell
 
@@ -58,6 +59,8 @@ fun Root(store: WalletStore) {
         CompositionLocalProvider(LocalToastAnchor provides anchor) { RouteContent(store) }
         val above = anchor.value?.let { top -> with(LocalDensity.current) { (height - top).toDp() } }
         ToastHost(store, Modifier.align(Alignment.BottomCenter), above)
+        // Every Ledger signature, from any flow, asks through this one sheet.
+        LedgerSignSheet(store)
     }
 }
 

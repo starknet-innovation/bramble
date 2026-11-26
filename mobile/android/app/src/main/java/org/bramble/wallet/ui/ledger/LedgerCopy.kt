@@ -3,6 +3,7 @@ package org.bramble.wallet.ui.ledger
 import org.bramble.wallet.ledger.LedgerBluetooth
 import org.bramble.wallet.ledger.LedgerConnectModel
 import org.bramble.wallet.ledger.LedgerRoute
+import org.bramble.wallet.ledger.LedgerSignStage
 import org.bramble.wallet.ledger.LedgerStage
 
 /** The words of the Ledger connect and pick screens, as iOS `LedgerCopy`. */
@@ -58,4 +59,51 @@ object LedgerCopy {
             LedgerBluetooth.LOCATION_OFF -> "Turn on Location to find your Ledger."
             LedgerBluetooth.READY -> null
         }
+}
+
+/**
+ * The words of the Ledger signing sheet, as iOS `LedgerSignCopy`: the extension's `ledgerSign.*`
+ * signing text (`review-sign.ts`), the connect steps in Bluetooth wording. Approval and signing
+ * sentences: edit them as a reviewed group, against "did we lose a fact?".
+ */
+object LedgerSignCopy {
+    /** Over the hash. */
+    const val HASH_LABEL = "Hash shown on your Ledger"
+
+    /** Under the hash. */
+    const val HASH_HELP = "Approve only if this matches your device, character for character."
+
+    /** While the device asks. */
+    const val CONFIRMING_BODY = "Approve the request on your Ledger."
+
+    /** While the core checks the app and the key. */
+    const val VERIFYING_BODY = "Checking this is the right Ledger."
+
+    /** Under a refusal. */
+    const val NOT_SIGNED = "The transaction has not been signed or broadcast."
+
+    /** Ends the plan. */
+    const val CANCEL = "Cancel transaction"
+
+    /** Signs the same transaction again. */
+    const val TRY_AGAIN = "Try again"
+
+    /** The hash's copy control. */
+    const val COPY_HASH = "Copy transaction hash"
+
+    /** Hex digits per group, as the extension renders the hash for comparison. */
+    private const val HASH_GROUP = 4
+
+    /** The sheet's heading for [stage]. */
+    fun title(stage: LedgerSignStage): String =
+        when (stage) {
+            LedgerSignStage.Idle, is LedgerSignStage.Bluetooth, LedgerSignStage.Scanning -> "Ledger connection needed"
+            is LedgerSignStage.Connecting -> "Connecting securely"
+            LedgerSignStage.Checking -> "Verifying the right account"
+            is LedgerSignStage.Confirming -> "Approve on your Ledger"
+            is LedgerSignStage.Refused -> "Ledger needs attention"
+        }
+
+    /** `0x` and the 64 digits in groups of four; the copied value stays unbroken. */
+    fun grouped(hash: String): String = "0x " + hash.removePrefix("0x").chunked(HASH_GROUP).joinToString(" ")
 }

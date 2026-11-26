@@ -2,12 +2,16 @@ package org.bramble.wallet.send
 
 import org.bramble.core.SendFailure
 import org.bramble.core.SendFailureCode
+import org.bramble.wallet.errors.friendlyError
 
 // The Send journey's text helpers, split from SendFlowModel.kt: the failure wording and the Half
 // shortcut's integer halving. Pure functions over core values; no state.
 
 /** The extension's wording per failure code (`SendCopy`, generated). */
 object SendFailureText {
+    /** The core's code for a device signature that did not verify on the account's key. */
+    private const val VERIFY_FAILED = "signature-verify-failed"
+
     private val reasons: Map<SendFailureCode, String> =
         mapOf(
             SendFailureCode.REVIEWED_FEE_EXCEEDED to SendCopy.reviewedFeeExceeded,
@@ -44,9 +48,22 @@ object SendFailureText {
      * filled in; the generic line for other codes.
      */
     fun message(failure: SendFailure): String {
-        val reason = reasons[failure.code] ?: return SendCopy.failureDefault
-        return SendCopy.failurePrefix +
-            reason.replace("{hash}", failure.hash ?: "").replace("{label}", failure.detail ?: "")
+        val reason = reasons[failure.code]
+        return when {
+            // A Ledger signature that did not verify reads as the Ledger catalogue's sentence.
+            failure.code == SendFailureCode.DEVICE_REFUSED -> {
+                friendlyError(failure.detail ?: VERIFY_FAILED)
+            }
+
+            reason == null -> {
+                SendCopy.failureDefault
+            }
+
+            else -> {
+                SendCopy.failurePrefix +
+                    reason.replace("{hash}", failure.hash ?: "").replace("{label}", failure.detail ?: "")
+            }
+        }
     }
 
     /** True when a failure with [code] may still have put the write on chain, so its hash is kept. */

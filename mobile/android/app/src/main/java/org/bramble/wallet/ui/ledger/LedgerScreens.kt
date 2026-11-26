@@ -31,15 +31,11 @@ import org.bramble.core.accountLabel
 import org.bramble.core.ledgerAccountCandidates
 import org.bramble.wallet.RpcClient
 import org.bramble.wallet.WalletStore
-import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.CheckRow
 import org.bramble.wallet.design.Disclosure
-import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.LocalSkin
-import org.bramble.wallet.design.MenuGroup
-import org.bramble.wallet.design.MenuRow
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.StatusLine
@@ -138,41 +134,13 @@ private fun liveModel(
 @Composable
 fun ColumnScope.LedgerConnectContent(model: LedgerConnectModel) {
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     when (val stage = model.stage) {
         is LedgerStage.Bluetooth -> {
-            val tone = if (stage.state == LedgerBluetooth.UNKNOWN) StatusTone.MUTED else StatusTone.DANGER
-            StatusLine(LedgerCopy.bluetooth(stage.state), tone)
-            when (stage.state) {
-                LedgerBluetooth.UNAUTHORIZED -> {
-                    PillButton("Open Settings", kind = PillKind.SECONDARY) { openAppSettings(context) }
-                }
-
-                LedgerBluetooth.OFF -> {
-                    PillButton("Turn on Bluetooth", kind = PillKind.SECONDARY) { askToTurnOnBluetooth(context) }
-                }
-
-                LedgerBluetooth.LOCATION_OFF -> {
-                    PillButton("Open Settings", kind = PillKind.SECONDARY) {
-                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                    }
-                }
-
-                else -> {}
-            }
+            LedgerBluetoothNotice(stage.state)
         }
 
         LedgerStage.Scanning -> {
-            Eyebrow("Ledgers nearby")
-            if (model.devices.isEmpty()) {
-                StatusLine("Searching…")
-            } else {
-                MenuGroup {
-                    model.devices.forEach { device ->
-                        MenuRow(BrambleIconName.SHIELD, device.name) { scope.launch { model.choose(device) } }
-                    }
-                }
-            }
+            LedgerDeviceList(model.devices) { device -> scope.launch { model.choose(device) } }
         }
 
         is LedgerStage.Connecting -> {
@@ -271,7 +239,7 @@ private fun LedgerRowView(
 }
 
 /** The system's prompt to turn Bluetooth on; the adapter's broadcast reports the answer. */
-private fun askToTurnOnBluetooth(context: Context) {
+internal fun askToTurnOnBluetooth(context: Context) {
     try {
         context.startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
     } catch (ignored: SecurityException) {
@@ -279,7 +247,7 @@ private fun askToTurnOnBluetooth(context: Context) {
     }
 }
 
-private fun openAppSettings(context: Context) {
+internal fun openAppSettings(context: Context) {
     val intent =
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

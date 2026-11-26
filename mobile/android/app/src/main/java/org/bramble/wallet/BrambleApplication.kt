@@ -6,6 +6,11 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.MainScope
 import org.bramble.core.WalletCore
+import org.bramble.wallet.ledger.LedgerBleDriver
+import org.bramble.wallet.ledger.LedgerBleScanner
+import org.bramble.wallet.ledger.LedgerGattLink
+import org.bramble.wallet.ledger.LedgerLinkException
+import org.bramble.wallet.ledger.LedgerSigner
 import org.bramble.wallet.security.BiometricVault
 import org.bramble.wallet.security.DeviceClock
 
@@ -34,6 +39,13 @@ class BrambleApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val walletStore = store
+        // The one Ledger signer every plan's device steps go to, for the life of the process.
+        val scanner = LedgerBleScanner(this)
+        LedgerSigner.shared =
+            LedgerSigner(scanner) { ledger ->
+                val device = scanner.device(ledger) ?: throw LedgerLinkException.Failed()
+                LedgerGattLink(this, device).apply { connect() }.let(::LedgerBleDriver)
+            }
         ProcessLifecycleOwner.get().lifecycle.addObserver(
             object : DefaultLifecycleObserver {
                 override fun onStop(owner: LifecycleOwner) = walletStore.lock()
