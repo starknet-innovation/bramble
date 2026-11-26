@@ -8,7 +8,9 @@ import Observation
 ///
 /// The core answers connect, typed-data signing and the passive reads around them. A connect or a
 /// signature is held as a card until the person approves it, denies it, or it expires; the core
-/// reviews, signs and re-checks everything at approval, so nothing here judges or signs. The
+/// reviews, signs and re-checks everything at approval, so nothing here judges or signs. Every
+/// other card (switch network, watch asset, a call batch) has no screen yet and is declined at
+/// once, and a request that needs a chain read first (`DappReply.Read`) is refused. The
 /// phishing feed is refreshed when the sink starts and on the browser's timer, as the core asks of
 /// a host.
 @MainActor
@@ -71,6 +73,8 @@ final class DappRequestSink {
     /// The cards waiting, oldest first.
     private(set) var cards: [Card] = []
     @ObservationIgnored private let session: DappSession
+    @ObservationIgnored private let core: WalletCore
+    @ObservationIgnored private let rpc: RpcTransport
     @ObservationIgnored private let http: PortfolioTransport
     @ObservationIgnored private let now: () -> Double
     @ObservationIgnored private var pageIds: [UInt64: String] = [:]
@@ -83,10 +87,13 @@ final class DappRequestSink {
     init(
         core: WalletCore,
         tokens: TokenPreferences = TokenPreferences(persisted: nil),
+        rpc: RpcTransport = RpcTransports.launch,
         http: PortfolioTransport = BoundedHttp.shared,
         now: @escaping () -> Double = { Date().timeIntervalSince1970 * DappRequestSink.millisecondsPerSecond }
     ) {
         session = DappSession(wallet: core, tokens: tokens)
+        self.core = core
+        self.rpc = rpc
         self.http = http
         self.now = now
     }
@@ -112,13 +119,29 @@ final class DappRequestSink {
         } catch {
             return .now(Self.json(id: request.id, error: Self.unknownError))
         }
-        if case let .pending(approvalId) = reply {
+        switch reply {
+        case let .pending(approvalId):
+            if !isShown(approvalId) {
+                let settled = session.deny(approvalId: approvalId, nowMs: now())
+                guard let answer = settled.first(where: { $0.requestId == requestId })?.reply else {
+                    return .now(Self.json(id: request.id, error: Self.userRefused))
+                }
+                return .now(Self.json(id: request.id, reply: answer))
+            }
             pageIds[requestId] = request.id
             heldCards[requestId] = approvalId
             reload()
             return .held(requestId)
+
+        case .read:
+            // wallet_deploymentData and wallet_watchAsset read the chain first; neither is answered
+            // on mobile yet, so the read is dropped and the page refused, as before v0.11.0.
+            session.withdraw(requestIds: [requestId])
+            return .now(Self.json(id: request.id, error: Self.unknownError))
+
+        case .result, .error:
+            return .now(Self.json(id: request.id, reply: reply))
         }
-        return .now(Self.json(id: request.id, reply: reply))
     }
 
     /// The person approved connection `card`, sharing `accountId`, which must be the active account.
@@ -126,11 +149,35 @@ final class DappRequestSink {
         finish(session.approveConnect(approvalId: card.id, reviewedAccountId: accountId, nowMs: now()))
     }
 
-    /// The person approved signing `card` with the account it was reviewed for.
-    func sign(_ card: Card) -> [Settled] {
+    /// The person approved signing `card` with the account it was reviewed for. A Ready or Braavos
+    /// account's live state is read first, each read posted to one endpoint that proved the card's
+    /// chain (a failed post is passed on empty, which the core refuses); the core then signs or
+    /// refuses. A Ledger account's device step is cancelled, so its request ends refused.
+    func sign(_ card: Card) async -> [Settled] {
         guard let sign = card.sign else { return [] }
-        let settled = session.approveSignTypedData(approvalId: card.id, reviewedAccountId: sign.accountId, nowMs: now())
-        return finish(settled)
+        var endpoint: RpcEndpoint?
+        var step = session.approveSignTypedData(approvalId: card.id, reviewedAccountId: sign.accountId, nowMs: now())
+        while true {
+            switch step {
+            case let .read(network, id, body):
+                let bound = endpoint ?? RpcEndpoint(network: endpointNetwork(network, wallet: core), transport: rpc)
+                endpoint = bound
+                // No purpose comes with the read, so the endpoint proves the chain with its own probe.
+                let reply = await bound.exchange(id: id, body: body, purpose: .accountSigner, write: false)
+                guard case let .rpc(_, text, _) = reply else {
+                    step = session.answerSignRead(approvalId: card.id, id: id, body: "")
+                    continue
+                }
+                step = session.answerSignRead(approvalId: card.id, id: id, body: text)
+
+            case .device, .deviceRetry:
+                // No Ledger signer on mobile yet: refuse rather than hang. P8 wires the device here.
+                step = session.cancelSignDevice(approvalId: card.id)
+
+            case let .settled(settled):
+                return finish(settled)
+            }
+        }
     }
 
     /// Whether the blocklist refuses `origin`, so the browser can stop a listed page before it loads.
@@ -166,6 +213,23 @@ final class DappRequestSink {
         reload()
     }
 
+    /// Whether `approvalId` is a card this app has a screen for: a connection or a signature.
+    private func isShown(_ approvalId: String) -> Bool {
+        guard let card = session.pendingApprovals(nowMs: now()).first(where: { $0.approvalId == approvalId })?.card
+        else { return false }
+        return Self.isShown(card)
+    }
+
+    private static func isShown(_ card: DappCard) -> Bool {
+        switch card {
+        case .connect, .signTypedData:
+            true
+
+        case .switchChain, .watchAsset, .invoke:
+            false
+        }
+    }
+
     private func finish(_ settled: [DappSettled]) -> [Settled] {
         reload()
         return settled.compactMap { item in
@@ -176,7 +240,7 @@ final class DappRequestSink {
     }
 
     private func reload() {
-        cards = session.pendingApprovals(nowMs: now()).map { approval in
+        cards = session.pendingApprovals(nowMs: now()).filter { Self.isShown($0.card) }.map { approval in
             Card(
                 id: approval.approvalId,
                 origin: approval.origin,
@@ -188,7 +252,10 @@ final class DappRequestSink {
     }
 
     private static func signRequest(_ card: DappCard) -> SignRequest? {
-        guard case let .signTypedData(accountId, address, _, summary, json, calls, flags) = card else { return nil }
+        // ponytail: the card's decoded `domain`/`message` rows are not shown; the sheet shows the
+        // exact document. Rendering them is a sign-sheet redesign, not part of the v0.11.0 bump.
+        guard case let .signTypedData(accountId, address, _, summary, json, _, _, outsideExecution, calls, flags) = card
+        else { return nil }
         return SignRequest(
             accountId: accountId,
             address: address,
@@ -196,16 +263,9 @@ final class DappRequestSink {
             document: indented(json),
             calls: calls,
             risks: flags.map(\.message),
-            outsideExecution: isOutsideExecution(summary: summary),
+            outsideExecution: outsideExecution,
             poisoned: flags.contains { $0.code == .addressPoisoning }
         )
-    }
-
-    /// Whether a card's summary (`"<primaryType> · <domain.name>"`, or the primary type alone) names
-    /// an `OutsideExecution`, the extension's `signRequestWarnings` test. The primary type is ASCII
-    /// (the core's name grammar), so the first segment is exactly it.
-    static func isOutsideExecution(summary: String) -> Bool {
-        summary == "OutsideExecution" || summary.hasPrefix("OutsideExecution · ")
     }
 
     /// `json` re-indented one value per line: it is never parsed, so no number or key order can
@@ -298,7 +358,7 @@ final class DappRequestSink {
         case let .error(code, message, data):
             json(id: id, error: (Int(code), message), data: data)
 
-        case .pending:
+        case .pending, .read:
             json(id: id, error: unknownError)
         }
     }

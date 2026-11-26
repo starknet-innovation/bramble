@@ -2,10 +2,18 @@ package org.bramble.wallet
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
+import org.bramble.core.AccountFamily
 import org.bramble.core.AccountRecord
+import org.bramble.core.DappReply
+import org.bramble.core.DappSession
+import org.bramble.core.DappSignStep
 import org.bramble.core.HttpOutcome
+import org.bramble.core.LedgerAccountRequest
+import org.bramble.core.LedgerScheme
 import org.bramble.core.NetworkId
 import org.bramble.core.SiteWarning
+import org.bramble.core.TokenPreferences
 import org.bramble.core.WalletCore
 import org.bramble.wallet.browser.DappCopy
 import org.bramble.wallet.browser.DappRequest
@@ -125,7 +133,7 @@ class DappRequestSinkTest {
         assertTrue(sign.document.contains(""""content": "hello""""))
         assertFalse(sign.poisoned)
 
-        val settled = sink.sign(card).single()
+        val settled = runBlocking { sink.sign(card) }.single()
         assertEquals(requestId, settled.requestId)
         assertEquals(2, JSONObject(settled.json).getJSONArray("result").length())
         assertTrue(sink.cards.isEmpty())
@@ -201,7 +209,7 @@ class DappRequestSinkTest {
         held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
         val card = sink.cards.single()
         assertTrue(card.sign!!.poisoned)
-        val reply = JSONObject(sink.sign(card).single().json)
+        val reply = JSONObject(runBlocking { sink.sign(card) }.single().json)
         assertFalse(reply.has("result"))
         assertTrue(reply.has("error"))
     }
@@ -214,7 +222,7 @@ class DappRequestSinkTest {
         val card = sink.cards.single()
         sink.pageGone()
         assertTrue(sink.cards.isEmpty())
-        assertTrue(sink.sign(card).isEmpty())
+        assertTrue(runBlocking { sink.sign(card) }.isEmpty())
     }
 
     @Test
@@ -249,6 +257,72 @@ class DappRequestSinkTest {
             assertTrue(method, now(sink.answer(request(method), NetworkId.MAINNET)).has("error"))
         }
         assertTrue(sink.cards.isEmpty())
+    }
+
+    /** A Ledger OpenZeppelin account on Mainnet, active and connected; any chain read fails the test. */
+    private fun ledgerConnected(): Triple<WalletCore, DappRequestSink, AccountRecord> {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = File(context.cacheDir, UUID.randomUUID().toString())
+        val core = WalletCore(dir.absolutePath, DeviceClock(context.contentResolver))
+        core.createWallet("a strong password", 12u)
+        val ledger =
+            core.addLedgerAccount(
+                LedgerAccountRequest(
+                    NetworkId.MAINNET,
+                    AccountFamily.OPEN_ZEPPELIN,
+                    LedgerScheme.BRAMBLE,
+                    0u,
+                    "0x1ed6e5",
+                ),
+            )
+        assertTrue(ledger.ledger)
+        val noRpc = RpcPost { _, _, _ -> throw AssertionError("no read expected") }
+        val sink = DappRequestSink(core, rpc = noRpc, http = { HttpOutcome(0u, null, null, false) })
+        held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
+        sink.approve(sink.cards.single(), ledger.id)
+        return Triple(core, sink, ledger)
+    }
+
+    /**
+     * The core asks a Ledger account's device for the signature; with no signer on mobile yet, the
+     * sink cancels it, so the page is refused (163) rather than left waiting.
+     */
+    @Test
+    fun ledgerTypedDataEndsRefused() {
+        val (core, sink, ledger) = ledgerConnected()
+        val requestId =
+            held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", typedData()), NetworkId.MAINNET))
+        val card = sink.cards.single()
+        assertEquals(ledger.id, card.sign!!.accountId)
+        val settled = runBlocking { sink.sign(card) }.single()
+        assertEquals(requestId, settled.requestId)
+        assertEquals(163, JSONObject(settled.json).getJSONObject("error").getInt("code"))
+        assertTrue(sink.cards.isEmpty())
+
+        // The same card on the core alone stops at the device, so the refusal above is the cancel.
+        val session = DappSession(core, TokenPreferences(null))
+        val pending = session.request(origin, "wallet_signTypedData", typedData(), NetworkId.MAINNET, 2u)
+        val approvalId = (pending as DappReply.Pending).approvalId
+        assertTrue(session.approveSignTypedData(approvalId, ledger.id, 0.0) is DappSignStep.Device)
+        session.cancelSignDevice(approvalId)
+    }
+
+    /** A switch-network card has no screen yet: it is declined at once (113), never shown. */
+    @Test
+    fun switchCardDeclinedAtOnce() {
+        val (sink, _) = connected()
+        val params = """{"chainId":"0x534e5f5345504f4c4941"}"""
+        val reply = now(sink.answer(DappRequest(origin, id, "wallet_switchStarknetChain", params), NetworkId.MAINNET))
+        assertEquals(113, reply.getJSONObject("error").getInt("code"))
+        assertTrue(sink.cards.isEmpty())
+    }
+
+    /** Deployment data needs a chain read the app does not make yet: refused (163) at once. */
+    @Test
+    fun deploymentDataRefused() {
+        val (sink, _) = connected()
+        val reply = now(sink.answer(request("wallet_deploymentData"), NetworkId.MAINNET))
+        assertEquals(163, reply.getJSONObject("error").getInt("code"))
     }
 
     @Test

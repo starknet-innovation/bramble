@@ -147,7 +147,7 @@ final class DappRequestSinkTests: XCTestCase {
 
     /// A connected site's typed data is held as a sign card for the active account, and Sign
     /// answers the page with the signature.
-    func testSigningTypedDataAnswersTheSignature() throws {
+    func testSigningTypedDataAnswersTheSignature() async throws {
         let (sink, account) = try connected()
         let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: typedData())
         let requestId = try held(sink.answer(sign, shown: .mainnet))
@@ -158,7 +158,7 @@ final class DappRequestSinkTests: XCTestCase {
         XCTAssertTrue(request.document.contains(#""content": "hello""#))
         XCTAssertFalse(request.poisoned)
 
-        let settled = sink.sign(card)
+        let settled = await sink.sign(card)
         XCTAssertEqual(settled.map(\.requestId), [requestId])
         let signature = try object(try XCTUnwrap(settled.first).json)["result"] as? [String]
         XCTAssertEqual(signature?.count, 2)
@@ -198,15 +198,6 @@ final class DappRequestSinkTests: XCTestCase {
             "}"
         ].joined(separator: "\n")
         XCTAssertEqual(DappRequestSink.indented(json), expected)
-    }
-
-    /// The outside-execution warning follows the primary type, as the extension's does, so an
-    /// `OutsideExecution` with no calls still carries it.
-    func testOutsideExecutionIsReadFromThePrimaryType() {
-        XCTAssertTrue(DappRequestSink.isOutsideExecution(summary: "OutsideExecution · Account.execute_from_outside"))
-        XCTAssertTrue(DappRequestSink.isOutsideExecution(summary: "OutsideExecution"))
-        XCTAssertFalse(DappRequestSink.isOutsideExecution(summary: "Mail · OutsideExecution"))
-        XCTAssertFalse(DappRequestSink.isOutsideExecution(summary: "OutsideExecutionV2 · App"))
     }
 
     /// A cancelled sign card holds the site off for the cooldown too, as the extension's surface does.
@@ -287,26 +278,122 @@ extension DappRequestSinkTests {
     }
 
     /// A card paying a lookalike of a known address can only be denied: Sign answers a refusal.
-    func testALookalikePaymentIsNeverSigned() throws {
+    func testALookalikePaymentIsNeverSigned() async throws {
         let (sink, account) = try connected()
         let params = outsideExecution("transfer", [lookalike(account.address), "0x1", "0x0"])
         let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: params)
         _ = try held(sink.answer(sign, shown: .mainnet))
         let card = try XCTUnwrap(sink.cards.first)
         XCTAssertTrue(try XCTUnwrap(card.sign).poisoned)
-        let reply = try object(try XCTUnwrap(sink.sign(card).first).json)
+        let settled = await sink.sign(card)
+        let reply = try object(try XCTUnwrap(settled.first).json)
         XCTAssertNil(reply["result"])
         XCTAssertNotNil(reply["error"])
     }
 
     /// A sign card the page left can no longer be signed.
-    func testALeftPagesSignCardIsNeverSigned() throws {
+    func testALeftPagesSignCardIsNeverSigned() async throws {
         let (sink, _) = try connected()
         let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: typedData())
         _ = try held(sink.answer(sign, shown: .mainnet))
         let card = try XCTUnwrap(sink.cards.first)
         sink.pageGone()
         XCTAssertTrue(sink.cards.isEmpty)
-        XCTAssertTrue(sink.sign(card).isEmpty)
+        let settled = await sink.sign(card)
+        XCTAssertTrue(settled.isEmpty)
+    }
+}
+
+/// wallet-core v0.11.0's sign loop and the cards this app has no screen for.
+@MainActor
+extension DappRequestSinkTests {
+    /// A transport that must never be reached: an OpenZeppelin account signs with no live read.
+    private struct NoRpc: RpcTransport {
+        func post(_: String, to _: URL, write _: Bool) throws -> String {
+            XCTFail("no read expected")
+            throw RpcTransportFailure.unreachable
+        }
+    }
+
+    /// A Ledger OpenZeppelin account on Mainnet, active and connected to the site.
+    private func ledgerConnected(_ core: WalletCore) throws -> (DappRequestSink, AccountRecord) {
+        let ledger = try core.addLedgerAccount(request: LedgerAccountRequest(
+            network: .mainnet, family: .openZeppelin, scheme: .bramble, accountIndex: 0, publicKeyX: "0x1ed6e5"
+        ))
+        XCTAssertTrue(ledger.ledger)
+        let sink = DappRequestSink(core: core, rpc: NoRpc(), http: NoNetwork())
+        _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
+        _ = sink.approve(try XCTUnwrap(sink.cards.first), accountId: ledger.id)
+        return (sink, ledger)
+    }
+
+    /// A software account's approval settles in one step: no read, no device.
+    func testASoftwareAccountSettlesWithoutAReadOrDevice() async throws {
+        let (core, account) = try wallet()
+        let sink = DappRequestSink(core: core, rpc: NoRpc(), http: NoNetwork())
+        _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
+        _ = sink.approve(try XCTUnwrap(sink.cards.first), accountId: account.id)
+        let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: typedData())
+        let requestId = try held(sink.answer(sign, shown: .mainnet))
+        let settled = await sink.sign(try XCTUnwrap(sink.cards.first))
+        XCTAssertEqual(settled.map(\.requestId), [requestId])
+        XCTAssertEqual((try object(try XCTUnwrap(settled.first).json)["result"] as? [String])?.count, 2)
+    }
+
+    /// The core asks a Ledger account's device for the signature; with no signer on mobile yet, the
+    /// sink cancels it, so the page is refused (163) rather than left waiting.
+    func testALedgerAccountsTypedDataEndsRefused() async throws {
+        let (core, _) = try wallet()
+        let (sink, ledger) = try ledgerConnected(core)
+        let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: typedData())
+        let requestId = try held(sink.answer(sign, shown: .mainnet))
+        let card = try XCTUnwrap(sink.cards.first)
+        XCTAssertEqual(card.sign?.accountId, ledger.id)
+
+        let settled = await sink.sign(card)
+        XCTAssertEqual(settled.map(\.requestId), [requestId])
+        let reply = try object(try XCTUnwrap(settled.first).json)
+        XCTAssertNil(reply["result"])
+        XCTAssertEqual((reply["error"] as? [String: Any])?["code"] as? Int, 163)
+        XCTAssertTrue(sink.cards.isEmpty)
+
+        // The same card on the core alone stops at the device, so the refusal above is the cancel.
+        let session = DappSession(wallet: core, tokens: TokenPreferences(persisted: nil))
+        let pending = try session.request(
+            origin: origin, method: "wallet_signTypedData", params: typedData(), shown: .mainnet, requestId: 2
+        )
+        guard case let .pending(approvalId) = pending else {
+            XCTFail("a connected site's typed data is held")
+            return
+        }
+        let step = session.approveSignTypedData(approvalId: approvalId, reviewedAccountId: ledger.id, nowMs: 0)
+        guard case .device = step else {
+            XCTFail("a Ledger account signs on its device")
+            return
+        }
+        _ = session.cancelSignDevice(approvalId: approvalId)
+    }
+
+    /// A switch-network card has no screen yet: it is declined at once (113), never shown.
+    func testASwitchNetworkCardIsDeclinedAtOnce() throws {
+        let (sink, _) = try connected()
+        let params = #"{"chainId":"0x534e5f5345504f4c4941"}"#
+        let switchChain = DappRequest(origin: origin, id: id, method: "wallet_switchStarknetChain", params: params)
+        guard case let .now(json) = sink.answer(switchChain, shown: .mainnet) else {
+            XCTFail("a switch card must not be held")
+            return
+        }
+        XCTAssertEqual((try object(json)["error"] as? [String: Any])?["code"] as? Int, 113)
+        XCTAssertTrue(sink.cards.isEmpty)
+    }
+
+    /// Deployment data needs a chain read the app does not make yet: refused (163) at once.
+    func testDeploymentDataIsRefusedWithoutARead() throws {
+        let (sink, _) = try connected()
+        guard case let .now(json) = sink.answer(request("wallet_deploymentData"), shown: .mainnet) else {
+            XCTFail("deployment data must not be held")
+            return
+        }
+        XCTAssertEqual((try object(json)["error"] as? [String: Any])?["code"] as? Int, 163)
     }
 }
