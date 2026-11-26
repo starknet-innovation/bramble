@@ -95,6 +95,27 @@ final class DappRequestSinkTests: XCTestCase {
         XCTAssertEqual((try object(json)["result"] as? [String: Any])?["accounts"] as? [String], [])
     }
 
+    func testACancelledSiteWaitsOutTheCooldown() throws {
+        let (core, _) = try wallet()
+        var clock = 1_000_000.0
+        let sink = DappRequestSink(core: core, http: NoNetwork()) { clock }
+        _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
+        _ = sink.deny(try XCTUnwrap(sink.cards.first))
+
+        // Asking again at once is refused without a card.
+        guard case let .now(json) = sink.answer(request("wallet_requestAccounts"), shown: .mainnet) else {
+            XCTFail("a connect inside the cooldown is refused at once")
+            return
+        }
+        XCTAssertEqual((try object(json)["error"] as? [String: Any])?["code"] as? Int, 113)
+        XCTAssertTrue(sink.cards.isEmpty)
+
+        // Once it has passed, the site may ask again.
+        clock += DappRequestSink.surfaceCooldownMs
+        _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
+        XCTAssertEqual(sink.cards.count, 1)
+    }
+
     func testSigningIsRefusedWithoutACard() throws {
         let (core, _) = try wallet()
         let sink = DappRequestSink(core: core, http: NoNetwork())

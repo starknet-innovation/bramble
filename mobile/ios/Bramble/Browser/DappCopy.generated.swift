@@ -13,6 +13,7 @@ enum DappCopy {
     static let connectSelectAccount = "Select an account on this network to share it."
     static let connectShares = "Shares this account's address with this site until you disconnect it."
     static let connectTitle = "Connection request"
+    static let leaveSite = "Leave site"
     static let siteInsightBlocklisted = "This domain is on the wallet blocklist of known phishing and scam sites."
     static let siteInsightConnectedBefore = "You have connected to this site before."
     static let siteInsightFirstSeen = "First time this wallet has seen this site; you have no prior history with it."

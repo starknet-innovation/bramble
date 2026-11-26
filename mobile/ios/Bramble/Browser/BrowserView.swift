@@ -48,6 +48,9 @@ struct BrowserView: View {
             SkinProvider {
                 ConnectSheet(card: card) { accountId in
                     if let accountId { bridge?.approve(card, accountId: accountId) } else { bridge?.deny(card) }
+                } leave: {
+                    bridge?.deny(card)
+                    back()
                 }
             }
             .environment(store)
@@ -77,13 +80,19 @@ struct BrowserView: View {
 
 /// The connection card (the extension's `approval-connect-card.ts`): the site, its warnings, the
 /// account it would see, and Cancel before Connect. The core shares the active account, so
-/// choosing another account switches to it first. A blocked site can only be cancelled.
+/// choosing another account switches to it first. A blocked site can only be cancelled. Leave site
+/// cancels and closes the browser, so a site that keeps asking cannot hold the person on its card.
 private struct ConnectSheet: View {
+    // ponytail: the extension has no tap delay; 500 ms against a page timing a tap onto Connect.
+    private static let armDelayMs = 500
+
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
+    @State private var armed = false
     let card: DappRequestSink.ConnectCard
     /// The account approved, or nil for Cancel.
     let decide: (String?) -> Void
+    let leave: () -> Void
 
     var body: some View {
         ScrollView {
@@ -107,12 +116,18 @@ private struct ConnectSheet: View {
                 HStack(spacing: BrambleSpace.sm) {
                     PillButton(DappCopy.connectCancel, kind: .secondary) { decide(nil) }
                     PillButton(DappCopy.connectAction, icon: .check) { decide(store.activeRecord?.id) }
-                        .disabled(card.blocked || store.activeRecord == nil || store.busy)
+                        .disabled(!armed || card.blocked || store.activeRecord == nil || store.busy)
                 }
+                PillButton(DappCopy.leaveSite, kind: .ghost, action: leave)
             }
             .padding(BrambleMetrics.Screen.shellPadding)
         }
         .background(skin.bg.ignoresSafeArea())
+        .task(id: card.id) {
+            armed = false
+            try? await Task.sleep(for: .milliseconds(Self.armDelayMs))
+            armed = true
+        }
     }
 
     private func accountRow(_ record: AccountRecord) -> some View {
@@ -283,7 +298,23 @@ final class BrowserBridge: NSObject, WKScriptMessageHandlerWithReply, WKNavigati
     ) {
         let mainFrame = navigationAction.targetFrame?.isMainFrame ?? true
         let secure = DappOrigin.origin(of: navigationAction.request.url) != nil
-        decisionHandler(mainFrame && !secure ? .cancel : .allow)
+        let cancelled = mainFrame && !secure
+        if cancelled { restoreAddress() }
+        decisionHandler(cancelled ? .cancel : .allow)
+    }
+
+    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation?, withError _: Error) {
+        restoreAddress()
+    }
+
+    /// The page's process died: its cards and held replies go with it.
+    func webViewWebContentProcessDidTerminate(_: WKWebView) {
+        release()
+    }
+
+    /// Puts the committed page back in the address bar after a navigation fails or is refused.
+    private func restoreAddress() {
+        if let current = page { committed(current) }
     }
 
     private func deliver(_ settled: [DappRequestSink.Settled]) {

@@ -23,6 +23,7 @@ const DAPP_MOBILE_ONLY = {
   addressPlaceholder: "Site address",
   browserTitle: "Browser",
   browserUnavailable: "Browser unavailable",
+  leaveSite: "Leave site",
 } as const;
 
 const camel = (key: string): string =>

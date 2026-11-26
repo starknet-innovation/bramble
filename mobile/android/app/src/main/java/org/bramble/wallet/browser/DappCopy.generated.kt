@@ -14,6 +14,7 @@ object DappCopy {
     const val connectSelectAccount = "Select an account on this network to share it."
     const val connectShares = "Shares this account's address with this site until you disconnect it."
     const val connectTitle = "Connection request"
+    const val leaveSite = "Leave site"
     const val siteInsightBlocklisted = "This domain is on the wallet blocklist of known phishing and scam sites."
     const val siteInsightConnectedBefore = "You have connected to this site before."
     const val siteInsightFirstSeen = "First time this wallet has seen this site; you have no prior history with it."

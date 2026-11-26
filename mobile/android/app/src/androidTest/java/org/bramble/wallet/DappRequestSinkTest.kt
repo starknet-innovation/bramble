@@ -31,13 +31,15 @@ class DappRequestSinkTest {
     private val origin = "https://app.example.com"
     private val id = "0f8fad5b-d9cb-469f-a165-70867728950e"
 
-    private fun sink(): Pair<DappRequestSink, AccountRecord> {
+    private fun sink(
+        now: () -> Double = { System.currentTimeMillis().toDouble() },
+    ): Pair<DappRequestSink, AccountRecord> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val dir = File(context.cacheDir, UUID.randomUUID().toString())
         val core = WalletCore(dir.absolutePath, DeviceClock(context.contentResolver))
         core.createWallet("a strong password", 12u)
         val account = core.activeAccount() ?: core.addRegularAccount(NetworkId.MAINNET)
-        return DappRequestSink(core, http = { HttpOutcome(0u, null, null, false) }) to account
+        return DappRequestSink(core, http = { HttpOutcome(0u, null, null, false) }, now = now) to account
     }
 
     private fun request(method: String) = DappRequest(origin, id, method)
@@ -91,6 +93,24 @@ class DappRequestSinkTest {
         assertTrue(sink.approve(card, account.id).isEmpty())
         val accounts = now(sink.answer(request("mc_accounts"), NetworkId.MAINNET))
         assertEquals(0, accounts.getJSONObject("result").getJSONArray("accounts").length())
+    }
+
+    @Test
+    fun cancelledSiteWaitsOutCooldown() {
+        var clock = 1_000_000.0
+        val (sink, _) = sink { clock }
+        held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
+        sink.deny(sink.cards.single())
+
+        // Asking again at once is refused without a card.
+        val again = now(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
+        assertEquals(113, again.getJSONObject("error").getInt("code"))
+        assertTrue(sink.cards.isEmpty())
+
+        // Once it has passed, the site may ask again.
+        clock += DappRequestSink.SURFACE_COOLDOWN_MS
+        held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
+        assertEquals(1, sink.cards.size)
     }
 
     @Test

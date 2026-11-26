@@ -68,6 +68,9 @@ class DappRequestSink(
 
     /** The card each held request waits on, by request number. */
     private val heldCards = mutableMapOf<ULong, String>()
+
+    /** When the person last cancelled each site's card. */
+    private val deniedAt = mutableMapOf<String, Double>()
     private var lastRequestId: ULong = 0u
 
     /** The connection cards waiting, oldest first. */
@@ -82,6 +85,10 @@ class DappRequestSink(
         request: DappRequest,
         shown: NetworkId,
     ): Answer {
+        val cooling = deniedAt[request.origin]?.let { now() - it < SURFACE_COOLDOWN_MS } == true
+        if (cooling && request.method in CONNECT_METHODS) {
+            return Answer.Now(errorJson(request.id, USER_REFUSED, USER_REFUSED_MESSAGE, null))
+        }
         lastRequestId += 1u
         val requestId = lastRequestId
         val reply =
@@ -115,7 +122,10 @@ class DappRequestSink(
     ): List<Settled> = finish(session.approveConnect(card.id, accountId, now()))
 
     /** The person declined [card]. */
-    fun deny(card: ConnectCard): List<Settled> = finish(session.denyConnect(card.id, now()))
+    fun deny(card: ConnectCard): List<Settled> {
+        deniedAt[card.origin] = now()
+        return finish(session.denyConnect(card.id, now()))
+    }
 
     /** Requests whose cards expired, answered as declined. Call it on a timer. */
     fun settleExpired(): List<Settled> = finish(session.settleExpired())
@@ -159,6 +169,18 @@ class DappRequestSink(
     companion object {
         private const val UNKNOWN_ERROR = 163L
         private const val UNKNOWN_ERROR_MESSAGE = "The wallet request failed"
+        private const val USER_REFUSED = 113L
+        private const val USER_REFUSED_MESSAGE = "The user refused the operation"
+
+        /**
+         * The extension's `SURFACE_COOLDOWN_MS` (`approval-surface.ts`): after the person cancels a
+         * site's card, that site's next connect is refused without a card for this long, so a page
+         * cannot put the card straight back.
+         */
+        const val SURFACE_COOLDOWN_MS = 1_000.0
+
+        /** The connect methods, the only ones that raise a card in this slice. */
+        private val CONNECT_METHODS = setOf("wallet_requestAccounts", "mc_requestAccounts")
 
         /** A site warning in the extension's words (`insight-messages.ts`). */
         fun warningCopy(warning: SiteWarning): String =

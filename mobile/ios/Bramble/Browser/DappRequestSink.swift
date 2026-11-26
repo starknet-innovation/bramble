@@ -40,6 +40,13 @@ final class DappRequestSink {
 
     private static let unknownError = (code: 163, message: "The wallet request failed")
     private static let millisecondsPerSecond = 1_000.0
+    private static let userRefused = (code: 113, message: "The user refused the operation")
+    /// The extension's `SURFACE_COOLDOWN_MS` (`approval-surface.ts`): after the person cancels a
+    /// site's card, that site's next connect is refused without a card for this long, so a page
+    /// cannot put the card straight back.
+    static let surfaceCooldownMs = 1_000.0
+    /// The connect methods, the only ones that raise a card in this slice.
+    private static let connectMethods: Set<String> = ["wallet_requestAccounts", "mc_requestAccounts"]
 
     /// The connection cards waiting, oldest first.
     private(set) var cards: [ConnectCard] = []
@@ -50,6 +57,8 @@ final class DappRequestSink {
     /// The card each held request waits on, by request number.
     @ObservationIgnored private var heldCards: [UInt64: String] = [:]
     @ObservationIgnored private var lastRequestId: UInt64 = 0
+    /// When the person last cancelled each site's card.
+    @ObservationIgnored private var deniedAt: [String: Double] = [:]
 
     init(
         core: WalletCore,
@@ -64,6 +73,10 @@ final class DappRequestSink {
     /// Answers `request`; `shown` is the network the browser shows, which answers a locked chain-id
     /// read only. A held request settles later through `approve`, `deny` or `settleExpired`.
     func answer(_ request: DappRequest, shown: NetworkId) -> Answer {
+        if Self.connectMethods.contains(request.method), let denied = deniedAt[request.origin],
+           now() - denied < Self.surfaceCooldownMs {
+            return .now(Self.json(id: request.id, error: Self.userRefused))
+        }
         lastRequestId += 1
         let requestId = lastRequestId
         let reply: DappReply
@@ -94,7 +107,8 @@ final class DappRequestSink {
 
     /// The person declined `card`.
     func deny(_ card: ConnectCard) -> [Settled] {
-        finish(session.denyConnect(approvalId: card.id, nowMs: now()))
+        deniedAt[card.origin] = now()
+        return finish(session.denyConnect(approvalId: card.id, nowMs: now()))
     }
 
     /// Requests whose cards expired, answered as declined. Call it on a timer.
