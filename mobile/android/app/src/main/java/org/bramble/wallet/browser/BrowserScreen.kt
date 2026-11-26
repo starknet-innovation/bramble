@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebStorage
@@ -84,13 +86,14 @@ fun BrowserScreen(
         if (script == null) {
             StatusLine(DappCopy.browserUnavailable, StatusTone.DANGER)
         } else if (open != null) {
-            DappWebView(open, script, bridge)
+            DappWebView(open, script, bridge, back)
         }
     }
     bridge.sink.cards.firstOrNull()?.let { card ->
-        ConnectSheet(store, card) { accountId ->
-            bridge.decide(card, accountId)
-        }
+        ConnectSheet(store, card, leave = {
+            bridge.decide(card, null)
+            back()
+        }) { accountId -> bridge.decide(card, accountId) }
     }
 }
 
@@ -126,15 +129,16 @@ private fun providerScript(context: Context): String? =
         null
     }
 
-/** The WebView the browser shows at [url], wired to [bridge]. */
+/** The WebView the browser shows at [url], wired to [bridge]; [gone] closes the browser. */
 @Composable
 private fun DappWebView(
     url: String,
     script: String,
     bridge: BrowserBridge,
+    gone: () -> Unit,
 ) {
     AndroidView(
-        factory = { bridge.attach(WebView(it), script) },
+        factory = { bridge.attach(WebView(it), script, gone) },
         modifier = Modifier.fillMaxSize(),
         onRelease = bridge::detach,
         update = { view ->
@@ -146,20 +150,37 @@ private fun DappWebView(
     )
 }
 
+/** A message's text, or null unless it is a string: `getData` throws for an array buffer. */
+internal fun messageText(message: WebMessageCompat): String? =
+    if (message.type == WebMessageCompat.TYPE_STRING) message.data else null
+
+/** The request in [body] for [origin], or null unless it is a request the page's bridge sends. */
+private fun readRequest(
+    origin: String,
+    body: String,
+): DappRequest? {
+    if (body.length > DappRequest.MAX_BODY_BYTES) return null
+    val json = runCatching { JSONObject(body) }.getOrNull()
+    return json?.let {
+        val params = it.opt("params").takeUnless { value -> value == JSONObject.NULL }
+        DappRequest.read(origin, body.toByteArray().size, it.opt("id"), it.opt("method"), params)
+    }
+}
+
 /**
  * The native end of the page's bridge: it admits a message only from the main frame whose `https`
- * origin equals the committed page's ([DappOrigin.admit]), hands it to the one [DappRequestSink],
- * and keeps the main frame on `https`. A refused message is never answered. A held request's reply
- * goes only to the page that asked: a new page drops every held reply. `addJavascriptInterface` is
- * never used: every frame gets it and it carries no origin.
+ * origin equals the committed page's ([DappOrigin.admit]), and only as text, hands it to the one
+ * [DappRequestSink], and keeps the main frame on `https` ([BrowserClient]). A refused message is
+ * never answered. A held request's reply goes only to the page that asked: a new page drops every
+ * held reply and denies its cards. `addJavascriptInterface` is never used: every frame gets it and
+ * it carries no origin.
  */
 private class BrowserBridge(
     val sink: DappRequestSink,
     /** The network the browser shows, for a locked chain-id read. */
     var shown: NetworkId,
     private val committed: (String) -> Unit,
-) : WebViewClient(),
-    WebViewCompat.WebMessageListener {
+) : WebViewCompat.WebMessageListener {
     /** The URL last loaded from the address bar. */
     var requested: String? = null
     private var page: String? = null
@@ -182,9 +203,11 @@ private class BrowserBridge(
         accountId: String?,
     ) = deliver(if (accountId != null) sink.approve(card, accountId) else sink.deny(card))
 
+    /** Wires [view] to this bridge; [gone] closes the browser when the page's process dies. */
     fun attach(
         view: WebView,
         script: String,
+        gone: () -> Unit,
     ): WebView {
         view.settings.apply {
             javaScriptEnabled = true
@@ -195,7 +218,7 @@ private class BrowserBridge(
             safeBrowsingEnabled = true
             setSupportMultipleWindows(false)
         }
-        view.webViewClient = this
+        view.webViewClient = BrowserClient(this, gone)
         // Every origin may post: the host binds each message itself, and the script is inert outside
         // the top frame.
         WebViewCompat.addWebMessageListener(view, BRIDGE_NAME, setOf("*"), this)
@@ -205,14 +228,30 @@ private class BrowserBridge(
 
     /** Ends the page and clears what the web stored, so nothing outlives the screen. */
     fun detach(view: WebView) {
-        held.clear()
-        sink.pageGone()
+        newPage()
         WebViewCompat.removeWebMessageListener(view, BRIDGE_NAME)
         view.stopLoading()
         view.clearCache(true)
         view.destroy()
         CookieManager.getInstance().removeAllCookies(null)
         WebStorage.getInstance().deleteAllData()
+    }
+
+    /** A new document, or none: no held reply may reach it, and its cards are denied. */
+    fun newPage() {
+        held.clear()
+        sink.pageGone()
+    }
+
+    /** The main frame committed [url]. */
+    fun commit(url: String?) {
+        page = url
+        if (url != null) committed(url)
+    }
+
+    /** Puts the committed page back in the address bar after a navigation fails or is refused. */
+    fun restoreAddress() {
+        page?.let(committed)
     }
 
     override fun onPostMessage(
@@ -223,7 +262,7 @@ private class BrowserBridge(
         replyProxy: JavaScriptReplyProxy,
     ) {
         val origin = DappOrigin.admit(isMainFrame, sourceOrigin.toString(), page)
-        val body = message.data
+        val body = origin?.let { messageText(message) }
         val request = if (origin != null && body != null) readRequest(origin, body) else null
         when (val answer = request?.let { sink.answer(it, shown) }) {
             is DappRequestSink.Answer.Now -> replyProxy.postMessage(answer.json)
@@ -232,43 +271,54 @@ private class BrowserBridge(
         }
     }
 
+    private fun deliver(settled: List<DappRequestSink.Settled>) {
+        settled.forEach { held.remove(it.requestId)?.postMessage(it.json) }
+    }
+}
+
+/**
+ * The browser's navigation rules over [bridge]: the main frame stays on `https`, the address bar
+ * shows the committed page again when a navigation fails or is refused, and a dead page process
+ * closes the browser ([gone]), whose teardown denies the page's cards and clears its data.
+ */
+private class BrowserClient(
+    private val bridge: BrowserBridge,
+    private val gone: () -> Unit,
+) : WebViewClient() {
     override fun onPageStarted(
         view: WebView,
         url: String?,
         favicon: Bitmap?,
-    ) {
-        // A new document: no held reply may reach it.
-        held.clear()
-        sink.pageGone()
-    }
+    ) = bridge.newPage()
 
     override fun doUpdateVisitedHistory(
         view: WebView,
         url: String?,
         isReload: Boolean,
-    ) {
-        page = url
-        if (url != null) committed(url)
-    }
+    ) = bridge.commit(url)
 
     override fun shouldOverrideUrlLoading(
         view: WebView,
         request: WebResourceRequest,
-    ): Boolean = request.isForMainFrame && DappOrigin.origin(request.url.toString()) == null
-
-    private fun deliver(settled: List<DappRequestSink.Settled>) {
-        settled.forEach { held.remove(it.requestId)?.postMessage(it.json) }
+    ): Boolean {
+        val refused = request.isForMainFrame && DappOrigin.origin(request.url.toString()) == null
+        if (refused) bridge.restoreAddress()
+        return refused
     }
 
-    private fun readRequest(
-        origin: String,
-        body: String,
-    ): DappRequest? {
-        if (body.length > DappRequest.MAX_BODY_BYTES) return null
-        val json = runCatching { JSONObject(body) }.getOrNull()
-        return json?.let {
-            val params = it.opt("params").takeUnless { value -> value == JSONObject.NULL }
-            DappRequest.read(origin, body.toByteArray().size, it.opt("id"), it.opt("method"), params)
-        }
+    override fun onReceivedError(
+        view: WebView,
+        request: WebResourceRequest,
+        error: WebResourceError,
+    ) {
+        if (request.isForMainFrame) bridge.restoreAddress()
+    }
+
+    override fun onRenderProcessGone(
+        view: WebView,
+        detail: RenderProcessGoneDetail,
+    ): Boolean {
+        gone()
+        return true
     }
 }
