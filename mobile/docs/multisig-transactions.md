@@ -46,18 +46,27 @@ Copy is the extension's (`i18n/messages/multisig*.ts`, `review-steps-multisig.ts
   add a key ("Approvals after adding"), remove the selected key ("Approvals after removal"), and
   "Change approvals required". Success: "Signer change ready for multisig review".
 - **Import transaction.** "Intent package", the extension's import note, "Verify and import".
-- **Intent card.** The core's summary, "Out of date" when stale, each call's summary from the
-  core's review, "Signatures", "Maximum network fee" (`FeeAmount.display`), the risk panel (Send's
-  "Risk and recovery": the core's flags, in its words), one action, "Copy transaction package"
-  while collecting or ready, and "Technical details" (hash, sender as `accountLabel` with "Copy
-  sender", nonce, each call's entrypoint, contract and calldata). The review is read when the card
-  shows and whenever the intent changes, against a fresh authority read of the sender. Until it
-  says the chain's signers still match (`hasFreshAuthority`), the card offers neither Sign nor
-  Submit; when they do not, or the review cannot be read, the panel ends with "The on-chain signers
-  no longer match this transaction. Signing and submission are disabled." and the note reads "The
-  signers changed since this transaction was frozen. Signing and submission stay blocked.", as
-  the extension's card. The card's sentences are generated from the extension
-  (`MultisigCopy.generated.*`, `scripts/mobile-assets/multisig-copy.ts`).
+- **Intent card.** Its label ("Fee-updated transaction" for an open intent whose exact action a
+  stale one froze, the extension's `sameAction`; "Out of date" when stale; none otherwise, since
+  the page title already says "Reviewed transaction"), the core's summary, each call's summary
+  from the core's review, the risk panel (Send's "Risk and recovery": the core's flags, in its
+  words), "Cost" ("Maximum network fee" from `FeeAmount.display`, then "Signatures"), one action,
+  "Copy transaction package" while collecting or ready, and "Technical details" (hash, sender with
+  "Copy sender", chain ID, nonce, call count, each call's entrypoint, contract and calldata; iOS
+  shows the hash and sender whole, Android shortened). The chain ID is the multisig network's
+  (`supportedNetworks`), which the core verifies every endpoint against before it freezes an
+  intent. The review is read when the card shows and whenever the intent changes, against a fresh
+  authority read of the sender. Until it says the chain's signers still match
+  (`hasFreshAuthority`), the card offers neither Sign nor Submit; when they do not, or the review
+  cannot be read, the panel ends with "The on-chain signers no longer match this transaction.
+  Signing and submission are disabled.", the note reads "The signers changed since this
+  transaction was frozen. Signing and submission stay blocked.", and the one action is "Review
+  current signers", which opens the multisig's Signers screen, as the extension's card. The card's
+  sentences are generated from the extension (`MultisigCopy.generated.*`,
+  `scripts/mobile-assets/multisig-copy.ts`).
+- **Not yet ported.** The extension's signer-change review (threshold and signers before and
+  after, the exact additions and removals) and the class hash row: the core does not expose a
+  stored intent's config snapshot or decoded change.
 
 ## 3. Guards (all the core's; the apps only show them)
 

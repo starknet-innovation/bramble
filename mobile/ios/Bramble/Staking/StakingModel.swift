@@ -21,9 +21,10 @@ final class StakingCheck: StakingReadSteps {
 
     init(_ preparation: StakingPreparation) { self.preparation = preparation }
 
-    /// `network` with only its bundled endpoints.
-    static func bundled(_ network: NetworkInfo) -> NetworkInfo {
-        supportedNetworks().first { $0.network == network.network } ?? network
+    /// `network` with only its bundled endpoints; nil for a network the core does not bundle, so
+    /// the check is never read from the person's override and `plan` refuses the stake.
+    static func bundled(_ network: NetworkInfo) -> NetworkInfo? {
+        supportedNetworks().first { $0.network == network.network }
     }
 
     func nextCalls() -> [RpcRequest] { preparation.checkNextCalls() }

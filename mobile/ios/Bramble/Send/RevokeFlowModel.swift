@@ -182,11 +182,8 @@ final class RevokeFlowModel {
         case let .failed(failure):
             fail(failure)
 
-        case .device, .deviceRetry:
-            // Mobile signs on no device (P8), so a Ledger account's step ends here, unsigned.
-            fail(SendFailure(code: .signingFailed, hash: nil))
-
-        case .rpc, .wait:
+        case .rpc, .wait, .device, .deviceRetry:
+            // The driver answers these (`SendDriver.run`); a device step comes back as `.failed`.
             break
         }
     }

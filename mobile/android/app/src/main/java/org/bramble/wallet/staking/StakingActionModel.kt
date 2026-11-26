@@ -126,7 +126,7 @@ class StakingActionModel internal constructor(
                 // endpoints only, never the RPC override, so no one node chooses the pool.
                 val check =
                     StakingSteps(preparation::checkNextCalls, preparation::checkAccept, preparation::checkRestart)
-                model.reads.drive(check, bundledNetwork(model.network))
+                bundledNetwork(model.network)?.let { model.reads.drive(check, it) }
                 val feeBalance = store.portfolio.rawBalances(model.network)["STRK"]
                 val staking = withContext(Dispatchers.Default) { preparation.plan(model.clock(), feeBalance) }
                 sentence = staking.review

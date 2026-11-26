@@ -5,6 +5,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.bramble.core.NetworkInfo
 import org.bramble.core.RpcPurpose
+import org.bramble.core.SendFailure
+import org.bramble.core.SendFailureCode
 import org.bramble.core.SendStep
 import org.bramble.core.StepReply
 import org.bramble.core.TransferPlan
@@ -32,7 +34,10 @@ class SendDriver(
 ) {
     private val bound = RpcEndpoint(network, transport)
 
-    /** Advances from [reply] until the plan needs the user: Review, Broadcast, Finished, Failed. */
+    /**
+     * Advances from [reply] until the plan needs the user: Review, Broadcast, Finished, Failed. A
+     * device step is Failed as `SIGNING_FAILED`.
+     */
     suspend fun run(
         reply: StepReply,
         onStep: (SendStep) -> Unit = {},
@@ -50,6 +55,12 @@ class SendDriver(
                     is SendStep.Wait -> {
                         delay(step.delayMs.toLong())
                         StepReply.WaitElapsed
+                    }
+
+                    is SendStep.Device, is SendStep.DeviceRetry -> {
+                        // Mobile signs on no device (P8): a Ledger account's plan ends here,
+                        // unsigned, for every flow this driver runs.
+                        return SendStep.Failed(SendFailure(SendFailureCode.SIGNING_FAILED, null, null))
                     }
 
                     else -> {

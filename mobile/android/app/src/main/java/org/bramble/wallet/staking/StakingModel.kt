@@ -94,9 +94,16 @@ internal suspend fun PortfolioReads.drive(
     }
 }
 
-/** [network] with only its bundled endpoints (`supportedNetworks`), for a stake's check read. */
-internal fun bundledNetwork(network: NetworkInfo): NetworkInfo =
-    supportedNetworks().firstOrNull { it.network == network.network } ?: network
+/**
+ * [network] with only its bundled endpoints (`supportedNetworks`), for a stake's check read; null
+ * for a network the core does not bundle, so the check is never read from the person's override
+ * and `plan` refuses the stake.
+ */
+internal fun bundledNetwork(network: NetworkInfo): NetworkInfo? =
+    supportedNetworks().firstOrNull {
+        it.network ==
+            network.network
+    }
 
 /** [StakingChainRead]'s steps. */
 internal fun StakingChainRead.steps() = StakingSteps(::nextCalls, ::accept, ::restart)
