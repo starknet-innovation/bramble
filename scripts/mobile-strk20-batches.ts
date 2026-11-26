@@ -12,13 +12,16 @@
 
 import { resolve } from "node:path";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
-import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
+import { STRK20_MAINNET_POOL, type Strk20NetworkConfig } from "@bramble/privacy/config";
+import type { Strk20PrepareInput } from "@bramble/privacy/service";
 import { deriveAccount } from "@bramble/vault/accounts";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { PARITY_MNEMONIC } from "./mobile-parity";
 import { parityPrivacyAccount } from "./mobile-privacy-wire";
+import { invokeStrk20Batches } from "./mobile-strk20-batches-invoke";
 import { moreStrk20Batches } from "./mobile-strk20-batches-more";
+import type { Signed } from "./mobile-strk20-jobs";
 import { bytesHex, hex, labelledStream, sdkSource } from "./mobile-strk20-primitives";
 
 /** The block every batch proves at; discovery pages carry it as `block_ref`. */
@@ -31,7 +34,7 @@ const POOL_NONCE = "0x2a";
 export type Served = { readonly status: number; readonly body: string };
 /** A reply built from the request it answers (a JSON-RPC reply echoes its id). */
 export type Reply = (request: { readonly id: unknown }) => Served;
-export type Route = "incoming" | "nonce" | "outgoing" | "prover";
+export type Route = "call" | "incoming" | "nonce" | "outgoing" | "prover";
 
 /** One job: which builder the extension uses, its reviewed actions, and its scripted replies. */
 export type Batch = {
@@ -39,6 +42,27 @@ export type Batch = {
   readonly builder: "activate" | "actions" | "registration";
   readonly actions: readonly Strk20Action[];
   readonly script: Readonly<Partial<Record<Route, readonly Reply[]>>>;
+  /** Routing in place of the bundled mainnet config. */
+  readonly config?: Strk20NetworkConfig;
+  /** Extra recorded inputs, appended after the common ones. */
+  readonly inputs?: Readonly<Record<string, unknown>>;
+  /** A shadow-account read instead of a proof job; its line carries `kind`. */
+  readonly read?: {
+    readonly kind: "shadow-accounts-read" | "shadow-commitment-read";
+    readonly dappName: string;
+    readonly nonce?: string;
+    readonly nonces?: readonly bigint[];
+  };
+  /** The account a job runs as, in place of parity account 0. */
+  readonly account?: {
+    readonly address: string;
+    readonly viewingKey: string;
+    readonly sign: (hash: string) => Promise<{ r: string; s: string; publicKey: string }>;
+  };
+  /** Rewrites the account context (a multisig's CallSet signer, held-proof hooks). */
+  readonly context?: (base: Strk20PrepareInput, signing: Signed[]) => Strk20PrepareInput;
+  /** Fields appended to the line once the job has run. */
+  readonly extra?: () => Promise<Readonly<Record<string, unknown>>>;
 };
 
 export type Party = {
@@ -116,6 +140,7 @@ export type BatchKit = {
   readonly self: Out;
   readonly toB: Out;
   readonly funds: Reply;
+  readonly rpc: (result: unknown) => Reply;
 };
 
 /** Computes the world and returns every batch, in fixture order. */
@@ -313,6 +338,7 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
     incoming,
     job,
     outgoing,
+    rpc,
     self,
     strk,
     toB,
@@ -371,5 +397,6 @@ export const strk20Batches = async (): Promise<readonly Batch[]> => {
       prover: [proved(shield, true)],
     }),
     ...moreStrk20Batches(kit),
+    ...(await invokeStrk20Batches(kit)),
   ];
 };

@@ -28,6 +28,7 @@ import {
 import type { Strk20MaturityRuntime } from "@bramble/privacy/official-sdk-maturity";
 import { prepareWith } from "@bramble/privacy/official-sdk-preparation";
 import type { PrivacySdkRuntime } from "@bramble/privacy/official-sdk-runtime";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import type { Strk20PrepareInput } from "@bramble/privacy/service";
 import { createRpcProvider, resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
@@ -77,6 +78,7 @@ const routeOf = (url: string, body: string): Route | "unscripted" => {
   if (url === `${config.discoveryUrl}/v1/sync/incoming_state`) return "incoming";
   if (url === config.proverUrl) return "prover";
   const method = (JSON.parse(body || "{}") as { method?: unknown }).method;
+  if (url === RPC_URL && method === "starknet_call") return "call";
   return url === RPC_URL && method === "starknet_getNonce" ? "nonce" : "unscripted";
 };
 
@@ -87,7 +89,8 @@ type Recorded = {
   body: string;
   reply: { status: number; body: string };
 };
-type Signed = { calls: unknown[]; digest?: string; signature?: string[] };
+/** What the signer was asked to sign, filled in by whichever signing hook answers it. */
+export type Signed = { calls: unknown[]; digest?: string; signature?: string[] };
 
 const errorRecord = (error: unknown) => ({
   class: error instanceof Error ? error.constructor.name : typeof error,
@@ -101,9 +104,10 @@ const plain = (value: unknown): unknown =>
 
 /** Runs one batch through the extension's proof path and returns its transcript line. */
 const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
-  if (!config) throw new Error("mainnet STRK20 config missing");
-  const account = await jobAccount();
-  const { viewingKey } = await parityPrivacyAccount(0);
+  const routing = batch.config === undefined ? config : batch.config;
+  if (!config || !routing) throw new Error("mainnet STRK20 config missing");
+  const account = batch.account ?? (await jobAccount());
+  const viewingKey = batch.account?.viewingKey ?? (await parityPrivacyAccount(0)).viewingKey;
   const queues = Object.fromEntries(
     Object.entries(batch.script).map(([route, replies]) => [route, [...(replies ?? [])]]),
   ) as Record<string, ((request: { id: unknown }) => { status: number; body: string })[]>;
@@ -160,10 +164,10 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
   const maturity = {
     provingBlock: async () => PROVING_BLOCK,
   } as unknown as Strk20MaturityRuntime;
-  const input = {
+  const base = {
     account: { address: account.address, id: `SN_MAIN:${account.address}`, networkId: "SN_MAIN" },
     actions: batch.actions,
-    config,
+    config: routing,
     isAuthorized: () => true,
     rpcUrls: [RPC_URL],
     signHash: async (messageHash: string) => {
@@ -175,6 +179,10 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
     simulate: false,
     viewingKey: async () => viewingKey,
   } as unknown as Strk20PrepareInput;
+  const input = batch.context ? batch.context(base, signing) : base;
+  const pause = async (attempt: number, retryAfterMs: number | undefined) => {
+    pauses.push({ attempt, retryAfterMs: retryAfterMs ?? null });
+  };
   const builders = {
     activate: (transfers: Parameters<typeof strk20RegistrationBuilderFor>[0]) =>
       strk20BuilderFor(observed, transfers, batch.actions, account.address, true),
@@ -194,14 +202,16 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
   try {
     drawn = await withRandomStream(stream, async () => {
       try {
+        if (batch.read) {
+          outcome = { result: plain(await runRead(observed, input, batch.read, pause)) };
+          return;
+        }
         const callAndProof = await prepareWith(
           observed,
           input,
           maturity,
           createRpcProvider,
-          async (attempt, retryAfterMs) => {
-            pauses.push({ attempt, retryAfterMs: retryAfterMs ?? null });
-          },
+          pause,
           undefined,
           builders[batch.builder],
           historical[batch.builder],
@@ -227,22 +237,37 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
   const created = sdkSteps["createProofInvocation"] as
     | { readonly error?: unknown; readonly invocation?: unknown; readonly warnings?: unknown }
     | undefined;
+  const inputs = {
+    account: hex(account.address),
+    accountPublicKey: (await account.sign("0x1")).publicKey,
+    actions: batch.actions,
+    builder: batch.builder,
+    chainId: network.chainId,
+    discoveryUrl: config.discoveryUrl,
+    pool: hex(config.poolAddress),
+    proverUrl: config.proverUrl,
+    provingBlock: PROVING_BLOCK,
+    rpcUrl: RPC_URL,
+    viewingKey: hex(viewingKey),
+    ...batch.inputs,
+  };
+  const random = { bytes: bytesHex(drawn.consumed), reads: drawn.reads };
+  if (batch.read) {
+    const { actions: _actions, builder: _builder, ...readInputs } = inputs;
+    return {
+      kind: batch.read.kind,
+      id: batch.id,
+      inputs: readInputs,
+      random,
+      requests,
+      retries: pauses,
+      outcome,
+    };
+  }
   return {
     id: batch.id,
-    inputs: {
-      account: hex(account.address),
-      accountPublicKey: (await account.sign("0x1")).publicKey,
-      actions: batch.actions,
-      builder: batch.builder,
-      chainId: network.chainId,
-      discoveryUrl: config.discoveryUrl,
-      pool: hex(config.poolAddress),
-      proverUrl: config.proverUrl,
-      provingBlock: PROVING_BLOCK,
-      rpcUrl: RPC_URL,
-      viewingKey: hex(viewingKey),
-    },
-    random: { bytes: bytesHex(drawn.consumed), reads: drawn.reads },
+    inputs,
+    random,
     requests,
     signing,
     invocation: created?.invocation ?? null,
@@ -254,7 +279,31 @@ const runBatch = async (sdk: PrivacySdkRuntime, batch: Batch) => {
     },
     retries: pauses,
     outcome,
+    ...(batch.extra ? await batch.extra() : {}),
   };
+};
+
+/** The extension's two shadow-account reads, through its production service, outside `prepareWith`. */
+const runRead = (
+  sdk: PrivacySdkRuntime,
+  context: Strk20PrepareInput,
+  read: NonNullable<Batch["read"]>,
+  pauseForServiceRetry: (attempt: number, retryAfterMs: number | undefined) => Promise<void>,
+): Promise<unknown> => {
+  const service = createOfficialStrk20Service({
+    pauseForServiceRetry,
+    providerFor: createRpcProvider,
+    sdk,
+  });
+  if (read.kind === "shadow-commitment-read") {
+    return service.shadowAccountCommitment({
+      ...context,
+      dappName: read.dappName,
+      ...(read.nonce === undefined ? {} : { nonce: read.nonce }),
+    });
+  }
+  if (!service.shadowAccounts) throw new Error("the service has no shadowAccounts read");
+  return service.shadowAccounts({ ...context, dappName: read.dappName, nonces: read.nonces ?? [] });
 };
 
 /** Every batch's transcript, one compact JSON line each. */
