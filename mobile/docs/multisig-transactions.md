@@ -1,6 +1,6 @@
 # Multisig transactions on mobile (M18)
 
-Status: implemented on `mobile/m18-multisig-tx` (2026-11-25), on wallet-core `v0.8.0` (X1,
+Status: implemented on `mobile/m18-multisig-tx` (2026-11-25), on wallet-core `v0.9.0` (X1,
 wallet-core #111, and its settle, #115). Scope: propose, co-sign, submit and change signers for a
 saved, deployed Argent (Ready) Multisig 0.2 account, plus importing a co-signer's package. Setup,
 deployment and the relay are `nostr-multisig.md`.
@@ -89,11 +89,11 @@ failed read leaves the intent submitted, and the next list reads it again.
 
 ## 5. Not in M18
 
-- Relay sync still holds trusted packages without importing them (`imported` is 0 at `v0.7.0`).
+- Relay sync still holds trusted packages without importing them (`imported` is still 0 at `v0.9.0`).
   A co-signer pastes the package into Import.
 - Advanced contract calls, replace-signer, and re-pricing a stale version.
-- Decoding a signer change on the card (threshold before and after, resulting signers). The core
-  returns it only on the proposal (`MultisigProposal.review()`), not on a stored intent.
+- Decoding a signer change on the card (threshold before and after, resulting signers). `v0.9.0`
+  exports a stored intent's review (`multisigIntentReview`); the apps do not adopt it yet.
 
 ## 6. Tests
 

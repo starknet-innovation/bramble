@@ -29,7 +29,11 @@ final class SwapFlowModelTests: XCTestCase {
         unlocked = nil
     }
 
-    private func model(opening: String? = nil, balances: [String: String] = [:]) throws -> SwapFlowModel {
+    private func model(
+        opening: String? = nil,
+        balances: [String: String] = [:],
+        http: (any PortfolioTransport)? = nil
+    ) throws -> SwapFlowModel {
         try SwapFlowModel(
             core: core,
             network: sepolia(),
@@ -37,7 +41,7 @@ final class SwapFlowModelTests: XCTestCase {
             preferences: TokenPreferences(persisted: nil),
             balances: balances,
             prices: nil,
-            http: avnu,
+            http: http ?? avnu,
             rpc: node,
             openingToken: opening
         )
@@ -129,6 +133,68 @@ final class SwapFlowModelTests: XCTestCase {
         XCTAssertFalse(model.canReview)
     }
 
+    func testAQuoteThatLandsAfterAnEditIsDropped() async throws {
+        let held = HeldTransport(avnu)
+        let model = try model(http: held)
+        model.amount = "0.01"
+        let quoting = Task { await model.requestQuote() }
+        await held.waitForHeld()
+        model.amount = "0.02"
+        held.release()
+        await quoting.value
+        XCTAssertNil(model.quote, "the reply was for the old amount")
+        XCTAssertFalse(model.canReview)
+    }
+
+    func testBackDuringTheBuildDropsItsReply() async throws {
+        let held = HeldTransport(avnu, holding: false)
+        let model = try model(http: held)
+        model.amount = "0.01"
+        await model.requestQuote()
+        held.holding = true
+        let building = Task { await model.reviewSwap() }
+        await held.waitForHeld()
+        XCTAssertFalse(model.back())
+        held.release()
+        await building.value
+        XCTAssertEqual(model.stage, .edit)
+        XCTAssertNil(model.review)
+        XCTAssertNil(model.swapReview)
+        XCTAssertTrue(node.posts.isEmpty, "no plan ran for the dropped build")
+        await model.confirm()
+        XCTAssertTrue(node.posts.isEmpty, "nothing is left to confirm")
+    }
+
+    func testALateQuoteDuringTheBuildDoesNothing() async throws {
+        let held = HeldTransport(avnu, holding: false)
+        let model = try model(http: held)
+        model.amount = "0.01"
+        await model.requestQuote()
+        held.holding = true
+        let building = Task { await model.reviewSwap() }
+        await held.waitForHeld()
+        XCTAssertEqual(model.stage, .preparing)
+        await model.requestQuote()
+        XCTAssertNotNil(model.quote, "the build's quote is kept")
+        held.release()
+        await building.value
+        XCTAssertEqual(model.stage, .review)
+    }
+
+    func testConfirmDuringAFeeRetryPostsNothing() async throws {
+        let model = try model()
+        model.amount = "0.01"
+        await model.requestQuote()
+        await model.reviewSwap()
+        XCTAssertEqual(model.stage, .review)
+        let retrying = Task { await model.retryFee() }
+        await Task.yield()
+        await model.confirm()
+        await retrying.value
+        XCTAssertFalse(node.posts.contains(where: \.write), "the retry's re-estimate owns the review")
+        XCTAssertEqual(model.stage, .review)
+    }
+
     func testTheTokenScreenSellsItsTokenAndTheSidesSwap() throws {
         let strk = try XCTUnwrap(Self.tracked("STRK"))
         let model = try model(opening: strk.token.id)
@@ -218,5 +284,44 @@ final class AvnuStub: PortfolioTransport, @unchecked Sendable {
         {"contractAddress":"\(Self.eth)","entrypoint":"approve","calldata":[\(quoted([spender, Self.sell, "0x0"]))]},\
         {"contractAddress":"\(Self.router)","entrypoint":"multi_route_swap","calldata":[\(quoted(route))]}]}
         """
+    }
+}
+
+/// Holds each reply until `release()`, so a test can act while a request is in flight.
+final class HeldTransport: PortfolioTransport, @unchecked Sendable {
+    private let inner: AvnuStub
+    private let lock = NSLock()
+    private var held: [CheckedContinuation<Void, Never>] = []
+    private var shouldHold: Bool
+
+    init(_ inner: AvnuStub, holding: Bool = true) {
+        self.inner = inner
+        shouldHold = holding
+    }
+
+    var holding: Bool {
+        get { lock.withLock { shouldHold } }
+        set { lock.withLock { shouldHold = newValue } }
+    }
+
+    func perform(_ request: HttpRequest) async -> HttpOutcome {
+        if holding {
+            await withCheckedContinuation { continuation in lock.withLock { held.append(continuation) } }
+        }
+        return inner.perform(request)
+    }
+
+    /// Returns once a request is waiting.
+    func waitForHeld() async {
+        while lock.withLock({ held.isEmpty }) { await Task.yield() }
+    }
+
+    func release() {
+        let waiting: [CheckedContinuation<Void, Never>] = lock.withLock {
+            shouldHold = false
+            defer { held = [] }
+            return held
+        }
+        waiting.forEach { $0.resume() }
     }
 }

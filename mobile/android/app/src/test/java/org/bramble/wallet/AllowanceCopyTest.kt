@@ -87,4 +87,24 @@ class AllowanceCopyTest {
         val notFound = RevokeFlowModel.shown(RevokeException.NotFound())
         assertEquals(friendlyError("allowance not found"), notFound)
     }
+
+    @Test
+    fun aRefusalReadsInTheCoresWords() {
+        assertEquals(
+            "That's an NFT contract, not a token. Revoke it from the site that asked.",
+            RevokeFlowModel.shown(RevokeException.Collection()),
+        )
+        assertEquals(
+            "Couldn't confirm that contract is a token, so the revoke wasn't sent. Revoke it from the site that asked.",
+            RevokeFlowModel.shown(RevokeException.UnconfirmedToken()),
+        )
+    }
+
+    @Test
+    fun hashKeptOnlyIfItMayHaveLanded() {
+        assertTrue(SendFailureText.mayHaveReachedChain(SendFailureCode.SUBMISSION_INDETERMINATE))
+        assertTrue(SendFailureText.mayHaveReachedChain(SendFailureCode.DEPLOYMENT_THEN_INVOKE_UNCONFIRMED))
+        assertFalse(SendFailureText.mayHaveReachedChain(SendFailureCode.LOCKED))
+        assertFalse(SendFailureText.mayHaveReachedChain(SendFailureCode.NODE_ERROR))
+    }
 }

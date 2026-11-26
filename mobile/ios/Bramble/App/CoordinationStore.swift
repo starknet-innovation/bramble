@@ -88,8 +88,9 @@ final class CoordinationStore {
         let nextMultisigs = (try? await work { try walletCore.multisigs(network: network) }) ?? []
         let nextPolicy = try? await work { try walletCore.relayPolicy() }
         var nextOpen: [String: Int] = [:]
+        // Stored intents only: settling reads the chain, and only moves Submitted to a closed state.
         for record in nextMultisigs {
-            nextOpen[record.id] = await intents(of: record.id).filter(isOpen).count
+            nextOpen[record.id] = await storedIntents(of: record.id).filter(isOpen).count
         }
         guard started == generation else { return }
         contacts = nextContacts

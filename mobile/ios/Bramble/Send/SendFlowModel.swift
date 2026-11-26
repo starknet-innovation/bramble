@@ -299,8 +299,8 @@ final class SendFlowModel {
 
     func retryFee() async {
         guard let driver, stage == .review else { return }
-        await driver.releaseEndpoint()
         stage = .reviewing
+        await driver.releaseEndpoint()
         await settle { try await driver.run(from: .retryEstimate) }
     }
 
@@ -383,6 +383,10 @@ final class SendFlowModel {
 
         case .rpc, .wait:
             break
+
+        case .device, .deviceRetry:
+            // No Ledger transport on mobile yet: a Ledger account's plan fails closed.
+            fail(with: SendFailure(code: .signingFailed, hash: nil))
         }
     }
 
