@@ -138,4 +138,7 @@ object SendCopy {
     const val failurePreparationUnavailable = "Transaction could not be prepared. Check your connection or RPC endpoint."
     const val failureUnrecognisedUnit = "The node quoted this fee in an unrecognised unit."
     const val failureWrongChain = "RPC endpoint returned the wrong Starknet chain"
+    const val payUpTo = "Pay up to {amount} {token}"
+    const val feeMoved = "The fee changed while you were reviewing. Check it and submit again."
+    const val statusUnknownTitle = "Status unknown"
 }

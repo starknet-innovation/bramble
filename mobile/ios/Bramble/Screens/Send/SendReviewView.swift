@@ -70,7 +70,12 @@ struct SendReviewView: View {
                         ),
                         token: model.token
                     )
-                    SendCostBox(cost: SendReviewCopy.cost(review)) { Task { await model.retryFee() } }
+                    SendCostBox(
+                        cost: SendReviewCopy.cost(review),
+                        offers: model.gaslessOffers,
+                        pay: { offer in Task { await model.payFee(with: offer) } },
+                        retry: { Task { await model.retryFee() } }
+                    )
                     SendRisksPanel(
                         messages: SendReviewCopy.risks(review, newResolvedRecipient: model.resolvedName?.isNew == true)
                     )
@@ -185,6 +190,10 @@ private struct AddressReveal: View {
 struct SendCostBox: View {
     @Environment(\.skin) private var skin
     let cost: SendReviewCopy.Cost
+    /// The tokens the core offers for the fee (`gaslessChoiceHtml`): one control each, under the
+    /// shortfall line. The wallet selects none.
+    var offers: [GaslessOffer] = []
+    var pay: (GaslessOffer) -> Void = { _ in /* No fee token to pay with. */ }
     let retry: () -> Void
 
     var body: some View {
@@ -204,6 +213,9 @@ struct SendCostBox: View {
             }
             if cost.shortfall {
                 Text(SendCopy.shortfall).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.warning)
+            }
+            ForEach(offers, id: \.tokenAddress) { offer in
+                PillButton(SendReviewCopy.payUpTo(offer), kind: .secondary) { pay(offer) }
             }
         }
         .padding(metrics.feeLayerPadding)

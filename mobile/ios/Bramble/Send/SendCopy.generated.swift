@@ -138,4 +138,7 @@ enum SendCopy {
     static let failurePreparationUnavailable = "Transaction could not be prepared. Check your connection or RPC endpoint."
     static let failureUnrecognisedUnit = "The node quoted this fee in an unrecognised unit."
     static let failureWrongChain = "RPC endpoint returned the wrong Starknet chain"
+    static let payUpTo = "Pay up to {amount} {token}"
+    static let feeMoved = "The fee changed while you were reviewing. Check it and submit again."
+    static let statusUnknownTitle = "Status unknown"
 }

@@ -208,19 +208,7 @@ final class PortfolioStore {
             priceView = view
 
         case let .fetch(requests):
-            let session = transport
-            let outcomes = await withTaskGroup(of: PriceOutcome.self) { group in
-                for request in requests {
-                    group.addTask {
-                        PriceOutcome(address: request.address, outcome: await session.perform(request.request))
-                    }
-                }
-                var collected: [PriceOutcome] = []
-                for await outcome in group {
-                    collected.append(outcome)
-                }
-                return collected
-            }
+            let outcomes = await fetchPrices(requests)
             guard started == generation else { return }
             priceView = prices.apply(
                 network: net,
@@ -232,6 +220,46 @@ final class PortfolioStore {
             persist()
         }
         recompute()
+    }
+
+    /// The wallet's own USD prices for `addresses` on the active network, for the gasless fee
+    /// reference (`GASLESS_POLICY` pins USD): served from cache when fresh, else fetched once and
+    /// merged into the cache. Nil while locked or off mainnet (the book serves nothing there).
+    func gaslessPrices(_ addresses: [String]) async -> PriceView? {
+        guard let net = scope?.network.network else { return nil }
+        let now = clock()
+        switch prices.plan(network: net, addresses: addresses, currency: .usd, nowMs: now, cachedOnly: false) {
+        case let .serve(view):
+            return view
+
+        case let .fetch(requests):
+            let outcomes = await fetchPrices(requests)
+            let view = prices.apply(
+                network: net,
+                addresses: addresses,
+                currency: .usd,
+                outcomes: outcomes,
+                attemptedAtMs: now
+            )
+            persist()
+            return view
+        }
+    }
+
+    private func fetchPrices(_ requests: [PriceRequest]) async -> [PriceOutcome] {
+        let session = transport
+        return await withTaskGroup(of: PriceOutcome.self) { group in
+            for request in requests {
+                group.addTask {
+                    PriceOutcome(address: request.address, outcome: await session.perform(request.request))
+                }
+            }
+            var collected: [PriceOutcome] = []
+            for await outcome in group {
+                collected.append(outcome)
+            }
+            return collected
+        }
     }
 
     /// Switches the display currency (each cached entry holds all three, so rows stay priced).

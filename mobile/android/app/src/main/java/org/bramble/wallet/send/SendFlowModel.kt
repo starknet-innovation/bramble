@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.bramble.core.AccountRecord
 import org.bramble.core.DisplayCurrency
+import org.bramble.core.GaslessFee
+import org.bramble.core.GaslessOffer
 import org.bramble.core.NetworkInfo
 import org.bramble.core.PriceBook
 import org.bramble.core.ReviewFlag
@@ -19,7 +21,6 @@ import org.bramble.core.TransferReview
 import org.bramble.core.TxStatus
 import org.bramble.core.WalletCore
 import org.bramble.core.formatTokenAmount
-import org.bramble.core.parseTokenAmount
 import org.bramble.wallet.RpcClient
 import org.bramble.wallet.RpcPost
 
@@ -31,13 +32,13 @@ import org.bramble.wallet.RpcPost
  * tone), `false` for a transaction that was not confirmed (an error).
  */
 class SendFlowModel(
-    private val core: WalletCore,
+    internal val core: WalletCore,
     /** The network the journey sends on; its tokens are the ones offered. */
     val network: NetworkInfo,
     /** The sending account; the core signs by its id. */
     val account: AccountRecord,
-    private val balances: Map<String, String>,
-    private val hooks: SendHooks = SendHooks(),
+    internal val balances: Map<String, String>,
+    internal val hooks: SendHooks = SendHooks(),
     /** The token to open on (a token screen's Send), or null for STRK; the flow still starts at the recipient. */
     startToken: String? = null,
     /** The tracked tokens on this network the review warns about paying (`trustedTokenAddresses`). */
@@ -49,6 +50,8 @@ class SendFlowModel(
      * is written (`withSubmittedPrice`); null records it without a price.
      */
     private val pricing: Pair<PriceBook, DisplayCurrency>? = null,
+    /** The gasless path's host half; null turns it off (mobile/docs/gasless.md). */
+    internal val gasless: GaslessDriver? = null,
 ) {
     /** The screen the journey shows, in the extension's order. */
     enum class Stage {
@@ -163,31 +166,53 @@ class SendFlowModel(
 
     /** The transaction hash once a write has been sent (or the core reports one). */
     var hash by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     /** The explorer link for [hash] from the finished plan, or null. */
     var explorerUrl by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     /** The failure copy shown on [Stage.FAILED]. */
     var failureMessage by mutableStateOf<String?>(null)
-        private set
+        internal set
 
-    private var driver: SendDriver? = null
+    /** The tokens the core offers to pay the network fee in, when the review found STRK short. */
+    var gaslessOffers by mutableStateOf<List<GaslessOffer>>(emptyList())
+        internal set
+
+    /**
+     * The failure is an unknown outcome (a gasless execute whose answer was lost): "Status
+     * unknown", and Activity rather than a re-send.
+     */
+    var outcomeUnknown by mutableStateOf(false)
+        internal set
+
+    internal var driver: SendDriver? = null
+
+    /** The open review's gasless choice, while the core offers one. */
+    internal var gaslessFee: GaslessFee? = null
+
+    /** The relay's hash once a gasless send went out; its status is read through the core. */
+    internal var relayedHash: String? = null
 
     /** The flow header's title for [stage]. */
     val title: String get() =
-        when (stage) {
-            Stage.RECIPIENT -> SendCopy.titleRecipient
-            Stage.ASSET -> SendCopy.tokensYouCanSend
-            Stage.DETAILS, Stage.REVIEWING -> SendCopy.titleDetails
-            Stage.REVIEW -> SendCopy.titleReview
-            Stage.AUTHORIZING -> SendCopy.titleAuthorizing
-            Stage.BROADCASTING -> SendCopy.titleBroadcasting
-            Stage.CONFIRMING -> SendCopy.titleConfirming
-            Stage.PENDING -> SendCopy.titlePending
-            Stage.SUBMITTED -> SendCopy.titleSubmitted
-            Stage.FAILED -> SendCopy.titleFailed
+        // An unknown outcome did not fail, so the header names the operation only.
+        if (stage == Stage.FAILED && outcomeUnknown) {
+            SendCopy.titleRecipient
+        } else {
+            when (stage) {
+                Stage.RECIPIENT -> SendCopy.titleRecipient
+                Stage.ASSET -> SendCopy.tokensYouCanSend
+                Stage.DETAILS, Stage.REVIEWING -> SendCopy.titleDetails
+                Stage.REVIEW -> SendCopy.titleReview
+                Stage.AUTHORIZING -> SendCopy.titleAuthorizing
+                Stage.BROADCASTING -> SendCopy.titleBroadcasting
+                Stage.CONFIRMING -> SendCopy.titleConfirming
+                Stage.PENDING -> SendCopy.titlePending
+                Stage.SUBMITTED -> SendCopy.titleSubmitted
+                Stage.FAILED -> SendCopy.titleFailed
+            }
         }
 
     /** Base-unit balance of the selected token, or null while unread. */
@@ -226,6 +251,7 @@ class SendFlowModel(
                 val driver = SendDriver(plan, network, transport).also { this.driver = it }
                 stage = Stage.REVIEWING
                 settle { driver.run(StepReply.Start) }
+                offerGasless()
             }
         }
     }
@@ -257,8 +283,12 @@ class SendFlowModel(
     suspend fun retryFee() {
         val driver = driver ?: return
         driver.releaseEndpoint()
+        // A new estimate voids the offers made for the old one.
+        gaslessFee = null
+        gaslessOffers = emptyList()
         stage = Stage.REVIEWING
         settle { driver.run(StepReply.RetryEstimate) }
+        offerGasless()
     }
 
     /** Confirms the reviewed transfer: the plan signs and posts it once, then watches it. */
@@ -275,6 +305,7 @@ class SendFlowModel(
 
     /** Asks the plan to check a pending transaction's status again. */
     suspend fun checkAgain() {
+        relayedHash?.let { if (stage == Stage.PENDING) return watch(it) }
         val driver = driver ?: return
         stage = Stage.CONFIRMING
         settle { driver.run(StepReply.CheckAgain) }
@@ -286,9 +317,13 @@ class SendFlowModel(
         driver = null
         review = null
         reviewBlock = null
+        gaslessFee = null
+        gaslessOffers = emptyList()
+        relayedHash = null
+        outcomeUnknown = false
     }
 
-    private suspend fun settle(run: suspend () -> SendStep) {
+    internal suspend fun settle(run: suspend () -> SendStep) {
         // Held here because a lock or dismissal drops `driver` while the step is in flight.
         val plan = driver?.plan
         try {
@@ -379,33 +414,3 @@ class SendFlowModel(
         stage = Stage.FAILED
     }
 }
-
-/**
- * Why [amount] is not a sendable amount of a token with [decimals], or null when the core parses
- * it. Only `InvalidAmount` is mapped; any other core refusal propagates.
- */
-private fun amountProblem(
-    amount: String,
-    decimals: UByte,
-): String? =
-    try {
-        parseTokenAmount(amount, decimals)
-        null
-    } catch (error: SendException.InvalidAmount) {
-        when (error.reason) {
-            org.bramble.core.SendAmountError.NOT_POSITIVE -> SendCopy.amountGate
-            org.bramble.core.SendAmountError.TOO_MANY_DECIMALS -> SendCopy.amountTooManyDecimals
-            else -> SendCopy.amountInvalid
-        }
-    }
-
-/**
- * What a Send journey reports back to its owner (the store).
- *
- * @property track receives every plan the journey opens, so a lock can close it.
- * @property notice shows the outcome toast: `true` for a confirmation, `false` for an error.
- */
-data class SendHooks(
-    val track: (TransferPlan) -> Unit = {},
-    val notice: (message: String, success: Boolean) -> Unit = { _, _ -> },
-)
