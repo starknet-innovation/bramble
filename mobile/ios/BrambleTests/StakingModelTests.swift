@@ -40,6 +40,15 @@ final class StakingModelTests: XCTestCase {
         ) { Self.now }
     }
 
+    /// A stake's check read (wallet-core #131) goes to the bundled endpoints only, never the
+    /// person's RPC override, which `NetworkInfo.rpcUrls` lists first.
+    func testTheCheckReadSkipsTheRpcOverride() throws {
+        var mainnet = try XCTUnwrap(supportedNetworks().first { $0.network == .mainnet })
+        let bundled = mainnet.rpcUrls
+        mainnet.rpcUrls = ["https://override.invalid"] + bundled
+        XCTAssertEqual(StakingCheck.bundled(mainnet)?.rpcUrls, bundled)
+    }
+
     func testSepoliaIsTheCoresRefusalAndReadsNothing() async throws {
         let node = try StakingFixtureNode(case: "notMember", block: "overview", account: "0x0")
         let staking = try model(node, network: sepolia())

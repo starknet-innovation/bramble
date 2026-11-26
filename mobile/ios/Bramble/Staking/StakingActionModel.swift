@@ -90,6 +90,9 @@ final class StakingActionModel: Identifiable {
         do {
             let preparation = try start()
             await endpoints.drive(preparation, on: network)
+            if let bundled = StakingCheck.bundled(network) {
+                await endpoints.drive(StakingCheck(preparation), on: bundled)
+            }
             let staking = try preparation.plan(nowSeconds: clock(), feeBalance: feeBalance)
             track(staking.plan)
             sentence = staking.review
