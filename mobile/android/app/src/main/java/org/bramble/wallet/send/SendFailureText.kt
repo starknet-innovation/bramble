@@ -48,6 +48,19 @@ object SendFailureText {
         return SendCopy.failurePrefix +
             reason.replace("{hash}", failure.hash ?: "").replace("{label}", failure.detail ?: "")
     }
+
+    /** True when a failure with [code] may still have put the write on chain, so its hash is kept. */
+    fun mayHaveReachedChain(code: SendFailureCode): Boolean =
+        when (code) {
+            SendFailureCode.HASH_MISMATCH,
+            SendFailureCode.SUBMISSION_INDETERMINATE,
+            SendFailureCode.DEPLOYMENT_STATUS_UNKNOWN,
+            SendFailureCode.DEPLOYMENT_UNCONFIRMED,
+            SendFailureCode.DEPLOYMENT_THEN_INVOKE_UNCONFIRMED,
+            -> true
+
+            else -> false
+        }
 }
 
 /** Integer halving of a base-10 string (floor), as the extension's `raw / 2n`. */

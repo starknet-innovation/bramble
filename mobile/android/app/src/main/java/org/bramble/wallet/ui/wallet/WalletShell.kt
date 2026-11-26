@@ -205,6 +205,11 @@ private fun FlowScreen(
                 .ReadyMultisigScreen(store, back = pop)
         }
 
+        Flow.ALLOWANCES -> {
+            org.bramble.wallet.allowances
+                .AllowancesScreen(store, viewActivity = arguments.showActivity, back = pop)
+        }
+
         Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL, Flow.TOKENS, Flow.ADD_TOKEN, Flow.DISCOVER_TOKENS -> {
             PortfolioFlowScreen(flow, store, arguments, pop, push)
         }
