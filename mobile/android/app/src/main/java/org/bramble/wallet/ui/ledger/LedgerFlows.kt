@@ -76,12 +76,14 @@ fun LedgerAddAccountFlow(
         LedgerConnectAction(model, title, busy = adding) { requests ->
             if (!adding) {
                 adding = true
-                model.close()
                 // The store's scope: leaving the sheet mid-call must not skip the reload and toast.
+                // The connection ends only once the add succeeded, so Show more still works after a failure.
                 store.appScope.launch {
                     runCatching { store.addLedgerAccounts(requests) }
-                        .onSuccess { added() }
-                        .onFailure(store::showError)
+                        .onSuccess {
+                            model.close()
+                            added()
+                        }.onFailure(store::showError)
                     adding = false
                 }
             }

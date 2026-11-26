@@ -266,7 +266,11 @@ private fun ImportStep(
         Step.IMPORT_METHOD -> {
             ImportMethodStep(
                 back = actions.pop,
-                recoveryPhrase = { actions.push(Step.RECOVERY_PHRASE) },
+                recoveryPhrase = {
+                    // Back from the Ledger choice leaves the path at LEDGER: reset it.
+                    actions.choose(OnboardingPath.RECOVER)
+                    actions.push(Step.RECOVERY_PHRASE)
+                },
                 ledger = {
                     actions.choose(OnboardingPath.LEDGER)
                     actions.push(Step.LEDGER)

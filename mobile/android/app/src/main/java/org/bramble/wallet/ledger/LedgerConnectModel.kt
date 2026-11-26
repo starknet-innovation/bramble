@@ -3,6 +3,7 @@ package org.bramble.wallet.ledger
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -130,6 +131,9 @@ interface LedgerCore {
 
     /** [address]'s on-chain state. */
     suspend fun describe(address: String): LedgerActivity
+
+    /** [address] in the core's canonical felt form (`validateRecipient`), so spellings match. */
+    fun canonical(address: String): String
 }
 
 /**
@@ -151,7 +155,7 @@ class LedgerConnectModel(
     existing: Set<String>,
     private val pageSize: UInt = PAGE_SIZE,
 ) {
-    private val existing = existing.map { it.lowercase() }.toSet()
+    private val existing = existing.map(core::canonical).toSet()
     private var device: LedgerExchanging? = null
     private var nextIndex = 0u
 
@@ -202,7 +206,15 @@ class LedgerConnectModel(
         scanner.stopScan()
         stage = LedgerStage.Connecting(ledger)
         val flow = epoch
-        val connected = runCatching { connect(ledger) }.getOrNull()
+        val connected =
+            try {
+                connect(ledger)
+            } catch (cancelled: CancellationException) {
+                // Backing out mid-connect is not a failed connection.
+                throw cancelled
+            } catch (ignored: Exception) {
+                null
+            }
         when {
             flow != epoch -> {
                 connected?.close()
@@ -296,7 +308,7 @@ class LedgerConnectModel(
         keysRead: Int,
         flow: Int,
     ) {
-        rows = rows + placed.map { LedgerRow(it, null, it.address.lowercase() in existing) }
+        rows = rows + placed.map { LedgerRow(it, null, core.canonical(it.address) in existing) }
         nextIndex += keysRead.toUInt()
         stage = LedgerStage.Picking
         check(placed.map { it.address }, flow)

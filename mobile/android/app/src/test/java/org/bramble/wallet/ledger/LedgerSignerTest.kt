@@ -1,5 +1,6 @@
 package org.bramble.wallet.ledger
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -160,6 +161,46 @@ class LedgerSignerTest {
         }
 
     @Test
+    fun cancelDuringReconnectStops() =
+        runBlocking {
+            val scanner = Scanner(listOf(ledger))
+            val gate = CompletableDeferred<Unit>()
+            var connects = 0
+            val signer =
+                LedgerSigner(scanner) {
+                    connects += 1
+                    // The second connect (the session's Ledger again) waits, then fails.
+                    if (connects > 1) {
+                        gate.await()
+                        throw LedgerLinkException.Failed()
+                    }
+                    ReplayDevice(recordedExchanges())
+                }
+            val first = async(Dispatchers.Default) { signer.exchange(VERSION_APDU, null) }
+            until { signer.stage == LedgerSignStage.Scanning }
+            signer.choose(ledger)
+            first.await()
+            signer.finish()
+            val second = async(Dispatchers.Default) { signer.exchange(VERSION_APDU, null) }
+            until { signer.stage == LedgerSignStage.Connecting(ledger) }
+            signer.cancel()
+            gate.complete(Unit)
+            assertEquals("a cancel is not a failed reconnect", null, second.await())
+            assertEquals("the sheet stays closed", LedgerSignStage.Idle, signer.stage)
+            assertEquals("no second list of Ledgers", 1, scanner.scans)
+        }
+
+    @Test
+    fun refusedPermissionIsNoDevice() =
+        runBlocking {
+            val signer = LedgerSigner(Scanner(listOf(ledger))) { throw SecurityException("BLUETOOTH_CONNECT") }
+            val answer = async(Dispatchers.Default) { signer.exchange(VERSION_APDU, null) }
+            until { signer.stage == LedgerSignStage.Scanning }
+            signer.choose(ledger)
+            assertEquals(StepReply.DeviceFailure(TransportFailure.DISCONNECTED), answer.await())
+        }
+
+    @Test
     fun onlySignHashShowsAHash() {
         assertEquals(null, LedgerSigner.shownHash(VERSION_APDU))
         assertEquals(TRANSFER_HASH, LedgerSigner.shownHash(SIGN_HASH_APDU))
@@ -244,7 +285,10 @@ class LedgerSignerTest {
         override var devices: List<LedgerDevice> = emptyList()
         override var changed: (() -> Unit)? = null
 
+        var scans = 0
+
         override fun startScan() {
+            scans += 1
             devices = nearby
         }
 

@@ -101,13 +101,22 @@ data class LedgerRow(
             val atReady = candidate.request.scheme == LedgerScheme.READY
             return when {
                 existing -> "Already in this wallet"
-                deployed == null -> "Checking…"
-                deployed -> "Deployed on Starknet"
+
+                activity == null -> "Checking…"
+
+                deployed == true -> "Deployed on Starknet"
+
                 funded == true && family == AccountFamily.OPEN_ZEPPELIN -> "Funded and ready to deploy"
+
                 funded == true -> "Funded, not deployed"
-                funded == null -> "Couldn't check this account's activity. Try again."
+
+                // The check ran but could not read the account: never "Checking…" forever.
+                funded == null || deployed == null -> "Couldn't check this account's activity. Try again."
+
                 family != AccountFamily.ARGENT -> NO_ACTIVITY
+
                 atReady -> "$NO_ACTIVITY — Bramble only imports existing Ready accounts"
+
                 else -> "$NO_ACTIVITY — Bramble only imports existing Argent accounts"
             }
         }

@@ -29,6 +29,7 @@ import org.bramble.core.LedgerScheme
 import org.bramble.core.NetworkInfo
 import org.bramble.core.accountLabel
 import org.bramble.core.ledgerAccountCandidates
+import org.bramble.core.validateRecipient
 import org.bramble.wallet.RpcClient
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleSpace
@@ -109,6 +110,8 @@ private class LiveLedgerCore(
     ) = ledgerAccountCandidates(network.network, family, keys)
 
     override suspend fun describe(address: String) = rpc.ledgerActivity(address, network)
+
+    override fun canonical(address: String) = validateRecipient(address) ?: address.lowercase()
 }
 
 private fun liveModel(

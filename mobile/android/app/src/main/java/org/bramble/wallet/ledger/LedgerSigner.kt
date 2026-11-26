@@ -3,6 +3,7 @@ package org.bramble.wallet.ledger
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import org.bramble.core.AccountRecord
 import org.bramble.core.StepReply
@@ -212,15 +213,20 @@ class LedgerSigner(
 
     /** The session's Ledger first; else the list until the person picks one or cancels. */
     private suspend fun connect(): LedgerExchanging? =
-        known?.let { open(it) } ?: run {
-            val choice = CompletableDeferred<LedgerDevice?>().also { picking = it }
-            scanner.changed = ::bluetoothChanged
-            stage = LedgerSignStage.Bluetooth(LedgerBluetooth.UNKNOWN)
-            bluetoothChanged()
-            choice.await()?.let { picked ->
-                scanner.stopScan()
-                scanner.changed = null
-                open(picked)
+        // Cancelled (or locked) during that reconnect: stop; only a failed reconnect lists Ledgers.
+        known?.let { open(it) } ?: if (cancelled) {
+            null
+        } else {
+            run {
+                val choice = CompletableDeferred<LedgerDevice?>().also { picking = it }
+                scanner.changed = ::bluetoothChanged
+                stage = LedgerSignStage.Bluetooth(LedgerBluetooth.UNKNOWN)
+                bluetoothChanged()
+                choice.await()?.let { picked ->
+                    scanner.stopScan()
+                    scanner.changed = null
+                    open(picked)
+                }
             }
         }
 
@@ -229,7 +235,10 @@ class LedgerSigner(
         val connected =
             try {
                 connector(ledger)
-            } catch (ignored: LedgerLinkException) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (ignored: Exception) {
+                // A failed link, or a refused Bluetooth permission (SecurityException): no device.
                 null
             }
         if (cancelled) connected?.close()

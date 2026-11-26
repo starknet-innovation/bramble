@@ -8,22 +8,42 @@ import org.bramble.core.LedgerAccountRequest
 
 /**
  * Creates a wallet with no recovery phrase from the first of [requests], sealed under
- * [password], then adds the rest; the first stays active. Throws the core's refusal (or
- * [SessionEndedException]); a failure after the wallet exists leaves the accounts added so far.
+ * [password], then adds the rest; the first stays active. Throws [IllegalArgumentException] for
+ * no picks, and the core's refusal (or [SessionEndedException]) when the wallet was not created.
+ * Once it exists the wallet counts as created: a later pick that fails to add is shown as an
+ * error toast, never thrown, so onboarding moves on and a retry never meets "a wallet exists".
  */
 suspend fun WalletStore.createLedgerWallet(
     password: String,
     requests: List<LedgerAccountRequest>,
 ) {
-    val first = requests.firstOrNull() ?: return
+    val first = requests.firstOrNull() ?: throw IllegalArgumentException("no Ledger account picked")
     val ticket = session.ticket()
-    calls.work(ticket) {
-        val record = walletCore.createLedgerWallet(password, first)
-        requests.drop(1).forEach { walletCore.addLedgerAccount(it) }
-        if (requests.size > 1) walletCore.selectAccount(record.id)
-    }
-    vaultWritten = true
+    var created = false
+    val failed =
+        try {
+            calls.work(ticket) {
+                val record = walletCore.createLedgerWallet(password, first)
+                created = true
+                val failed = requests.drop(1).count { runCatching { walletCore.addLedgerAccount(it) }.isFailure }
+                if (requests.size > 1) runCatching { walletCore.selectAccount(record.id) }
+                failed
+            }
+        } finally {
+            if (created) vaultWritten = true
+        }
+    if (failed > 0) showToast(ledgerNotAdded(failed))
 }
+
+/** The toast after onboarding for [count] picks the core refused to add. */
+fun ledgerNotAdded(count: Int): String =
+    if (count ==
+        1
+    ) {
+        "1 account wasn't added. Add it from Add account."
+    } else {
+        "$count accounts weren't added. Add them from Add account."
+    }
 
 /** Adds the picked Ledger accounts to the unlocked wallet; each add makes its account active. */
 suspend fun WalletStore.addLedgerAccounts(requests: List<LedgerAccountRequest>) {

@@ -1,5 +1,6 @@
 package org.bramble.wallet.ledger
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.bramble.core.AccountFamily
 import org.bramble.core.LedgerAccountRequest
@@ -14,6 +15,7 @@ import org.bramble.wallet.errors.FriendlyErrorRules
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -161,6 +163,48 @@ class LedgerConnectModelTest {
     }
 
     @Test
+    fun backingOutIsNotAFailure() {
+        val fixture = Fixture(LedgerRoute.BRAMBLE, connectError = CancellationException("left"))
+        assertThrows(CancellationException::class.java) { runBlocking { fixture.model.choose(ledger) } }
+        assertFalse(fixture.model.stage is LedgerStage.Failed)
+    }
+
+    @Test
+    fun refusedPermissionAsksReconnect() =
+        runBlocking {
+            val fixture = Fixture(LedgerRoute.BRAMBLE, connectError = SecurityException("BLUETOOTH_CONNECT"))
+            fixture.model.choose(ledger)
+            assertEquals(LedgerStage.Failed(message("replug")), fixture.model.stage)
+        }
+
+    @Test
+    fun heldAccountMatchesWhenPadded() =
+        runBlocking {
+            val held = "0x00" + address(LedgerScheme.BRAMBLE, AccountFamily.OPEN_ZEPPELIN, 0u).removePrefix("0x")
+            val fixture = Fixture(LedgerRoute.BRAMBLE, existing = setOf(held)) { LedgerActivity(true, true) }
+            fixture.model.choose(ledger)
+            assertEquals(
+                "Already in this wallet",
+                fixture.model.rows
+                    .first()
+                    .status,
+            )
+        }
+
+    @Test
+    fun failedCheckIsNotChecking() =
+        runBlocking {
+            val fixture = Fixture(LedgerRoute.BRAMBLE) { LedgerActivity(null, null) }
+            fixture.model.choose(ledger)
+            assertEquals(
+                "Couldn't check this account's activity. Try again.",
+                fixture.model.rows
+                    .first()
+                    .status,
+            )
+        }
+
+    @Test
     fun heldAccountCannotBePicked() =
         runBlocking {
             val held = address(LedgerScheme.BRAMBLE, AccountFamily.OPEN_ZEPPELIN, 0u).uppercase()
@@ -180,6 +224,7 @@ class LedgerConnectModelTest {
         refusal: String? = null,
         disconnectAfter: Int? = null,
         connectFails: Boolean = false,
+        connectError: Exception? = null,
         existing: Set<String> = emptySet(),
         describe: (String) -> LedgerActivity = { LedgerActivity(false, false) },
     ) {
@@ -191,7 +236,11 @@ class LedgerConnectModelTest {
             LedgerConnectModel(
                 route,
                 scanner,
-                connect = { if (connectFails) throw LedgerLinkException.Disconnected() else device },
+                connect = {
+                    if (connectFails) throw LedgerLinkException.Disconnected()
+                    connectError?.let { throw it }
+                    device
+                },
                 core = ScriptedCore(refusal, readers, describe),
                 existing = existing,
             )
@@ -217,6 +266,9 @@ class LedgerConnectModelTest {
         ) = keys.map { LedgerCandidate(request(it, family), address(it.scheme, family, it.accountIndex)) }
 
         override suspend fun describe(address: String) = activity(address)
+
+        /** The core's minimal form: lowercase, no leading zeros. */
+        override fun canonical(address: String) = "0x" + address.lowercase().removePrefix("0x").trimStart('0')
     }
 
     /** The core's steps for one key at a scheme: the version, then the key, or [refusal] after it. */
