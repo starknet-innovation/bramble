@@ -4,23 +4,44 @@ import Observation
 
 /// Where every admitted dapp request lands (P16), and the only code that calls wallet-core's
 /// `DappSession`, so nothing outside this class names its shapes: the browser sees reply JSON and
-/// `ConnectCard`s.
+/// `Card`s.
 ///
-/// The core answers connect and the passive reads around it. It also holds a typed-data signature
-/// as a card, but the app has no screen for one yet, so such a card is declined at once; nothing
-/// here signs. A connect is held as a card until the person approves it with an account, denies
-/// it, or it expires. The phishing feed is refreshed when the sink starts
-/// and on the browser's timer, as the core asks of a host.
+/// The core answers connect, typed-data signing and the passive reads around them. A connect or a
+/// signature is held as a card until the person approves it, denies it, or it expires; the core
+/// reviews, signs and re-checks everything at approval, so nothing here judges or signs. The
+/// phishing feed is refreshed when the sink starts and on the browser's timer, as the core asks of
+/// a host.
 @MainActor
 @Observable
 final class DappRequestSink {
-    /// A connection request waiting for the person, with its site's warnings as copy.
-    struct ConnectCard: Identifiable, Equatable {
+    /// A request waiting for the person, with its site's warnings as copy: a connection, or a
+    /// signature when `sign` is set.
+    struct Card: Identifiable, Equatable {
         let id: String
         let origin: String
         /// A blocked site's card can only be denied.
         let blocked: Bool
         let warnings: [String]
+        let sign: SignRequest?
+    }
+
+    /// What a typed-data card asks to sign, as the core reviewed it. `document` is the exact JSON
+    /// the core hashes (it refuses any value the hash would not cover), indented for reading.
+    struct SignRequest: Equatable {
+        /// The account the core reviewed it for and signs with; approval echoes it back.
+        let accountId: String
+        let address: String
+        /// `"<primaryType> · <domain.name>"`.
+        let summary: String
+        let document: String
+        /// A SNIP-9 outside execution's calls, empty for any other document.
+        let calls: [String]
+        /// The review's flags in the extension's words.
+        let risks: [String]
+        /// A SNIP-9 outside execution: its signature lets the site submit the calls later.
+        let outsideExecution: Bool
+        /// It pays or approves a lookalike of a trusted address: it can only be denied.
+        let poisoned: Bool
     }
 
     /// What the page gets for a request: a reply now, or a card to wait on.
@@ -39,14 +60,16 @@ final class DappRequestSink {
     private static let millisecondsPerSecond = 1_000.0
     private static let userRefused = (code: 113, message: "The user refused the operation")
     /// The extension's `SURFACE_COOLDOWN_MS` (`approval-surface.ts`): after the person cancels a
-    /// site's card, that site's next connect is refused without a card for this long, so a page
-    /// cannot put the card straight back.
+    /// site's card, that site's next card-raising request is refused without a card for this long,
+    /// so a page cannot put a card straight back.
     static let surfaceCooldownMs = 1_000.0
-    /// The connect methods, the only ones that raise a card in this slice.
-    private static let connectMethods: Set<String> = ["wallet_requestAccounts", "mc_requestAccounts"]
+    /// The methods that raise a card in this slice: connect and typed-data signing.
+    private static let cardMethods: Set<String> = [
+        "wallet_requestAccounts", "mc_requestAccounts", "wallet_signTypedData"
+    ]
 
-    /// The connection cards waiting, oldest first.
-    private(set) var cards: [ConnectCard] = []
+    /// The cards waiting, oldest first.
+    private(set) var cards: [Card] = []
     @ObservationIgnored private let session: DappSession
     @ObservationIgnored private let http: PortfolioTransport
     @ObservationIgnored private let now: () -> Double
@@ -71,7 +94,7 @@ final class DappRequestSink {
     /// Answers `request`; `shown` is the network the browser shows, which answers a locked chain-id
     /// read only. A held request settles later through `approve`, `deny` or `settleExpired`.
     func answer(_ request: DappRequest, shown: NetworkId) -> Answer {
-        if Self.connectMethods.contains(request.method), let denied = deniedAt[request.origin],
+        if Self.cardMethods.contains(request.method), let denied = deniedAt[request.origin],
            now() - denied < Self.surfaceCooldownMs {
             return .now(Self.json(id: request.id, error: Self.userRefused))
         }
@@ -90,13 +113,6 @@ final class DappRequestSink {
             return .now(Self.json(id: request.id, error: Self.unknownError))
         }
         if case let .pending(approvalId) = reply {
-            if !isConnect(approvalId) {
-                let settled = session.deny(approvalId: approvalId, nowMs: now())
-                guard let answer = settled.first(where: { $0.requestId == requestId })?.reply else {
-                    return .now(Self.json(id: request.id, error: Self.userRefused))
-                }
-                return .now(Self.json(id: request.id, reply: answer))
-            }
             pageIds[requestId] = request.id
             heldCards[requestId] = approvalId
             reload()
@@ -105,13 +121,25 @@ final class DappRequestSink {
         return .now(Self.json(id: request.id, reply: reply))
     }
 
-    /// The person approved `card`, sharing `accountId`, which must be the active account.
-    func approve(_ card: ConnectCard, accountId: String) -> [Settled] {
+    /// The person approved connection `card`, sharing `accountId`, which must be the active account.
+    func approve(_ card: Card, accountId: String) -> [Settled] {
         finish(session.approveConnect(approvalId: card.id, reviewedAccountId: accountId, nowMs: now()))
     }
 
+    /// The person approved signing `card` with the account it was reviewed for.
+    func sign(_ card: Card) -> [Settled] {
+        guard let sign = card.sign else { return [] }
+        let settled = session.approveSignTypedData(approvalId: card.id, reviewedAccountId: sign.accountId, nowMs: now())
+        return finish(settled)
+    }
+
+    /// Whether the blocklist refuses `origin`, so the browser can stop a listed page before it loads.
+    func isBlockedSite(_ origin: String) -> Bool {
+        session.isBlockedSite(origin: origin)
+    }
+
     /// The person declined `card`.
-    func deny(_ card: ConnectCard) -> [Settled] {
+    func deny(_ card: Card) -> [Settled] {
         deniedAt[card.origin] = now()
         return finish(session.deny(approvalId: card.id, nowMs: now()))
     }
@@ -138,14 +166,6 @@ final class DappRequestSink {
         reload()
     }
 
-    /// Whether `approvalId` is a connection card, the only kind this app shows.
-    private func isConnect(_ approvalId: String) -> Bool {
-        guard let card = session.pendingApprovals(nowMs: now()).first(where: { $0.approvalId == approvalId })?.card
-        else { return false }
-        if case .connect = card { return true }
-        return false
-    }
-
     private func finish(_ settled: [DappSettled]) -> [Settled] {
         reload()
         return settled.compactMap { item in
@@ -156,15 +176,87 @@ final class DappRequestSink {
     }
 
     private func reload() {
-        cards = session.pendingApprovals(nowMs: now()).compactMap { approval in
-            guard case .connect = approval.card else { return nil }
-            return ConnectCard(
+        cards = session.pendingApprovals(nowMs: now()).map { approval in
+            Card(
                 id: approval.approvalId,
                 origin: approval.origin,
                 blocked: approval.blocked,
-                warnings: approval.warnings.map(Self.copy)
+                warnings: approval.warnings.map(Self.copy),
+                sign: Self.signRequest(approval.card)
             )
         }
+    }
+
+    private static func signRequest(_ card: DappCard) -> SignRequest? {
+        guard case let .signTypedData(accountId, address, _, summary, json, calls, flags) = card else { return nil }
+        return SignRequest(
+            accountId: accountId,
+            address: address,
+            summary: summary,
+            document: indented(json),
+            calls: calls,
+            risks: flags.map(\.message),
+            outsideExecution: isOutsideExecution(summary: summary),
+            poisoned: flags.contains { $0.code == .addressPoisoning }
+        )
+    }
+
+    /// Whether a card's summary (`"<primaryType> · <domain.name>"`, or the primary type alone) names
+    /// an `OutsideExecution`, the extension's `signRequestWarnings` test. The primary type is ASCII
+    /// (the core's name grammar), so the first segment is exactly it.
+    static func isOutsideExecution(summary: String) -> Bool {
+        summary == "OutsideExecution" || summary.hasPrefix("OutsideExecution · ")
+    }
+
+    /// `json` re-indented one value per line: it is never parsed, so no number or key order can
+    /// change between what is shown and what is signed. String contents are copied verbatim; only
+    /// whitespace outside strings moves. It walks Unicode scalars, not `Character`s: a combining
+    /// mark after a quote would otherwise fuse with it and desync the string tracking.
+    static func indented(_ json: String) -> String {
+        var out = String.UnicodeScalarView(), depth = 0, inString = false, escaped = false
+        func newline() { out.append(contentsOf: ("\n" + String(repeating: "  ", count: depth)).unicodeScalars) }
+        for char in json.unicodeScalars {
+            if inString {
+                out.append(char)
+                if escaped {
+                    escaped = false
+                } else if char == "\\" {
+                    escaped = true
+                } else if char == "\"" {
+                    inString = false
+                }
+                continue
+            }
+            switch char {
+            case "\"":
+                inString = true
+                out.append(char)
+
+            case "{", "[":
+                depth += 1
+                out.append(char)
+                newline()
+
+            case "}", "]":
+                depth -= 1
+                newline()
+                out.append(char)
+
+            case ",":
+                out.append(char)
+                newline()
+
+            case ":":
+                out.append(contentsOf: ": ".unicodeScalars)
+
+            case " ", "\n", "\r", "\t":
+                break
+
+            default:
+                out.append(char)
+            }
+        }
+        return String(out)
     }
 
     /// A site warning in the extension's words (`insight-messages.ts`).

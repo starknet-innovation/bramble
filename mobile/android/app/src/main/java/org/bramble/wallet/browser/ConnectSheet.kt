@@ -56,7 +56,7 @@ private const val ARM_DELAY_MS = 500L
 @Composable
 internal fun ConnectSheet(
     store: WalletStore,
-    card: DappRequestSink.ConnectCard,
+    card: DappRequestSink.Card,
     leave: () -> Unit,
     decide: (String?) -> Unit,
 ) {

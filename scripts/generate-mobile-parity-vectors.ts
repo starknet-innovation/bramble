@@ -30,6 +30,7 @@ import {
 } from "./mobile-parity-activity-feed";
 import { ALLOWANCES_PARITY_FIXTURE_PATH, renderAllowancesParity } from "./mobile-parity-allowances";
 import { CALLS_PARITY_FIXTURE_PATH, renderCallsParity } from "./mobile-parity-calls";
+import { DAPP_PARITY_FIXTURE_PATH, renderDappParity } from "./mobile-parity-dapp";
 import { GASLESS_PARITY_FIXTURE_PATH, renderGaslessParity } from "./mobile-parity-gasless";
 import {
   MULTISIG_IMPORT_FIXTURE_PATH,
@@ -205,6 +206,9 @@ console.log(`wrote ${SWAP_PARITY_FIXTURE_PATH}`);
 
 await writeFile(GASLESS_PARITY_FIXTURE_PATH, await renderGaslessParity());
 console.log(`wrote ${GASLESS_PARITY_FIXTURE_PATH}`);
+
+await writeFile(DAPP_PARITY_FIXTURE_PATH, await renderDappParity());
+console.log(`wrote ${DAPP_PARITY_FIXTURE_PATH}`);
 
 // So are the privacy fixture and the privacy copy tables.
 await import("./generate-mobile-privacy-vectors");

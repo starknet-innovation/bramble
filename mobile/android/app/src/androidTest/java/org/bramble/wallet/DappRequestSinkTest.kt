@@ -95,24 +95,133 @@ class DappRequestSinkTest {
         assertEquals(0, accounts.getJSONObject("result").getJSONArray("accounts").length())
     }
 
-    /** A connected site's typed data has no screen yet: declined at once, never a connect card (as iOS). */
-    @Test
-    fun typedDataDeclinedForNow() {
+    /** A SNIP-12 document over [message], bound to Mainnet. */
+    private fun typedData(message: String = """{"content":"hello"}"""): String =
+        listOf(
+            """{"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},""",
+            """"message":$message,"primaryType":"Mail",""",
+            """"types":{"Mail":[{"name":"content","type":"felt"}],""",
+            """"StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},""",
+            """{"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}""",
+        ).joinToString("")
+
+    private fun connected(): Pair<DappRequestSink, AccountRecord> {
         val (sink, account) = sink()
         held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
         sink.approve(sink.cards.single(), account.id)
+        return sink to account
+    }
 
-        val params =
-            listOf(
-                """{"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},""",
-                """"message":{"content":"hello"},"primaryType":"Mail",""",
-                """"types":{"Mail":[{"name":"content","type":"felt"}],""",
-                """"StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},""",
-                """{"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}""",
-            ).joinToString("")
-        val reply = now(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
-        assertEquals(113, reply.getJSONObject("error").getInt("code"))
+    /** A connected site's typed data is a sign card for the active account; Sign answers the signature. */
+    @Test
+    fun signingAnswersSignature() {
+        val (sink, account) = connected()
+        val requestId =
+            held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", typedData()), NetworkId.MAINNET))
+        val card = sink.cards.single()
+        val sign = card.sign!!
+        assertEquals(account.id, sign.accountId)
+        assertEquals("Mail · Bramble Test", sign.summary)
+        assertTrue(sign.document.contains(""""content": "hello""""))
+        assertFalse(sign.poisoned)
+
+        val settled = sink.sign(card).single()
+        assertEquals(requestId, settled.requestId)
+        assertEquals(2, JSONObject(settled.json).getJSONArray("result").length())
         assertTrue(sink.cards.isEmpty())
+    }
+
+    /** A message value the types do not declare is refused before any card, so it is never shown as signed. */
+    @Test
+    fun undeclaredValueNeverCards() {
+        val (sink, _) = connected()
+        val params = typedData("""{"content":"hello","note":"not signed"}""")
+        val reply = now(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
+        assertTrue(reply.has("error"))
+        assertTrue(sink.cards.isEmpty())
+    }
+
+    /** A cancelled sign card holds the site off for the cooldown too, as the extension's surface does. */
+    @Test
+    fun deniedSignWaitsOutCooldown() {
+        val (sink, _) = connected()
+        val sign = DappRequest(origin, id, "wallet_signTypedData", typedData())
+        held(sink.answer(sign, NetworkId.MAINNET))
+        sink.deny(sink.cards.single())
+        val again = now(sink.answer(sign, NetworkId.MAINNET))
+        assertEquals(113, again.getJSONObject("error").getInt("code"))
+        assertTrue(sink.cards.isEmpty())
+    }
+
+    /** starknet.js's SNIP-9 v2 `getTypedData` on Mainnet with one STRK call, as in `dapp_sign_outside.rs`. */
+    private fun outsideExecution(
+        entrypoint: String,
+        calldata: List<String>,
+    ): String {
+        val data = calldata.joinToString(",") { "\"$it\"" }
+        return listOf(
+            """{"typed_data":{"types":{"StarknetDomain":[{"name":"name","type":"shortstring"},""",
+            """{"name":"version","type":"shortstring"},{"name":"chainId","type":"shortstring"},""",
+            """{"name":"revision","type":"shortstring"}],"OutsideExecution":[""",
+            """{"name":"Caller","type":"ContractAddress"},{"name":"Nonce","type":"felt"},""",
+            """{"name":"Execute After","type":"u128"},{"name":"Execute Before","type":"u128"},""",
+            """{"name":"Calls","type":"Call*"}],"Call":[{"name":"To","type":"ContractAddress"},""",
+            """{"name":"Selector","type":"selector"},{"name":"Calldata","type":"felt*"}]},""",
+            """"primaryType":"OutsideExecution","domain":{"name":"Account.execute_from_outside",""",
+            """"version":"2","chainId":"SN_MAIN","revision":"1"},"message":{"Caller":"0x414e595f43414c4c4552",""",
+            """"Nonce":"0x1","Execute After":"0x1","Execute Before":"0xe8d4a50fff",""",
+            """"Calls":[{"To":"$STRK","Selector":"$entrypoint","Calldata":[$data]}]}}}""",
+        ).joinToString("")
+    }
+
+    /** [address] with its visible `0x` + four and last four kept, the rest changed. */
+    private fun lookalike(address: String): String {
+        val padded = address.removePrefix("0x").padStart(64, '0')
+        return "0x" + padded.take(4) + "1".repeat(56) + padded.takeLast(4)
+    }
+
+    /** An outside execution's card says what its signature lets the site do, and lists its calls. */
+    @Test
+    fun outsideExecutionShowsCalls() {
+        val (sink, _) = connected()
+        val params = outsideExecution("approve", listOf("0x123", MAX_U128, MAX_U128))
+        held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
+        val sign = sink.cards.single().sign!!
+        assertTrue(sign.outsideExecution)
+        assertEquals(1, sign.calls.size)
+        assertTrue(sign.risks.isNotEmpty())
+        assertFalse(sign.poisoned)
+    }
+
+    /** A card paying a lookalike of a known address can only be denied: Sign answers a refusal. */
+    @Test
+    fun lookalikePaymentIsNeverSigned() {
+        val (sink, account) = connected()
+        val params = outsideExecution("transfer", listOf(lookalike(account.address), "0x1", "0x0"))
+        held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
+        val card = sink.cards.single()
+        assertTrue(card.sign!!.poisoned)
+        val reply = JSONObject(sink.sign(card).single().json)
+        assertFalse(reply.has("result"))
+        assertTrue(reply.has("error"))
+    }
+
+    /** A sign card the page left can no longer be signed. */
+    @Test
+    fun leftPagesSignCardIsNeverSigned() {
+        val (sink, _) = connected()
+        held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", typedData()), NetworkId.MAINNET))
+        val card = sink.cards.single()
+        sink.pageGone()
+        assertTrue(sink.cards.isEmpty())
+        assertTrue(sink.sign(card).isEmpty())
+    }
+
+    @Test
+    fun blocklistedSiteIsRefused() {
+        val (sink, _) = sink()
+        assertFalse(sink.isBlockedSite(origin))
+        assertTrue(sink.isBlockedSite("https://starknet-airdrop.com"))
     }
 
     @Test
@@ -149,5 +258,10 @@ class DappRequestSinkTest {
             "Domain closely resembles starknet.io; watch for a spoofed lookalike.",
             DappRequestSink.warningCopy(SiteWarning.Lookalike("starknet.io")),
         )
+    }
+
+    private companion object {
+        const val STRK = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+        const val MAX_U128 = "0xffffffffffffffffffffffffffffffff"
     }
 }

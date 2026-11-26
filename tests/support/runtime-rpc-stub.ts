@@ -6,6 +6,9 @@
  * (for example to capture inputs or return a failure). `submitErc20Transfer`
  * and `submitInvokeTransaction` echo their inputs so a transfer/invoke assertion
  * sees the token and calls it submitted without any override.
+ *
+ * The mobile dapp parity fixture (`scripts/mobile-parity-dapp/`) runs on this stub: editing
+ * it can change `mobile/core/tests/fixtures/extension-dapp.jsonl`; run `bun run mobile:parity`.
  */
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 
