@@ -107,7 +107,7 @@ fun WalletShell(store: WalletStore) {
             }
         },
     ) {
-        WalletHeader(store, openAccounts = { accountsOpen = true })
+        WalletHeader(store, openAccounts = { accountsOpen = true }, openBrowser = { push(Flow.BROWSER) })
         DockScreen(store, push, openSend = { openSend(null) }) { id ->
             tokenId = id
             push(Flow.TOKEN_DETAIL)
@@ -203,6 +203,11 @@ private fun FlowScreen(
         Flow.READY_MULTISIG -> {
             org.bramble.wallet.coordination
                 .ReadyMultisigScreen(store, back = pop)
+        }
+
+        Flow.BROWSER -> {
+            org.bramble.wallet.browser
+                .BrowserScreen(back = pop)
         }
 
         Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL, Flow.TOKENS, Flow.ADD_TOKEN, Flow.DISCOVER_TOKENS -> {
@@ -349,6 +354,7 @@ private fun DockFrame(
 private fun WalletHeader(
     store: WalletStore,
     openAccounts: () -> Unit,
+    openBrowser: () -> Unit,
 ) {
     val skin = LocalSkin.current
     val account = store.activeRecord
@@ -394,19 +400,24 @@ private fun WalletHeader(
                 }
             }
         }
-        HeaderActions(store, explorer)
+        HeaderActions(store, explorer, openBrowser)
     }
 }
 
-/** The header's explorer link ([explorer] is null where the network has none) and lock control. */
+/**
+ * The header's browser control, explorer link ([explorer] is null where the network has none) and
+ * lock control.
+ */
 @Composable
 private fun HeaderActions(
     store: WalletStore,
     explorer: String?,
+    openBrowser: () -> Unit,
 ) {
     val skin = LocalSkin.current
     val context = LocalContext.current
     Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+        IconButton(BrambleIconName.GLOBE, "Browser", tint = skin.muted, onClick = openBrowser)
         IconButton(
             BrambleIconName.EXTERNAL_LINK,
             if (explorer != null) "Open in explorer" else "Explorer unavailable on this network",

@@ -57,6 +57,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/ledger-grant/dom.ts",
   "apps/extension/src/ledger-grant/index.ts",
   "apps/extension/src/provider/inpage.ts",
+  "apps/extension/src/provider/mobile-bridge.ts",
   "apps/extension/src/sandbox/render.ts",
   "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",

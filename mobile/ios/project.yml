@@ -48,6 +48,9 @@ targets:
       # The onboarding landscape is the extension's own asset, bundled by reference, not copied.
       - path: ../../apps/extension/public/brand/onboarding-landscape.webp
         buildPhase: resources
+      # The in-app browser's document-start script (bun run mobile:assets): the extension's provider.
+      - path: ../web/bramble-provider.generated.js
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
     # Every file the app creates defaults to complete protection (unreadable while the device is

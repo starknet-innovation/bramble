@@ -52,4 +52,7 @@ enum class Flow {
 
     /** Scan the token registry for held tokens. */
     DISCOVER_TOKENS,
+
+    /** The in-app browser. */
+    BROWSER,
 }
