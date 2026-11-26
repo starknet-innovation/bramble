@@ -56,6 +56,10 @@ final class SecurityTests: XCTestCase {
             Bundle.main.object(forInfoDictionaryKey: "NSFaceIDUsageDescription") as? String,
             BrambleCopy.faceIdUsage
         )
+        XCTAssertEqual(
+            Bundle.main.object(forInfoDictionaryKey: "NSBluetoothAlwaysUsageDescription") as? String,
+            BrambleCopy.bluetoothUsage
+        )
     }
 
     func testTheWrapSecretIsWipedAfterUse() throws {

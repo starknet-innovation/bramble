@@ -16,11 +16,15 @@ import { HEADER, sorted } from "./shared";
 export const FACE_ID_USAGE =
   "Bramble uses Face ID to unlock your wallet instead of typing your passphrase.";
 
+/** The Bluetooth usage string iOS shows before connecting a Ledger; `project.yml` carries it (checked). */
+export const BLUETOOTH_USAGE = "Bramble uses Bluetooth to connect to your Ledger.";
+
 /** Every security string the mobile apps show, keyed by camelCase name. */
 const SECURITY_COPY: Readonly<Record<string, string>> = {
   autoLockBackground: "When Bramble leaves the screen",
   autoLockEyebrow: "Auto-lock",
   autoLockIdle: "After {minutes} minutes idle",
+  bluetoothUsage: BLUETOOTH_USAGE,
   biometricEnable: "Turn on {biometry}",
   biometricEyebrow: "Biometric unlock",
   biometricInvalidated:
