@@ -27,12 +27,14 @@ final class LedgerBleLink: NSObject, LedgerLink {
     private var inbox: [Data] = []
     private var pending: CheckedContinuation<Void, Error>?
     private var waitingForNotification: CheckedContinuation<Data, Error>?
+    /// Resumed by the first state update: a new manager starts in `.unknown`.
+    private var waitingForState: CheckedContinuation<Void, Never>?
 
     private var services: [CBUUID] { specs.map { CBUUID(string: $0.service) } }
 
     /// The identifiers of Ledgers the system is connected to, and of those `remembered` from an
     /// earlier connection. The first call turns the link's Bluetooth on (and asks for permission),
-    /// so it finds nothing until Bluetooth is on. Scanning for a new device is not here yet.
+    /// so it finds nothing until Bluetooth is on. `LedgerBleScanner` finds new devices.
     func ledgers(remembered: [UUID]) -> [UUID] {
         guard let manager = bluetooth(), manager.state == .poweredOn else { return [] }
         let known = manager.retrievePeripherals(withIdentifiers: remembered).map(\.identifier)
@@ -43,8 +45,11 @@ final class LedgerBleLink: NSObject, LedgerLink {
     /// Connects to the Ledger `id` (from `ledgers`), finds its service's characteristics and
     /// subscribes to notifications, within `connectTimeoutMs`. Pairing, when the device asks for
     /// it, happens here (the system prompts). On any failure the link is closed; Bluetooth off or
-    /// an unknown device is `.disconnected`.
+    /// an unknown device is `.disconnected`. A new link first waits for Bluetooth's state.
     func connect(_ id: UUID) async throws {
+        if let manager = bluetooth(), manager.state == .unknown || manager.state == .resetting {
+            await withCheckedContinuation { waitingForState = $0 }
+        }
         guard let manager = bluetooth(), manager.state == .poweredOn, !closed,
               let target = manager.retrievePeripherals(withIdentifiers: [id]).first
         else {
@@ -157,6 +162,8 @@ extension LedgerBleLink: CBCentralManagerDelegate {
         // CoreBluetooth calls on the main queue (`queue: nil`). The parameter is not Sendable, so
         // the actor's own reference is read instead.
         MainActor.assumeIsolated {
+            waitingForState?.resume()
+            waitingForState = nil
             if self.central?.state != .poweredOn, peripheral != nil { close() }
         }
     }

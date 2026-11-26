@@ -1,9 +1,11 @@
+import BrambleCore
 import SwiftUI
 
 /// First-run flow, step for step with the extension's onboarding wizard:
 ///
 ///   create: welcome → passphrase → review account → save phrase → confirm backup → all set
 ///   import: welcome → method → recovery phrase → passphrase → find your accounts → all set
+///   Ledger: welcome → method → connect and pick → passphrase → all set
 ///
 /// The vault is written when the passphrase is accepted (the core generates or imports the phrase
 /// and seals it in one call); later steps only read public data or the words kept for backup. An
@@ -12,9 +14,9 @@ import SwiftUI
 /// pending" until Confirm backup succeeds, so unlocking one resumes at Save phrase
 /// (`resumingBackup`), after a passphrase check when the unlock did not already reveal the words.
 struct OnboardingFlow: View {
-    enum Path: Equatable { case create, recover }
+    enum Path: Equatable { case create, recover, ledger }
     enum Step: Equatable {
-        case welcome, importMethod, recoveryPhrase, passphrase
+        case welcome, importMethod, recoveryPhrase, ledger, passphrase
         case reviewAccount, findAccounts, revealBackup, savePhrase, confirmBackup, complete
 
         /// The edge back-swipe runs only on the steps before the vault is written. `welcome` is
@@ -22,7 +24,7 @@ struct OnboardingFlow: View {
         /// `replace(with:)`, so a swipe there must do nothing (design-mobile.md 4.6).
         var allowsSwipeBack: Bool {
             switch self {
-            case .importMethod, .recoveryPhrase, .passphrase:
+            case .importMethod, .recoveryPhrase, .ledger, .passphrase:
                 true
 
             case .welcome, .reviewAccount, .findAccounts, .revealBackup, .savePhrase, .confirmBackup, .complete:
@@ -53,6 +55,8 @@ struct OnboardingFlow: View {
     @State private var forward = true
     /// Phrase typed on the recovery step, handed to the core at the passphrase step, then cleared.
     @State private var importedPhrase = ""
+    /// The Ledger accounts picked on the connect step (public keys only), created at the passphrase.
+    @State private var ledgerRequests: [LedgerAccountRequest] = []
 
     var body: some View {
         ZStack {
@@ -101,7 +105,16 @@ struct OnboardingFlow: View {
             )
 
         case .importMethod:
-            ImportMethodStep(back: pop) { push(.recoveryPhrase) }
+            ImportMethodStep(back: pop, recoveryPhrase: { push(.recoveryPhrase) }, ledger: {
+                path = .ledger
+                push(.ledger)
+            })
+
+        case .ledger:
+            LedgerOnboardingStep(back: pop) { requests in
+                ledgerRequests = requests
+                push(.passphrase)
+            }
 
         case .recoveryPhrase:
             RecoveryPhraseStep(back: pop) { phrase in
@@ -113,6 +126,10 @@ struct OnboardingFlow: View {
             PassphraseStep(path: path, back: pop) { passphrase in
                 if path == .create {
                     try await store.create(password: passphrase)
+                } else if path == .ledger {
+                    try await store.createLedgerWallet(password: passphrase, requests: ledgerRequests)
+                    replace(with: .complete)
+                    return
                 } else {
                     try await store.importWallet(phrase: importedPhrase, password: passphrase)
                     importedPhrase = ""

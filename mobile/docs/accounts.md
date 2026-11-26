@@ -127,7 +127,7 @@ signs. Manage, as `account-names.ts` does:
 **Kept accounts (P7).** `unusable_accounts()` lists the records the vault holds that mobile keeps
 but does not operate. Manage shows them read-only under "Not usable on this device", with the
 hint "These accounts stay in your wallet. Use them in the Bramble extension." and one line per
-`UnusableReason`: "Ledger account. Ledger isn't on mobile yet." / "From another recovery phrase." /
+`UnusableReason`: "Ledger account that doesn't match its device key." (a Ledger record the core cannot place; one it can is operated) / "From another recovery phrase." /
 "On <network id>, which mobile doesn't support." / "Mobile can't derive this account's key." The
 extension has no counterpart (it operates them all), so this wording is mobile's own. The section
 is absent when the list is empty.

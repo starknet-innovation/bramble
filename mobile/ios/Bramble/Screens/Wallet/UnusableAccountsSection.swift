@@ -30,7 +30,7 @@ struct UnusableAccountsSection: View {
 func unusableReasonText(_ account: UnusableAccount) -> String {
     switch account.reason {
     case .ledger:
-        "Ledger account. Ledger isn't on mobile yet."
+        "Ledger account that doesn't match its device key."
 
     case .importedPhrase:
         "From another recovery phrase."

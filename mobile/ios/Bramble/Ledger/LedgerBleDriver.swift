@@ -87,6 +87,11 @@ final class LedgerBleDriver {
         return size
     }
 
+    /// Ends the link; later exchanges fail as `.disconnected`.
+    func close() {
+        link.close()
+    }
+
     private static func run(_ exchange: LedgerBleExchange, over link: any LedgerLink) async throws -> LedgerExchange {
         for frame in exchange.frames() { try await link.write(frame.bytes) }
         while true {

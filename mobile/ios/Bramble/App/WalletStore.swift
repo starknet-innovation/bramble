@@ -150,7 +150,7 @@ final class WalletStore {
     /// on disk without a session, so retrying would only answer "A wallet already exists". Go to
     /// Unlock instead, as Android's `relocked` does: unlocking resumes at Save phrase (the backup
     /// is still pending) or at account discovery (the import's recovery is still pending).
-    private func routeToUnlockIfLockedDuringCreation(_ error: Error) {
+    func routeToUnlockIfLockedDuringCreation(_ error: Error) {
         if case CoreError.Locked = error, core.status() == .locked {
             route = .locked
         }
