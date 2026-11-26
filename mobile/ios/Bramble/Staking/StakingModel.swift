@@ -170,20 +170,23 @@ final class StakingModel {
             }
             let outcome = await transport.perform(request)
             let page = try stakingDirectoryView(network: network.network, outcome: outcome, tokens: tokens)
-            var listed = cursor == nil ? Directory(entries: [], nextCursor: nil) : current
-                ?? Directory(entries: [], nextCursor: nil)
             switch page {
             case .incomplete:
-                listed.incomplete = cursor == nil
-                listed.moreError = cursor == nil ? nil : StakingCopy.directoryIncomplete
-                listed.nextCursor = nil
+                // The extension's `appendDirectoryPage`: an incomplete page replaces the list, so
+                // nothing from an earlier page stays selectable.
+                return .loaded(Directory(entries: [], nextCursor: nil, incomplete: true))
 
             case let .ready(entries, nextCursor):
-                listed.entries += entries
-                listed.nextCursor = nextCursor
-                listed.moreError = nil
+                // The core dedups within a page; a staker an earlier page listed is dropped.
+                let base = cursor == nil ? [] : current?.entries ?? []
+                let seen = Set(base.map(\.staker))
+                let listed = base + entries.filter { !seen.contains($0.staker) }
+                let full = listed.count >= StakingCopy.maxListedValidators
+                return .loaded(Directory(
+                    entries: Array(listed.prefix(StakingCopy.maxListedValidators)),
+                    nextCursor: full ? nil : nextCursor
+                ))
             }
-            return .loaded(listed)
         } catch {
             if cursor != nil, var current {
                 current.moreError = StakingText.message(error)
@@ -193,9 +196,10 @@ final class StakingModel {
         }
     }
 
-    /// The paste field's Open: a valid Starknet address opens that validator; anything else says so.
+    /// The paste field's Open: a valid non-zero Starknet address opens that validator; anything
+    /// else says so. The core accepts 0x0 as a felt; the extension's `stakerAddress` refuses it.
     func openPasted() async {
-        guard let staker = validateRecipient(input: pasteInput) else {
+        guard let staker = validateRecipient(input: pasteInput), staker != "0x0" else {
             pasteError = StakingCopy.directoryInvalidAddress
             return
         }

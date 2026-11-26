@@ -26,7 +26,8 @@ extension CoordinationStore {
         return settled ? await storedIntents(of: multisigId) : listed
     }
 
-    private func storedIntents(of multisigId: String) async -> [MultisigIntent] {
+    /// The intents stored for a multisig as filed, unsettled; empty when the core refuses.
+    func storedIntents(of multisigId: String) async -> [MultisigIntent] {
         let walletCore = core
         return (try? await work { try walletCore.multisigIntents(multisigId: multisigId) }) ?? []
     }

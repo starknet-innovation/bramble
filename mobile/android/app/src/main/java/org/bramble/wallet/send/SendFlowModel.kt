@@ -364,6 +364,11 @@ class SendFlowModel(
                 fail(step.failure)
             }
 
+            is SendStep.Device, is SendStep.DeviceRetry -> {
+                // No Ledger transport on mobile yet: a Ledger account's plan fails closed.
+                fail(SendFailure(SendFailureCode.SIGNING_FAILED, null))
+            }
+
             else -> {
                 // Rpc and Wait steps never reach here: the driver handles them.
             }

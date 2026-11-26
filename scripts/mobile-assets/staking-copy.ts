@@ -9,11 +9,12 @@
  * Rust core (`StakingPlan.review`, `StakingError.Refused`, `TransferPlan.riskFlags`) and are
  * shown verbatim.
  */
-// Not package exports: the English catalogs and the background's unreadable-staking refusal, read
-// here only to pin the mobile copy to them.
+// Not package exports: the English catalogs, the background's unreadable-staking refusal and the
+// directory's list cap, read here only to pin the mobile copy to them.
 import { STAKING_UNREADABLE } from "../../apps/extension/src/background/staking/staking-context";
 import { reviewStepsSwapMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/review-steps-swap";
 import { swapStakingMessages } from "../../packages/presentation/wallet-ui/src/i18n/messages/swap-staking";
+import { MAX_LISTED_VALIDATORS } from "../../packages/presentation/wallet-ui/src/sidepanel/journeys/staking/staking-directory-client";
 import { HEADER, sorted } from "./shared";
 
 /** Repository-relative path of the iOS staking copy table. */
@@ -55,6 +56,8 @@ export const renderSwiftStakingCopy = (): string =>
     "/// The extension's staking screen copy (`swap-staking.ts`); placeholders are filled by the app.",
     "enum StakingCopy {",
     ...sorted(stakingCopy()).map(([key, value]) => `    static let ${key} = ${quoted(value)}`),
+    "    /// The most validators the list holds, however many pages load (`MAX_LISTED_VALIDATORS`).",
+    `    static let maxListedValidators = ${MAX_LISTED_VALIDATORS}`,
     "}",
     "",
   ].join("\n");
@@ -70,6 +73,9 @@ export const renderKotlinStakingCopy = (): string =>
     ...sorted(stakingCopy()).map(
       ([key, value]) => `    const val ${key} = ${quoted(value).replaceAll("$", "\\$")}`,
     ),
+    "",
+    "    /** The most validators the list holds, however many pages load (`MAX_LISTED_VALIDATORS`). */",
+    `    const val maxListedValidators = ${MAX_LISTED_VALIDATORS}`,
     "}",
     "",
   ].join("\n");

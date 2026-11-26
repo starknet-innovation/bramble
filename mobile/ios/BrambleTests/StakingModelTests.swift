@@ -28,7 +28,7 @@ final class StakingModelTests: XCTestCase {
         try XCTUnwrap(supportedNetworks().first { $0.network == .mainnet })
     }
 
-    private func model(_ node: StakingFixtureNode, network: NetworkInfo? = nil) throws -> StakingModel {
+    private func model(_ node: some PortfolioTransport, network: NetworkInfo? = nil) throws -> StakingModel {
         let wallet = try core
         let net = try network ?? mainnet()
         return try StakingModel(
@@ -115,6 +115,143 @@ final class StakingModelTests: XCTestCase {
         XCTAssertEqual(StakingText.exitWindow(59), "59 seconds")
     }
 
+    func testShowMoreDropsValidatorsAnEarlierPageListed() async throws {
+        let pages = try DirectoryPages([
+            (Self.page(first: 0, count: 3, cursor: "cursor-2"), false),
+            (Self.page(first: 2, count: 3, cursor: "cursor-3"), false)
+        ])
+        let staking = try model(pages)
+        await staking.loadDirectory(cursor: nil)
+        await staking.loadDirectory(cursor: "cursor-2")
+        let listed = try Self.listed(staking)
+        XCTAssertEqual(listed.entries.count, 5)
+        XCTAssertEqual(Set(listed.entries.map(\.staker)).count, 5)
+        XCTAssertEqual(listed.nextCursor, "cursor-3")
+    }
+
+    func testAnIncompleteLaterPageLeavesNothingSelectable() async throws {
+        let pages = try DirectoryPages([
+            (Self.page(first: 0, count: 3, cursor: "cursor-2"), false),
+            (Self.page(first: 3, count: 3, cursor: nil, status: "unavailable"), false)
+        ])
+        let staking = try model(pages)
+        await staking.loadDirectory(cursor: nil)
+        await staking.loadDirectory(cursor: "cursor-2")
+        let listed = try Self.listed(staking)
+        XCTAssertTrue(listed.incomplete)
+        XCTAssertTrue(listed.entries.isEmpty)
+        XCTAssertNil(listed.nextCursor)
+    }
+
+    func testTheListStopsAtTheExtensionsCap() async throws {
+        let size = 50
+        let pages = try DirectoryPages((0 ..< 11).map { index in
+            try (Self.page(first: index * size, count: size, cursor: "cursor-\(index + 2)"), false)
+        })
+        let staking = try model(pages)
+        await staking.loadDirectory(cursor: nil)
+        while let cursor = try Self.listed(staking).nextCursor, await pages.served < 11 {
+            await staking.loadDirectory(cursor: cursor)
+        }
+        let listed = try Self.listed(staking)
+        XCTAssertEqual(listed.entries.count, StakingCopy.maxListedValidators)
+        XCTAssertNil(listed.nextCursor)
+        let served = await pages.served
+        XCTAssertEqual(served, 10)
+    }
+
+    func testOnlyTheNewestDirectoryReadLands() async throws {
+        let pages = try DirectoryPages([
+            (Self.page(first: 0, count: 1, cursor: nil), true),
+            (Self.page(first: 1, count: 2, cursor: nil), false)
+        ])
+        let staking = try model(pages)
+        let slow = Task { await staking.loadDirectory(cursor: nil) }
+        await Self.served(pages, 1)
+        await staking.loadDirectory(cursor: nil)
+        await pages.release()
+        await slow.value
+        XCTAssertEqual(try Self.listed(staking).entries.count, 2)
+    }
+
+    func testShowMoreWhileAPageLoadsIsIgnored() async throws {
+        let pages = try DirectoryPages([
+            (Self.page(first: 0, count: 2, cursor: "cursor-2"), false),
+            (Self.page(first: 2, count: 2, cursor: nil), true),
+            (Self.page(first: 4, count: 2, cursor: nil), false)
+        ])
+        let staking = try model(pages)
+        await staking.loadDirectory(cursor: nil)
+        let more = Task { await staking.loadDirectory(cursor: "cursor-2") }
+        await Self.served(pages, 2)
+        XCTAssertTrue(staking.loadingMore)
+        await staking.loadDirectory(cursor: "cursor-2")
+        await pages.release()
+        await more.value
+        XCTAssertEqual(try Self.listed(staking).entries.count, 4)
+        XCTAssertFalse(staking.loadingMore)
+        let served = await pages.served
+        XCTAssertEqual(served, 2)
+    }
+
+    func testPastingTheZeroAddressOpensNothing() async throws {
+        let pages = DirectoryPages([])
+        let staking = try model(pages)
+        staking.pasteInput = "0x000"
+        await staking.openPasted()
+        XCTAssertEqual(staking.pasteError, StakingCopy.directoryInvalidAddress)
+        XCTAssertNil(staking.validator)
+        let served = await pages.served
+        XCTAssertEqual(served, 0)
+    }
+
+    private static func listed(_ staking: StakingModel) throws -> StakingModel.Directory {
+        guard case let .loaded(listed) = staking.directory else {
+            return try XCTUnwrap(StakingModel.Directory?.none, "directory \(staking.directory)")
+        }
+        return listed
+    }
+
+    /// Waits (a bounded number of yields) until `pages` has handed out `count` pages.
+    private static func served(_ pages: DirectoryPages, _ count: Int) async {
+        var tries = 0
+        while await pages.served < count, tries < 10_000 {
+            tries += 1
+            await Task.yield()
+        }
+        let served = await pages.served
+        XCTAssertEqual(served, count)
+    }
+
+    /// `ready.full`'s Starkscan page holding `count` copies of its first validator, numbered from
+    /// `first` (staker and pool), with `status` as the snapshot's coverage status.
+    private static func page(first: Int, count: Int, cursor: String?, status: String? = nil) throws -> String {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "extension-staking", withExtension: "jsonl"))
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+        let found = lines.lazy
+            .compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+            .first { $0["block"] as? String == "directory" && $0["name"] as? String == "ready.full" }
+        let exchange = try XCTUnwrap((found?["starkscan"] as? [[String: Any]])?.first)
+        let body = try XCTUnwrap((exchange["reply"] as? [String: Any])?["body"] as? String)
+        var page = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        let item = try XCTUnwrap((page["items"] as? [[String: Any]])?.first)
+        let pool = try XCTUnwrap((item["pools"] as? [[String: Any]])?.first)
+        page["items"] = (first ..< first + count).map { index in
+            var validator = item
+            var own = pool
+            own["address"] = String(format: "0x5b%05x", index)
+            validator["address"] = String(format: "0x5a%05x", index)
+            validator["pools"] = [own]
+            return validator
+        }
+        page["nextCursor"] = cursor ?? NSNull()
+        if let status, var coverage = page["coverage"] as? [String: Any] {
+            coverage["status"] = status
+            page["coverage"] = coverage
+        }
+        return try String(decoding: JSONSerialization.data(withJSONObject: page), as: UTF8.self)
+    }
+
     private struct Prepared {
         let model: StakingActionModel
         let node: StakingFixtureNode
@@ -152,5 +289,37 @@ final class StakingModelTests: XCTestCase {
         await model.prepare()
         model.close()
         return Prepared(model: model, node: node, send: send)
+    }
+}
+
+/// Starkscan for the directory tests: hands out `pages` in request order, whatever was asked, and
+/// a held page waits for `release()`. Past the last page it answers as an unavailable service.
+private actor DirectoryPages: PortfolioTransport {
+    private static let statusOK: UInt16 = 200
+    private static let unavailable: UInt16 = 503
+
+    private let pages: [(body: String, held: Bool)]
+    private var waiting: CheckedContinuation<Void, Never>?
+    private(set) var served = 0
+
+    init(_ pages: [(body: String, held: Bool)]) {
+        self.pages = pages
+    }
+
+    func perform(_: HttpRequest) async -> HttpOutcome {
+        guard served < pages.count else {
+            return HttpOutcome(status: Self.unavailable, retryAfter: nil, body: nil, timedOut: false)
+        }
+        let page = pages[served]
+        served += 1
+        if page.held {
+            await withCheckedContinuation { waiting = $0 }
+        }
+        return HttpOutcome(status: Self.statusOK, retryAfter: nil, body: Data(page.body.utf8), timedOut: false)
+    }
+
+    func release() {
+        waiting?.resume()
+        waiting = nil
     }
 }

@@ -105,8 +105,8 @@ final class RevokeFlowModel {
     /// The Cost box's retry: re-estimates on a freshly proven endpoint.
     func retryFee() async {
         guard let driver, stage == .review else { return }
-        await driver.releaseEndpoint()
         stage = .preparing
+        await driver.releaseEndpoint()
         await settle(driver.plan) { try await driver.run(from: .retryEstimate) }
     }
 
