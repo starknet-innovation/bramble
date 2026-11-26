@@ -15,6 +15,8 @@ val coordinationFixture: File = rootDir.resolve("../core/tests/fixtures/ui-coord
 // The in-app browser's document-start script (bun run mobile:assets), copied into the app's assets.
 val providerScript: File = rootDir.resolve("../web/bramble-provider.generated.js")
 val multisigFixture: File = rootDir.resolve("../core/tests/fixtures/extension-multisig-transactions.json")
+// The Speculos transcripts the Ledger Bluetooth driver replays (ledger/LedgerBleDriverTest).
+val ledgerFixture: File = rootDir.resolve("../core/tests/fixtures/extension-ledger.jsonl")
 val brambleRes = layout.buildDirectory.dir("generated/bramble-res")
 val brambleAssets = layout.buildDirectory.dir("generated/bramble-assets")
 val brambleTestAssets = layout.buildDirectory.dir("generated/bramble-test-assets")
@@ -36,7 +38,8 @@ val copyParityFixture by tasks.registering(Copy::class) {
     check(parityFixture.isFile) { "missing $parityFixture (run bun run mobile:parity)" }
     check(coordinationFixture.isFile) { "missing $coordinationFixture" }
     check(multisigFixture.isFile) { "missing $multisigFixture" }
-    from(parityFixture, coordinationFixture, multisigFixture)
+    check(ledgerFixture.isFile) { "missing $ledgerFixture" }
+    from(parityFixture, coordinationFixture, multisigFixture, ledgerFixture)
     into(brambleTestAssets)
 }
 
