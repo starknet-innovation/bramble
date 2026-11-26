@@ -14,10 +14,11 @@
  */
 import type { Json } from "@bramble/core/json";
 import { createOriginGuard } from "@bramble/permissions/blocklist";
-import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createPreferencesStore, type WalletPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { OriginGrantInput } from "@bramble/vault/service";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
   type ProviderMethod,
   readProviderRequest,
@@ -26,8 +27,12 @@ import {
   toRuntimeMessage,
 } from "@bramble/wallet-protocol/bridge";
 import { invalidRequestPayload } from "@bramble/wallet-protocol/rpc-errors";
+import type { MessageHandlerOptions } from "../../apps/extension/src/background/routing/message-context";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
-import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import {
+  createUnlockSession,
+  type UnlockSession,
+} from "../../apps/extension/src/background/runtime/session";
 import {
   account,
   contentSender,
@@ -50,7 +55,7 @@ type State = {
   readonly active?: "first" | "second";
 };
 
-type Ask = { readonly method: ProviderMethod; readonly params?: Json };
+export type Ask = { readonly method: ProviderMethod; readonly params?: Json };
 
 /** What happens to the first held card: approved (with an echo), denied, or left. */
 type Decision = {
@@ -68,7 +73,7 @@ type Case = {
   readonly decision?: Decision;
 };
 
-const ask = (method: ProviderMethod, params?: Json): Ask =>
+export const ask = (method: ProviderMethod, params?: Json): Ask =>
   params === undefined ? { method } : { method, params };
 const accounts = ask("wallet_requestAccounts");
 const silent = ask("wallet_requestAccounts", { silent_mode: true });
@@ -160,37 +165,64 @@ const REQUEST_ID = "00000000-0000-4000-8000-000000000001";
 /** What the page receives for `reply`, the background's answer to `method`. */
 const pageAnswer = (method: ProviderMethod, reply: unknown) => toProviderPayload(reply, method);
 
-const runCase = async ({ asks, decision, name, state }: Case) => {
-  let blocked = state.blocked === true;
-  let active = state.active === "second" ? secondAccount : account;
-  const initial = active;
-  const grantedIds = state.granted ?? [account.id];
-  const grants: OriginGrantInput[] = [];
+/** The stub wallet the handler reads; a case may wrap it (see {@link createBackground}). */
+export type StubWallet = ReturnType<typeof createWallet>;
+
+/** How one background is set up: the vault's accounts and grant, and the session's lock. */
+export type BackgroundSetup = {
+  readonly accounts: readonly AccountRef[];
+  /** Read on every wallet call, so a case can switch accounts between two messages. */
+  readonly active: () => AccountRef;
+  /** Read on every guard call, so a case can block the site mid-case. */
+  readonly blocked: () => boolean;
+  readonly grantedIds: readonly string[];
+  readonly locked: boolean;
+  /** The active network; Sepolia by default. */
+  readonly network?: StarknetNetworkId;
+  /** Collaborators beyond the wallet, guard, preferences, RPC and session (multisig stores). */
+  readonly options?: Partial<MessageHandlerOptions>;
+  /** Writes preferences beyond the active network before the handler reads any. */
+  readonly preferences?: (store: WalletPreferencesStore) => Promise<void>;
+  /** Wraps the stub wallet, given the session (to lock it mid-request). */
+  readonly wallet?: (
+    stub: StubWallet,
+    session: UnlockSession,
+  ) => Parameters<typeof createMessageHandler>[0];
+};
+
+/**
+ * The extension's real background message handler over the background suites' stubs, at the
+ * fixed clock `1_000`. Shared by the `connect` and `sign` blocks.
+ */
+export const createBackground = async (setup: BackgroundSetup) => {
   const stub = createWallet({
-    accounts: [account, secondAccount],
-    activeAccountId: () => active.id,
-    grantAccountIds: grantedIds,
+    accounts: setup.accounts,
+    activeAccountId: () => setup.active().id,
+    grantAccountIds: setup.grantedIds,
   });
-  // The stub's `grantOrigin` answers with its first account whatever was granted; the vault
-  // service answers with the granted one (`findVaultAccount`), so this does too.
-  const wallet = {
-    ...stub,
-    async grantOrigin(input: OriginGrantInput) {
-      grants.push(input);
-      return [input.accountId === secondAccount.id ? secondAccount : account];
-    },
-  };
   const session = createUnlockSession({ now: () => 1_000, ttlMs: 60 * 60 * 1000 });
-  if (state.locked !== true) session.unlock(vaultPassphrase);
+  if (!setup.locked) session.unlock(vaultPassphrase);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  await preferencesStore.setActiveNetwork("SN_SEPOLIA");
-  const handler = createMessageHandler(wallet, testExtension, {
-    originGuard: createOriginGuard(() => new Set(blocked ? ["example.com"] : [])),
+  await preferencesStore.setActiveNetwork(setup.network ?? "SN_SEPOLIA");
+  await setup.preferences?.(preferencesStore);
+  const handler = createMessageHandler(setup.wallet?.(stub, session) ?? stub, testExtension, {
+    ...setup.options,
+    originGuard: createOriginGuard(() => new Set(setup.blocked() ? ["example.com"] : [])),
     preferencesStore,
     runtimeRpc: makeRuntimeRpc(),
     session,
   });
+  return { handler, session };
+};
 
+type Handler = Awaited<ReturnType<typeof createBackground>>["handler"];
+
+/**
+ * Sends each page request from `grantedOrigin` through the bridge and the handler, without
+ * awaiting: `answers[i]` stays `"pending"` while a card holds it. Resolves once each request
+ * has either answered or queued its card.
+ */
+export const askPage = async (handler: Handler, asks: readonly Ask[]) => {
   const answers: unknown[] = asks.map(() => "pending");
   const held = asks.map(async ({ method, params }, index) => {
     const args = readProviderRequestArguments(
@@ -204,6 +236,36 @@ const runCase = async ({ asks, decision, name, state }: Case) => {
       : { error: invalidRequestPayload() };
   });
   await flushHeld();
+  return { answers, held };
+};
+
+const runCase = async ({ asks, decision, name, state }: Case) => {
+  let blocked = state.blocked === true;
+  let active = state.active === "second" ? secondAccount : account;
+  const initial = active;
+  const grantedIds = state.granted ?? [account.id];
+  const grants: OriginGrantInput[] = [];
+  const { handler, session } = await createBackground({
+    accounts: [account, secondAccount],
+    active: () => active,
+    blocked: () => blocked,
+    grantedIds,
+    locked: state.locked === true,
+    // The stub's `grantOrigin` answers with its first account whatever was granted; the vault
+    // service answers with the granted one (`findVaultAccount`), so this does too. Only the
+    // answer is replaced: the real `grantOrigin` also runs `requireGrantAuthorization` and
+    // validates the origin, but the handler has already checked both before it calls here
+    // (the session's authorization, and `grantedOrigin` is a valid https origin in every case),
+    // and the stub never wrote anything this block records, so no recorded outcome changes.
+    wallet: (stub) => ({
+      ...stub,
+      async grantOrigin(input: OriginGrantInput) {
+        grants.push(input);
+        return [input.accountId === secondAccount.id ? secondAccount : account];
+      },
+    }),
+  });
+  const { answers, held } = await askPage(handler, asks);
 
   let decided: unknown = null;
   if (decision) {
@@ -239,7 +301,7 @@ const runCase = async ({ asks, decision, name, state }: Case) => {
   await Promise.race([Promise.all(held), flushHeld()]);
 
   return {
-    answers,
+    answers: [...answers],
     asks,
     decided,
     grants: grants.map(({ accountId, origin }) => ({ accountId: accountId ?? null, origin })),

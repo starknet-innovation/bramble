@@ -44,7 +44,7 @@ const REV1_DOMAIN_TYPE = ["name", "version", "chainId", "revision"].map((name) =
 const REV0_DOMAIN_TYPE = ["name", "version", "chainId"].map((name) => ({ name, type: "felt" }));
 
 /** A revision 1 document with `message` of `primary`, its fields declared by `fields`. */
-const rev1 = (
+export const rev1 = (
   domain: Record<string, unknown>,
   fields: readonly object[] = [{ name: "content", type: "felt" }],
   message: Record<string, unknown> = { content: "hello" },

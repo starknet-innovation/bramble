@@ -10,6 +10,9 @@
  * - `queue`: the approval queue's caps, dedupe, waiters, reservations and TTL (`queue.ts`);
  * - `site`, `feedParse`, `feed`: the blocklist and site warnings, and the live phishing feed
  *   (`sites.ts`);
+ * - `sign`: `wallet_signTypedData` through the background's message handler and every gate
+ *   before its card: lock (before and mid-flight), blocklist, grant, a presented multisig, and
+ *   the document's chain against the account's (`sign.ts`);
  * - `typedData`, `outside`: SNIP-12 typed data's gate, chain binding and summary, and a SNIP-9
  *   outside execution's call review at queue time and at signing (`typed-data.ts`).
  *
@@ -23,6 +26,7 @@ import { computeConnect } from "./connect";
 import { computeGrants } from "./grants";
 import { computeQueue } from "./queue";
 import { computeRequests } from "./request";
+import { computeSign } from "./sign";
 import { computeFeed, computeFeedParse, computeSites } from "./sites";
 import { computeOutside, computeTypedData } from "./typed-data";
 
@@ -44,6 +48,7 @@ export const renderDappParity = async (): Promise<string> => {
     ["feed", await computeFeed()],
     ["typedData", computeTypedData()],
     ["outside", computeOutside()],
+    ["sign", await computeSign()],
   ];
   return blocks
     .flatMap(([block, cases]) => cases.map((item) => `${JSON.stringify({ block, ...item })}\n`))
