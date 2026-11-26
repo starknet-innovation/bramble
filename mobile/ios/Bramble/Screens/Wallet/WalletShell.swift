@@ -18,6 +18,7 @@ struct WalletShell: View {
         case allowances(AllowanceView?)
         /// Staking (M21), offered only where the core's policy allows it.
         case staking
+        case browser
     }
 
     @Environment(WalletStore.self) private var store
@@ -30,7 +31,7 @@ struct WalletShell: View {
         NavigationStack(path: $flows) {
             ScrollView {
                 VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-                    WalletHeader { accountsOpen = true }
+                    WalletHeader(openAccounts: { accountsOpen = true }, openBrowser: { flows.append(.browser) })
                     switch store.tab {
                     case .home:
                         HomeView(
@@ -97,77 +98,79 @@ struct WalletShell: View {
     }
 
     /// The screen each pushed flow shows.
+    @ViewBuilder
     private func destination(_ flow: Flow) -> some View {
-        Group {
-            switch flow {
-            case .receive:
-                ReceiveView()
+        switch flow {
+        case .receive:
+            ReceiveView()
 
-            case .network:
-                NetworkView()
+        case .network:
+            NetworkView()
 
-            case .appearance:
-                AppearanceView()
+        case .appearance:
+            AppearanceView()
 
-            case .security:
-                SecurityView()
+        case .security:
+            SecurityView()
 
-            case .reveal:
-                RevealSecretsView()
+        case .reveal:
+            RevealSecretsView()
 
-            case .remove:
-                RemoveWalletView()
+        case .remove:
+            RemoveWalletView()
 
-            case .send:
-                SendFlowView { flows.append(.tokens) }
+        case .send:
+            SendFlowView { flows.append(.tokens) }
 
-            case let .sendToken(address):
-                SendFlowView(token: address) { flows.append(.tokens) }
+        case let .sendToken(address):
+            SendFlowView(token: address) { flows.append(.tokens) }
 
-            case let .swap(token):
-                SwapView(token: token)
+        case let .swap(token):
+            SwapView(token: token)
 
-            case .deploy:
-                DeployAccountView()
+        case .deploy:
+            DeployAccountView()
 
-            case let .allowances(revoking):
-                AllowancesDestination(revoking: revoking) { flows.append(.allowances($0)) } exit: { flows.removeAll() }
+        case let .allowances(revoking):
+            AllowancesDestination(revoking: revoking) { flows.append(.allowances($0)) } exit: { flows.removeAll() }
 
-            case .accounts:
-                AccountsManageView()
+        case .accounts:
+            AccountsManageView()
 
-            case .coordination(let coordinationFlow):
-                CoordinationDestination(flow: coordinationFlow)
+        case .coordination(let coordinationFlow):
+            CoordinationDestination(flow: coordinationFlow)
 
-            case .tokens:
-                TokensView { flows.append($0) }
+        case .tokens:
+            TokensView { flows.append($0) }
 
-            case .addToken:
-                AddTokenView()
+        case .addToken:
+            AddTokenView()
 
-            case .discoverTokens:
-                DiscoverTokensView()
+        case .discoverTokens:
+            DiscoverTokensView()
 
-            case let .token(id):
-                tokenDetail(id)
+        case let .token(id):
+            tokenDetail(id)
 
-            case .privacy:
-                PrivacyJourneyView { flows.append(.network) }
+        case .privacy:
+            PrivacyJourneyView { flows.append(.network) }
 
-            case .staking:
-                StakingScreen()
-            }
+        case .staking:
+            StakingScreen()
+
+        case .browser:
+            BrowserView { flows.removeLast() }
         }
     }
 }
 
-/// `.wallet-header`: avatar, account name with the drawer chevron, network status, actions. The
-/// extension's Connected sites button is absent: mobile has no dApp connections (recorded as an
-/// intentional difference).
+/// `.wallet-header`: avatar, account name with the drawer chevron, network status, actions. Where
+/// the extension has Connected sites, mobile opens its in-app browser.
 struct WalletHeader: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let openAccounts: () -> Void
+    let openBrowser: () -> Void
 
     var body: some View {
         let header = BrambleMetrics.WalletHeader.self
@@ -206,6 +209,7 @@ struct WalletHeader: View {
             .accessibilityHint("Opens the account list")
             Spacer(minLength: 0)
             HStack(spacing: BrambleMetrics.HeaderActions.gap) {
+                IconButton(icon: .globe, label: "Browser", tint: skin.muted, action: openBrowser)
                 IconButton(
                     icon: .externalLink,
                     label: "Open in explorer",

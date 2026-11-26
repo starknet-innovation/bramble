@@ -61,4 +61,7 @@ enum class Flow {
 
     /** Staking (M21), offered only where the core's policy allows it. */
     STAKING,
+
+    /** The in-app browser. */
+    BROWSER,
 }

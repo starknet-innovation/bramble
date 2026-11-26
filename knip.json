@@ -24,6 +24,7 @@
         "src/content/index.ts",
         "src/ledger-grant/index.ts",
         "src/provider/inpage.ts",
+        "src/provider/mobile-bridge.ts",
         "src/sandbox/render.ts",
         "src/sidepanel/index.ts"
       ],

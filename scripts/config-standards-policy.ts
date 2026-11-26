@@ -119,6 +119,7 @@ export const EXPECTED_BIOME_INCLUDES = [
   "!mobile/ios/Bramble.xcodeproj",
   "!mobile/ios/Generated",
   "!mobile/ios/build",
+  "!mobile/web/*.generated.js",
   "!node_modules",
   "!output",
   "!playwright-report",
