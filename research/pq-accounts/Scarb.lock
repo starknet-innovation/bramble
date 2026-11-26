@@ -7,6 +7,8 @@ version = "0.1.0"
 dependencies = [
  "pqbench_interface",
  "pqbench_slh_dsa_blake2s_128s",
+ "pqbench_slh_dsa_shake_128s",
+ "snforge_std",
 ]
 
 [[package]]
@@ -15,6 +17,14 @@ version = "0.1.0"
 
 [[package]]
 name = "pqbench_slh_dsa_blake2s_128s"
+version = "0.1.0"
+dependencies = [
+ "pqbench_interface",
+ "snforge_std",
+]
+
+[[package]]
+name = "pqbench_slh_dsa_shake_128s"
 version = "0.1.0"
 dependencies = [
  "pqbench_interface",

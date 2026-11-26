@@ -8,6 +8,11 @@ cairo-version.workspace = true
 starknet.workspace = true
 pqbench_interface.workspace = true
 pqbench_slh_dsa_blake2s_128s = { path = "../crates/slh_dsa_blake2s_128s" }
+pqbench_slh_dsa_shake_128s = { path = "../crates/slh_dsa_shake_128s" }
+
+[dev-dependencies]
+snforge_std.workspace = true
+assert_macros.workspace = true
 
 [[target.starknet-contract]]
 allowed-libfuncs-list.name = "audited"

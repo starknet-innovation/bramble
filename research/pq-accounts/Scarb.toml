@@ -2,6 +2,7 @@
 members = [
     "crates/bench_interface",
     "crates/slh_dsa_blake2s_128s",
+    "crates/slh_dsa_shake_128s",
     "contracts",
 ]
 

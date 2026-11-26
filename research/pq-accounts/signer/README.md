@@ -1,11 +1,13 @@
-# SLH-DSA-BLAKE2s-128s signer (research)
+# SLH-DSA-128s signer (research)
 
 > **Research code, not for real funds.** SLH-DSA-BLAKE2s-128s is a **non-standard**
 > instantiation of FIPS 205's 128s parameter set with BLAKE2s in place of SHAKE. It has had
 > no cryptographic review or audit, and this signer is a Python reference (about 2–3 s per
 > signature).
 
-`slh_signer.py` signs for the `SlhDsaBlake2s128sAccount` contract. The cryptography is
+`slh_signer.py` signs for `SlhDsaBlake2s128sAccount` (default) and, with
+`keygen --scheme slh-dsa-shake-128s`, for the standard FIPS 205 `SlhDsaShake128sAccount`. The
+key file records its scheme, and requests must name the same one. The cryptography is
 `scripts/slh_dsa_ref.py`.
 
 - **Keys:** `keygen` draws `SK.seed`, `SK.prf` and `PK.seed` from `secrets` and writes them
