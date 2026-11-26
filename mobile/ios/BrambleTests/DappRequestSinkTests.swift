@@ -129,27 +129,91 @@ final class DappRequestSinkTests: XCTestCase {
         XCTAssertTrue(sink.cards.isEmpty)
     }
 
-    /// The core queues a connected site's typed data as a sign card, which this app has no screen
-    /// for yet: it is declined at once, never shown as a connect card.
-    func testTypedDataIsDeclinedUntilItHasAScreen() throws {
+    /// A SNIP-12 document over `message`, bound to Mainnet.
+    private func typedData(message: String = #"{"content":"hello"}"#) -> String {
+        #"{"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},"#
+            + #""message":\#(message),"primaryType":"Mail","types":{"Mail":[{"name":"content","type":"felt"}],"#
+            + #""StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},"#
+            + #"{"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}"#
+    }
+
+    private func connected() throws -> (DappRequestSink, AccountRecord) {
         let (core, account) = try wallet()
         let sink = DappRequestSink(core: core, http: NoNetwork())
         _ = try held(sink.answer(request("wallet_requestAccounts"), shown: .mainnet))
         _ = sink.approve(try XCTUnwrap(sink.cards.first), accountId: account.id)
+        return (sink, account)
+    }
 
-        let params = #"""
-        {"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},
-        "message":{"content":"hello"},"primaryType":"Mail","types":{"Mail":[{"name":"content","type":"felt"}],
-        "StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},
-        {"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}
-        """#
+    /// A connected site's typed data is held as a sign card for the active account, and Sign
+    /// answers the page with the signature.
+    func testSigningTypedDataAnswersTheSignature() throws {
+        let (sink, account) = try connected()
+        let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: typedData())
+        let requestId = try held(sink.answer(sign, shown: .mainnet))
+        let card = try XCTUnwrap(sink.cards.first)
+        let request = try XCTUnwrap(card.sign)
+        XCTAssertEqual(request.accountId, account.id)
+        XCTAssertEqual(request.summary, "Mail · Bramble Test")
+        XCTAssertTrue(request.document.contains(#""content": "hello""#))
+        XCTAssertFalse(request.poisoned)
+
+        let settled = sink.sign(card)
+        XCTAssertEqual(settled.map(\.requestId), [requestId])
+        let signature = try object(try XCTUnwrap(settled.first).json)["result"] as? [String]
+        XCTAssertEqual(signature?.count, 2)
+        XCTAssertTrue(sink.cards.isEmpty)
+    }
+
+    /// The card shows only what the signature covers: a message value the types do not declare
+    /// is refused before any card, so it can never be shown as signed.
+    func testAnUndeclaredValueNeverReachesACard() throws {
+        let (sink, _) = try connected()
+        let params = typedData(message: #"{"content":"hello","note":"not signed"}"#)
         let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: params)
         guard case let .now(json) = sink.answer(sign, shown: .mainnet) else {
-            XCTFail("typed data must not be held")
+            XCTFail("an undeclared value must not be held")
+            return
+        }
+        XCTAssertNotNil(try object(json)["error"])
+        XCTAssertTrue(sink.cards.isEmpty)
+    }
+
+    func testIndentingKeepsTheTextExact() {
+        let json = #"{"a":[1,"x, {y}: \"z\""],"b":{}}"#
+        let shown = DappRequestSink.indented(json)
+        XCTAssertEqual(shown.filter { !$0.isWhitespace }, json.filter { !$0.isWhitespace })
+        XCTAssertTrue(shown.contains(#""x, {y}: \"z\"""#))
+    }
+
+    /// The outside-execution warning follows the primary type, as the extension's does, so an
+    /// `OutsideExecution` with no calls still carries it.
+    func testOutsideExecutionIsReadFromThePrimaryType() {
+        XCTAssertTrue(DappRequestSink.isOutsideExecution(summary: "OutsideExecution · Account.execute_from_outside"))
+        XCTAssertTrue(DappRequestSink.isOutsideExecution(summary: "OutsideExecution"))
+        XCTAssertFalse(DappRequestSink.isOutsideExecution(summary: "Mail · OutsideExecution"))
+        XCTAssertFalse(DappRequestSink.isOutsideExecution(summary: "OutsideExecutionV2 · App"))
+    }
+
+    /// A cancelled sign card holds the site off for the cooldown too, as the extension's surface does.
+    func testADeniedSignWaitsOutTheCooldown() throws {
+        let (sink, _) = try connected()
+        let sign = DappRequest(origin: origin, id: id, method: "wallet_signTypedData", params: typedData())
+        _ = try held(sink.answer(sign, shown: .mainnet))
+        _ = sink.deny(try XCTUnwrap(sink.cards.first))
+        guard case let .now(json) = sink.answer(sign, shown: .mainnet) else {
+            XCTFail("asking again at once must not raise a card")
             return
         }
         XCTAssertEqual((try object(json)["error"] as? [String: Any])?["code"] as? Int, 113)
         XCTAssertTrue(sink.cards.isEmpty)
+    }
+
+    func testABlocklistedSiteIsRefused() throws {
+        let (core, _) = try wallet()
+        let sink = DappRequestSink(core: core, http: NoNetwork())
+        XCTAssertFalse(sink.isBlockedSite(origin))
+        XCTAssertTrue(sink.isBlockedSite("https://starknet-airdrop.com"))
     }
 
     func testWarningsUseTheExtensionsWords() {

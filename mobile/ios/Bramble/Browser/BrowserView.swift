@@ -5,8 +5,8 @@ import WebKit
 /// The in-app browser (P16): an address bar that opens `https` sites only, over a `WKWebView` that
 /// injects the extension's provider (`mobile/web/bramble-provider.generated.js`) at document start
 /// in the main frame only. Nothing the web stores outlives the screen (a non-persistent data
-/// store), and WebKit's fraudulent-website warning stays on. A site's connection request opens the
-/// connection card over it.
+/// store), and WebKit's fraudulent-website warning stays on. A site's connection or signing
+/// request opens its card over it, and a page on the blocklist is never loaded.
 struct BrowserView: View {
     /// The injected script, bundled from `mobile/web`. Without it the browser does not open.
     static let providerScript: String? = Bundle.main
@@ -18,6 +18,8 @@ struct BrowserView: View {
     @State private var page: URL?
     @State private var invalid = false
     @State private var bridge: BrowserBridge?
+    /// The blocklisted origin the last navigation was stopped at, until another page opens.
+    @State private var blockedSite: String?
     let back: () -> Void
 
     var body: some View {
@@ -33,6 +35,9 @@ struct BrowserView: View {
             .submitLabel(.go)
             .onSubmit(open)
             .accessibilityIdentifier("browser-address")
+            if let blockedSite {
+                BlockedSitePanel(origin: blockedSite, leave: back)
+            }
             if let script = Self.providerScript {
                 if let page, let bridge {
                     DappWebView(url: page, script: script, bridge: bridge)
@@ -46,11 +51,20 @@ struct BrowserView: View {
         .padding(BrambleMetrics.Screen.shellPadding)
         .sheet(item: pendingCard) { card in
             SkinProvider {
-                ConnectSheet(card: card) { accountId in
-                    if let accountId { bridge?.approve(card, accountId: accountId) } else { bridge?.deny(card) }
-                } leave: {
-                    bridge?.deny(card)
-                    back()
+                if let sign = card.sign {
+                    SignSheet(card: card, sign: sign) { approved in
+                        if approved { bridge?.sign(card) } else { bridge?.deny(card) }
+                    } leave: {
+                        bridge?.deny(card)
+                        back()
+                    }
+                } else {
+                    ConnectSheet(card: card) { accountId in
+                        if let accountId { bridge?.approve(card, accountId: accountId) } else { bridge?.deny(card) }
+                    } leave: {
+                        bridge?.deny(card)
+                        back()
+                    }
                 }
             }
             .environment(store)
@@ -61,15 +75,18 @@ struct BrowserView: View {
             let sink = DappRequestSink(core: store.core, tokens: store.portfolio.preferences)
             let started = BrowserBridge(sink: sink, shown: store.network) { url in
                 input = url.absoluteString
+                blockedSite = nil
+            } blocked: { origin in
+                blockedSite = origin
             }
             bridge = started
             await started.run()
         }
     }
 
-    /// The oldest connection card; only a decision closes its sheet.
-    private var pendingCard: Binding<DappRequestSink.ConnectCard?> {
-        Binding(get: { bridge?.sink.cards.first }, set: { _ in /* Cancel or Connect decides it. */ })
+    /// The oldest card; only a decision closes its sheet.
+    private var pendingCard: Binding<DappRequestSink.Card?> {
+        Binding(get: { bridge?.sink.cards.first }, set: { _ in /* Only a decision closes it. */ })
     }
 
     private func open() {
@@ -90,7 +107,7 @@ private struct ConnectSheet: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @State private var armed = false
-    let card: DappRequestSink.ConnectCard
+    let card: DappRequestSink.Card
     /// The account approved, or nil for Cancel.
     let decide: (String?) -> Void
     let leave: () -> Void
@@ -205,7 +222,7 @@ private struct DappWebView: UIViewRepresentable {
 
 /// The native end of the page's bridge: it admits a message only from the main frame whose
 /// `https` origin equals the committed page's (`DappOrigin.admit`), hands it to the one
-/// `DappRequestSink`, and keeps the main frame on `https`. A refused message gets a bare error
+/// `DappRequestSink`, and keeps the main frame on `https` and off the blocklist. A refused message gets a bare error
 /// that says nothing about why. A held request's reply goes only to the page that asked: a new
 /// commit releases every held reply unanswered.
 @MainActor
@@ -224,13 +241,20 @@ final class BrowserBridge: NSObject, WKScriptMessageHandlerWithReply, WKNavigati
     var shown: NetworkId
     var requested: URL?
     private let committed: (URL) -> Void
+    private let blocked: (String) -> Void
     private var page: URL?
     private var held: [UInt64: Reply] = [:]
 
-    init(sink: DappRequestSink, shown: NetworkId, committed: @escaping (URL) -> Void) {
+    init(
+        sink: DappRequestSink,
+        shown: NetworkId,
+        committed: @escaping (URL) -> Void,
+        blocked: @escaping (String) -> Void
+    ) {
         self.sink = sink
         self.shown = shown
         self.committed = committed
+        self.blocked = blocked
     }
 
     /// Refreshes the phishing feed now and every 30 minutes, and settles expired cards every few
@@ -245,11 +269,15 @@ final class BrowserBridge: NSObject, WKScriptMessageHandlerWithReply, WKNavigati
         }
     }
 
-    func approve(_ card: DappRequestSink.ConnectCard, accountId: String) {
+    func approve(_ card: DappRequestSink.Card, accountId: String) {
         deliver(sink.approve(card, accountId: accountId))
     }
 
-    func deny(_ card: DappRequestSink.ConnectCard) {
+    func sign(_ card: DappRequestSink.Card) {
+        deliver(sink.sign(card))
+    }
+
+    func deny(_ card: DappRequestSink.Card) {
         deliver(sink.deny(card))
     }
 
@@ -298,9 +326,11 @@ final class BrowserBridge: NSObject, WKScriptMessageHandlerWithReply, WKNavigati
         decisionHandler: @MainActor @Sendable (WKNavigationActionPolicy) -> Void
     ) {
         let mainFrame = navigationAction.targetFrame?.isMainFrame ?? true
-        let secure = DappOrigin.origin(of: navigationAction.request.url) != nil
-        let cancelled = mainFrame && !secure
+        let origin = DappOrigin.origin(of: navigationAction.request.url)
+        let listed = mainFrame && origin.map(sink.isBlockedSite) == true
+        let cancelled = mainFrame && (origin == nil || listed)
         if cancelled { restoreAddress() }
+        if listed, let origin { blocked(origin) }
         decisionHandler(cancelled ? .cancel : .allow)
     }
 

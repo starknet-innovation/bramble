@@ -95,24 +95,69 @@ class DappRequestSinkTest {
         assertEquals(0, accounts.getJSONObject("result").getJSONArray("accounts").length())
     }
 
-    /** A connected site's typed data has no screen yet: declined at once, never a connect card (as iOS). */
-    @Test
-    fun typedDataDeclinedForNow() {
+    /** A SNIP-12 document over [message], bound to Mainnet. */
+    private fun typedData(message: String = """{"content":"hello"}"""): String =
+        listOf(
+            """{"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},""",
+            """"message":$message,"primaryType":"Mail",""",
+            """"types":{"Mail":[{"name":"content","type":"felt"}],""",
+            """"StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},""",
+            """{"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}""",
+        ).joinToString("")
+
+    private fun connected(): Pair<DappRequestSink, AccountRecord> {
         val (sink, account) = sink()
         held(sink.answer(request("wallet_requestAccounts"), NetworkId.MAINNET))
         sink.approve(sink.cards.single(), account.id)
+        return sink to account
+    }
 
-        val params =
-            listOf(
-                """{"typed_data":{"domain":{"chainId":"SN_MAIN","name":"Bramble Test","revision":"1","version":"1"},""",
-                """"message":{"content":"hello"},"primaryType":"Mail",""",
-                """"types":{"Mail":[{"name":"content","type":"felt"}],""",
-                """"StarknetDomain":[{"name":"name","type":"shortstring"},{"name":"version","type":"shortstring"},""",
-                """{"name":"chainId","type":"shortstring"},{"name":"revision","type":"shortstring"}]}}}""",
-            ).joinToString("")
-        val reply = now(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
-        assertEquals(113, reply.getJSONObject("error").getInt("code"))
+    /** A connected site's typed data is a sign card for the active account; Sign answers the signature. */
+    @Test
+    fun signingAnswersSignature() {
+        val (sink, account) = connected()
+        val requestId =
+            held(sink.answer(DappRequest(origin, id, "wallet_signTypedData", typedData()), NetworkId.MAINNET))
+        val card = sink.cards.single()
+        val sign = card.sign!!
+        assertEquals(account.id, sign.accountId)
+        assertEquals("Mail · Bramble Test", sign.summary)
+        assertTrue(sign.document.contains(""""content": "hello""""))
+        assertFalse(sign.poisoned)
+
+        val settled = sink.sign(card).single()
+        assertEquals(requestId, settled.requestId)
+        assertEquals(2, JSONObject(settled.json).getJSONArray("result").length())
         assertTrue(sink.cards.isEmpty())
+    }
+
+    /** A message value the types do not declare is refused before any card, so it is never shown as signed. */
+    @Test
+    fun undeclaredValueNeverCards() {
+        val (sink, _) = connected()
+        val params = typedData("""{"content":"hello","note":"not signed"}""")
+        val reply = now(sink.answer(DappRequest(origin, id, "wallet_signTypedData", params), NetworkId.MAINNET))
+        assertTrue(reply.has("error"))
+        assertTrue(sink.cards.isEmpty())
+    }
+
+    /** A cancelled sign card holds the site off for the cooldown too, as the extension's surface does. */
+    @Test
+    fun deniedSignWaitsOutCooldown() {
+        val (sink, _) = connected()
+        val sign = DappRequest(origin, id, "wallet_signTypedData", typedData())
+        held(sink.answer(sign, NetworkId.MAINNET))
+        sink.deny(sink.cards.single())
+        val again = now(sink.answer(sign, NetworkId.MAINNET))
+        assertEquals(113, again.getJSONObject("error").getInt("code"))
+        assertTrue(sink.cards.isEmpty())
+    }
+
+    @Test
+    fun blocklistedSiteIsRefused() {
+        val (sink, _) = sink()
+        assertFalse(sink.isBlockedSite(origin))
+        assertTrue(sink.isBlockedSite("https://starknet-airdrop.com"))
     }
 
     @Test
