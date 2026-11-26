@@ -98,7 +98,10 @@ struct IntentCard: View {
         }
         .task(id: intent) {
             reviewed = false
-            review = await store.coordination.review(intent)
+            let read = await store.coordination.review(intent)
+            // A newer intent cancelled this read; its own task lands instead.
+            guard !Task.isCancelled else { return }
+            review = read
             reviewed = true
         }
     }

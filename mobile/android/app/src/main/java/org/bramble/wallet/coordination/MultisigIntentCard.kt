@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.bramble.core.AccountRecord
 import org.bramble.core.IntentState
@@ -256,7 +257,12 @@ suspend fun CoordinationStore.review(
     intent: MultisigIntent,
     tokens: TokenPreferences,
 ): MultisigIntentReview? =
-    runCatching {
+    try {
         val read = readAuthority(intent.sender, network(), chainPost)
         work { core.multisigIntentReview(intent.id, tokens, read) }
-    }.getOrNull()
+    } catch (cancelled: CancellationException) {
+        // The card moved to a newer intent: its effect reads that one instead.
+        throw cancelled
+    } catch (ignored: Exception) {
+        null
+    }
