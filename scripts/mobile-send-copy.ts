@@ -6,10 +6,27 @@
  * fails the drift gate in `tests/conformance/mobile-generated.test.ts`.
  */
 
+import { reviewFeeMessages } from "../packages/presentation/wallet-ui/src/i18n/messages/review-fees";
+import { sendMessages } from "../packages/presentation/wallet-ui/src/i18n/messages/send";
+import { ERROR_COPY } from "../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy";
+
 /** Repository-relative paths of the generated copy tables. */
 export const SEND_COPY_SWIFT_PATH = "mobile/ios/Bramble/Send/SendCopy.generated.swift";
 export const SEND_COPY_KOTLIN_PATH =
   "mobile/android/app/src/main/java/org/bramble/wallet/send/SendCopy.generated.kt";
+
+const friendly = (raw: string): string => {
+  const text = ERROR_COPY.get(raw);
+  if (text === undefined) throw new Error(`send copy: no friendly copy for "${raw}"`);
+  return text;
+};
+
+// Gasless fee copy (mobile/docs/gasless.md), read from the extension's catalogs, not the fixture.
+const GASLESS_COPY: readonly (readonly [string, string])[] = [
+  ["payUpTo", reviewFeeMessages.en["cost.fee.payUpTo"]],
+  ["feeMoved", friendly("the fee changed since this request was reviewed")],
+  ["statusUnknownTitle", sendMessages.en["send.failure.title.unknown"]],
+];
 
 type Json = Record<string, unknown>;
 
@@ -182,6 +199,7 @@ export const sendCopyEntries = (copy: Json): readonly (readonly [string, string]
         (code) =>
           [`failure${code.charAt(0).toUpperCase()}${code.slice(1)}`, at(failures, code)] as const,
       ),
+    ...GASLESS_COPY,
   ];
 };
 

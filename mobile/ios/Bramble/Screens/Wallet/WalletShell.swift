@@ -8,10 +8,16 @@ struct WalletShell: View {
         case receive, network, appearance, security, reveal, remove, send, deploy, accounts
         /// Send, opened on one token (its address) from that token's screen.
         case sendToken(String)
+        /// Swap, opened from Home (nil) or selling one tracked token (its id) from that token's screen.
+        case swap(String?)
         case coordination(CoordinationFlow)
         case tokens, addToken, discoverTokens
         case token(String)
         case privacy
+        /// The allowance manager, or (with one) a listed allowance's revoke.
+        case allowances(AllowanceView?)
+        /// Staking (M21), offered only where the core's policy allows it.
+        case staking
         case browser
     }
 
@@ -32,6 +38,7 @@ struct WalletShell: View {
                             receive: { flows.append(.receive) },
                             open: { flows.append($0) },
                             send: { openSend(.send) },
+                            swap: { flows.append(.swap(nil)) },
                             privacy: { flows.append(.privacy) }
                         )
 
@@ -79,65 +86,80 @@ struct WalletShell: View {
         flows.append(flow)
     }
 
+    /// A tracked token's screen, with its Send, Swap, privacy and staking entries.
+    private func tokenDetail(_ id: String) -> some View {
+        TokenDetailView(
+            tokenId: id,
+            send: { openSend(.sendToken($0)) },
+            swap: { flows.append(.swap($0)) },
+            journey: { flows.append(.privacy) },
+            stake: { flows.append(.staking) }
+        )
+    }
+
     /// The screen each pushed flow shows.
+    @ViewBuilder
     private func destination(_ flow: Flow) -> some View {
-        Group {
-            switch flow {
-            case .receive:
-                ReceiveView()
+        switch flow {
+        case .receive:
+            ReceiveView()
 
-            case .network:
-                NetworkView()
+        case .network:
+            NetworkView()
 
-            case .appearance:
-                AppearanceView()
+        case .appearance:
+            AppearanceView()
 
-            case .security:
-                SecurityView()
+        case .security:
+            SecurityView()
 
-            case .reveal:
-                RevealSecretsView()
+        case .reveal:
+            RevealSecretsView()
 
-            case .remove:
-                RemoveWalletView()
+        case .remove:
+            RemoveWalletView()
 
-            case .send:
-                SendFlowView { flows.append(.tokens) }
+        case .send:
+            SendFlowView { flows.append(.tokens) }
 
-            case let .sendToken(address):
-                SendFlowView(token: address) { flows.append(.tokens) }
+        case let .sendToken(address):
+            SendFlowView(token: address) { flows.append(.tokens) }
 
-            case .deploy:
-                DeployAccountView()
+        case let .swap(token):
+            SwapView(token: token)
 
-            case .accounts:
-                AccountsManageView()
+        case .deploy:
+            DeployAccountView()
 
-            case .coordination(let coordinationFlow):
-                CoordinationDestination(flow: coordinationFlow)
+        case let .allowances(revoking):
+            AllowancesDestination(revoking: revoking) { flows.append(.allowances($0)) } exit: { flows.removeAll() }
 
-            case .tokens:
-                TokensView { flows.append($0) }
+        case .accounts:
+            AccountsManageView()
 
-            case .addToken:
-                AddTokenView()
+        case .coordination(let coordinationFlow):
+            CoordinationDestination(flow: coordinationFlow)
 
-            case .discoverTokens:
-                DiscoverTokensView()
+        case .tokens:
+            TokensView { flows.append($0) }
 
-            case let .token(id):
-                TokenDetailView(
-                    tokenId: id,
-                    send: { openSend(.sendToken($0)) },
-                    journey: { flows.append(.privacy) }
-                )
+        case .addToken:
+            AddTokenView()
 
-            case .privacy:
-                PrivacyJourneyView { flows.append(.network) }
+        case .discoverTokens:
+            DiscoverTokensView()
 
-            case .browser:
-                BrowserView { flows.removeLast() }
-            }
+        case let .token(id):
+            tokenDetail(id)
+
+        case .privacy:
+            PrivacyJourneyView { flows.append(.network) }
+
+        case .staking:
+            StakingScreen()
+
+        case .browser:
+            BrowserView { flows.removeLast() }
         }
     }
 }

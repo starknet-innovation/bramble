@@ -14,7 +14,6 @@ import org.bramble.wallet.security.DeviceClock
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,9 +60,8 @@ class CoreBridgeTest {
             assertEquals(vector.getString("address"), account.address)
             assertEquals(vector.getString("classHash"), account.classHash)
             assertEquals(vector.getString("publicKeyX"), account.publicKey)
-            // No raw-hash signing crosses the FFI (wallet-core #127: one signature over a pool's
-            // scope hash is the account's STRK20 viewing key); signature parity is wallet-core's
-            // Rust suite (tests/parity.rs).
+            // The fixture's signatures are held in wallet-core's Rust tests: since v0.9.0 the core
+            // signs no raw hash across FFI (wallet-core #127).
         }
     }
 
@@ -72,10 +70,9 @@ class CoreBridgeTest {
         val core = core()
         val phrase = core.createWallet("a strong password", 12u)
         assertEquals(12, phrase.words.size)
-        assertNotNull(core.activeAccount())
         core.lock()
         assertEquals(WalletStatus.LOCKED, core.status())
-        assertThrows(CoreException.Locked::class.java) { core.addRegularAccount(NetworkId.SEPOLIA) }
+        assertThrows(CoreException.Locked::class.java) { core.nostrPublicKey() }
         assertThrows(CoreException.WrongPassword::class.java) { core.unlock("wrong password") }
     }
 

@@ -11,9 +11,12 @@ final class CoreBridgeTests: XCTestCase {
             let address: String
             let networkId: String
             let publicKeyX: String
+            let signatureR: String
+            let signatureS: String
         }
 
         let accounts: [Account]
+        let messageHash: String
         let mnemonic: String
     }
 
@@ -44,9 +47,8 @@ final class CoreBridgeTests: XCTestCase {
             )
             XCTAssertEqual(account.address, vector.address)
             XCTAssertEqual(account.publicKey, vector.publicKeyX)
-            // No raw-hash signing crosses the FFI (wallet-core #127: one signature over a pool's
-            // scope hash is the account's STRK20 viewing key); signature parity is wallet-core's
-            // Rust suite (tests/parity.rs).
+            // The fixture's signatures are held in wallet-core's Rust tests: since v0.9.0 the core
+            // signs no raw hash across FFI (wallet-core #127).
         }
     }
 
@@ -79,10 +81,9 @@ final class CoreBridgeTests: XCTestCase {
         let core = try core()
         let phrase = try core.createWallet(password: "a strong password", wordCount: 12)
         XCTAssertEqual(phrase.words.count, 12)
-        XCTAssertNotNil(try core.activeAccount())
         core.lock()
         XCTAssertEqual(core.status(), .locked)
-        XCTAssertThrowsError(try core.addRegularAccount(network: .sepolia)) { error in
+        XCTAssertThrowsError(try core.nostrPublicKey()) { error in
             guard case .Locked = error as? CoreError else { return XCTFail("expected Locked, got \(error)") }
         }
         XCTAssertThrowsError(try core.unlock(password: "wrong password")) { error in

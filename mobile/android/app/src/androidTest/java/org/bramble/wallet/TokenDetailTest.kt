@@ -37,13 +37,14 @@ class TokenDetailTest {
         openPublicWalletOn(FixtureNode(deployed = false))
         val strk = onMainThread { portfolio.tracked.first { it.token.symbol == "STRK" }.token }
         rule.setContent {
-            BrambleTheme { TokenDetailScreen(appStore, strk.id, back = {}, send = {}, journey = {}) }
+            BrambleTheme { TokenDetailScreen(appStore, strk.id, back = {}, send = {}, swap = {}, journey = {}) }
         }
         waitFor(hasText("Your balance".uppercase()))
         waitFor(hasText("Contract".uppercase()))
         waitFor(hasText(strk.decimals.toString()))
         waitFor(hasContentDescription("Copy token address") and hasClickAction())
         waitFor(hasText("Send") and hasClickAction())
+        waitFor(hasText("Swap") and hasClickAction())
 
         val action = onMainThread { tokenDetailPrivacyFor(strk.address).action }
         assertEquals("an undeployed account is offered Shield, funded or not", DetailAction.SHIELD, action)

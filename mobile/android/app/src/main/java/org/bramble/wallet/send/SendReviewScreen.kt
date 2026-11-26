@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import org.bramble.core.GaslessOffer
 import org.bramble.core.TransferReview
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleIcon
@@ -62,10 +63,11 @@ internal fun ReviewStage(
     review: TransferReview,
     retry: () -> Unit,
     confirm: () -> Unit,
+    pay: (GaslessOffer) -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         ReviewFactsList(store, model, review)
-        CostBox(reviewCost(review), retry)
+        CostBox(reviewCost(review), model.gaslessOffers, pay, retry)
         RisksPanel(reviewRisks(review, newResolvedRecipient = model.resolvedName?.isNew == true))
         StatusLine(model.reviewBlock, StatusTone.DANGER)
         PillButton(SendCopy.confirmLabel, icon = BrambleIconName.CHECK, enabled = review.canConfirm, onClick = confirm)
@@ -240,10 +242,15 @@ private fun Hairline() {
     Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(LocalSkin.current.hairline))
 }
 
-/** The Cost box (`reviewFeeSection`): "Cost", then the figure and its share, or the failure and a retry. */
+/**
+ * The Cost box (`reviewFeeSection`): "Cost", then the figure and its share, or the failure and a
+ * retry. Only Send passes gasless [offers]; the revoke, swap and stake reviews offer none, as on iOS.
+ */
 @Composable
-private fun CostBox(
+internal fun CostBox(
     cost: ReviewCost,
+    offers: List<GaslessOffer> = emptyList(),
+    pay: (GaslessOffer) -> Unit = {},
     retry: () -> Unit,
 ) {
     val skin = LocalSkin.current
@@ -266,6 +273,10 @@ private fun CostBox(
                 if (cost.shortfall) {
                     Text(SendCopy.shortfall, color = skin.warning, style = textStyle(BrambleTypeScale.caption))
                 }
+                // `gaslessChoiceHtml`: one control per token the core offers; the wallet selects none.
+                offers.forEach { offer ->
+                    PillButton(payUpTo(offer), kind = PillKind.SECONDARY) { pay(offer) }
+                }
             }
 
             is ReviewCost.Failed -> {
@@ -283,7 +294,7 @@ private fun CostBox(
 
 /** `reviewPanel`: "Risk and recovery" over each warning; nothing at all when there is none. */
 @Composable
-private fun RisksPanel(risks: List<String>) {
+internal fun RisksPanel(risks: List<String>) {
     if (risks.isEmpty()) return
     val skin = LocalSkin.current
     Column(

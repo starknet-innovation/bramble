@@ -8,7 +8,7 @@ import Observation
 @MainActor
 @Observable
 final class CoordinationStore {
-    @ObservationIgnored private unowned let wallet: WalletStore
+    @ObservationIgnored unowned let wallet: WalletStore
     @ObservationIgnored private var syncTask: Task<CoordinationSyncOutcome, Error>?
     /// Bumped on lock; a core call that finishes after it must not write public state back.
     @ObservationIgnored private var generation = 0
@@ -20,14 +20,16 @@ final class CoordinationStore {
     private(set) var contacts: [Contact] = []
     private(set) var multisigs: [MultisigRecord] = []
     private(set) var relayPolicy: RelayPolicy?
+    /// Open (collecting, ready or stale) signing intents by multisig id, for the list rows.
+    private(set) var openIntents: [String: Int] = [:]
 
     init(wallet: WalletStore) {
         self.wallet = wallet
     }
 
-    private var core: WalletCore { wallet.core }
+    var core: WalletCore { wallet.core }
 
-    private var rpc: RpcTransport {
+    var rpc: RpcTransport {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "BrambleStubNetwork"), let key = wallet.records.first?.publicKey,
            let guid = try? argentSignerGuid(publicKey: key) {
@@ -48,7 +50,7 @@ final class CoordinationStore {
         return WebSocketRelayTransport()
     }
 
-    private func work<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
+    func work<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
         try await Task.detached(priority: .userInitiated, operation: body).value
     }
 
@@ -62,6 +64,7 @@ final class CoordinationStore {
         contacts = []
         multisigs = []
         relayPolicy = nil
+        openIntents = [:]
     }
 
     func loadNostrKey() async {
@@ -84,10 +87,15 @@ final class CoordinationStore {
         let nextContacts = (try? await work { try walletCore.contacts(network: network) }) ?? []
         let nextMultisigs = (try? await work { try walletCore.multisigs(network: network) }) ?? []
         let nextPolicy = try? await work { try walletCore.relayPolicy() }
+        var nextOpen: [String: Int] = [:]
+        for record in nextMultisigs {
+            nextOpen[record.id] = await intents(of: record.id).filter(isOpen).count
+        }
         guard started == generation else { return }
         contacts = nextContacts
         multisigs = nextMultisigs
         relayPolicy = nextPolicy
+        openIntents = nextOpen
     }
 
     func saveContact(label: String, address: String, publicKeyX: String?, nostrPublicKey: String?) async throws {

@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +27,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.launch
 import org.bramble.core.CoreException
+import org.bramble.core.IntentState
+import org.bramble.core.MultisigIntent
 import org.bramble.core.MultisigRecord
 import org.bramble.core.TokenInfo
 import org.bramble.core.explorerAccountUrl
@@ -37,10 +40,12 @@ import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
+import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.MenuDivider
 import org.bramble.wallet.design.MenuGroup
+import org.bramble.wallet.design.MenuRow
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.SegmentedControl
@@ -63,19 +68,20 @@ private const val WATCH_ONLY =
 private const val BALANCE_FRACTION_DIGITS: UByte = 4u
 
 /** The two sections of a shared account's home. */
-private enum class SharedTab { TOKENS, INTENTS }
+internal enum class SharedTab { TOKENS, INTENTS }
 
 /**
  * `multisig-home`, port of the iOS `SharedAccountHomeView`: the shared account's actions and
- * notes, then Tokens and Intents. Intents holds "Co-signer updates": a coordination sync that
- * authenticates gift wraps and reports trusted packages, held until intent import lands
- * (docs/nostr-multisig.md §1). Send, Signers and signing are not on mobile yet. [open] pushes
- * Deploy (the saved setup) and Receive.
+ * notes, then Tokens and Transactions. Transactions lists the open signing intents and imports one;
+ * "Co-signer updates" syncs gift wraps, whose trusted packages are still held, not imported
+ * (docs/multisig-transactions.md). [tabState] is the stack entry's, so it outlives a push; [open]
+ * pushes Send, Signers, Deploy, Receive and each intent.
  */
 @Composable
 internal fun SharedAccountHomeScreen(
     store: WalletStore,
     id: String,
+    tabState: MutableState<SharedTab>,
     open: (MultisigFlow) -> Unit,
     back: () -> Unit,
 ) {
@@ -84,7 +90,7 @@ internal fun SharedAccountHomeScreen(
         Page(store, "Ready multisig", null, back) { Caption("This Ready multisig is no longer watched.") }
         return
     }
-    var tab by remember { mutableStateOf(SharedTab.TOKENS) }
+    var tab by tabState
     // Raw balances by symbol; null until a read succeeds, and after one fails.
     var balances by remember { mutableStateOf<Map<String, String>?>(null) }
     LaunchedEffect(record.address) {
@@ -92,8 +98,11 @@ internal fun SharedAccountHomeScreen(
     }
     Page(store, multisigDisplayName(record), multisigConfigLabel(record), back) {
         Actions(store, record, open)
-        SegmentedControl(listOf("Tokens" to SharedTab.TOKENS, "Intents" to SharedTab.INTENTS), tab) { tab = it }
-        if (tab == SharedTab.TOKENS) SharedTokens(store.networkInfo.tokens, balances) else Intents(store, record)
+        SegmentedControl(
+            listOf("Tokens" to SharedTab.TOKENS, MultisigTxText.TRANSACTIONS to SharedTab.INTENTS),
+            tab,
+        ) { tab = it }
+        if (tab == SharedTab.TOKENS) SharedTokens(store.networkInfo.tokens, balances) else Intents(store, record, open)
         StopWatching(store, record, back)
     }
 }
@@ -107,6 +116,16 @@ private fun Actions(
     val skin = LocalSkin.current
     val context = LocalContext.current
     val undeployed = record.deployment != null && !record.hasCurrentConfig
+    if (record.hasCurrentConfig && record.localSignerAccountIds.isNotEmpty()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
+            PillButton(MultisigTxText.SEND, Modifier.weight(1f), PillKind.SECONDARY, BrambleIconName.SEND) {
+                open(MultisigFlow.Propose(record.id))
+            }
+            PillButton(MultisigTxText.SIGNERS, Modifier.weight(1f), PillKind.SECONDARY, BrambleIconName.USERS) {
+                open(MultisigFlow.Signers(record.id))
+            }
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm), verticalAlignment = Alignment.CenterVertically) {
         if (undeployed) {
             PillButton("Deploy", Modifier.weight(1f), PillKind.SECONDARY, BrambleIconName.WALLET) {
@@ -198,17 +217,24 @@ private fun balanceLabel(
         ?.let { runCatching { formatTokenAmount(it, token.decimals, BALANCE_FRACTION_DIGITS) }.getOrNull() }
         ?.let { "$it ${token.symbol}" } ?: "—"
 
-/** Intents: "Co-signer updates", the sync and its result, and the empty intents line. */
+/** Transactions: "Co-signer updates" and its sync, the open intents, and Import transaction. */
 @Composable
 private fun Intents(
     store: WalletStore,
     record: MultisigRecord,
+    open: (MultisigFlow) -> Unit,
 ) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     var result by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf(false) }
+    // Null until read, so the empty line never shows ahead of the list.
+    var intents by remember { mutableStateOf<List<MultisigIntent>?>(null) }
+    // Keyed on the open count too, so a signature or submission made one screen deeper shows here.
+    LaunchedEffect(record.id, store.coordination.openIntents[record.id]) {
+        intents = store.coordination.intents(record.id).filter(::isOpen)
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -228,13 +254,33 @@ private fun Intents(
             }
         }
         StatusLine(result, if (failed) StatusTone.DANGER else StatusTone.MUTED)
-        Text(
-            "No intents are awaiting verification or signature. Import one to review it here.",
-            color = skin.muted,
-            style = textStyle(BrambleTypeScale.body),
-        )
+        val listed = intents
+        if (listed?.isEmpty() == true) {
+            Text(MultisigTxText.NOTHING_IMPORT, color = skin.muted, style = textStyle(BrambleTypeScale.body))
+        } else if (listed != null) {
+            Eyebrow(intentsHeading(listed))
+            MenuGroup {
+                listed.forEachIndexed { index, intent ->
+                    if (index > 0) MenuDivider()
+                    MenuRow(BrambleIconName.USERS, intent.summary, value = MultisigTxText.status(intent)) {
+                        open(MultisigFlow.Intent(record.id, intent.id))
+                    }
+                }
+            }
+        }
+        PillButton(MultisigTxText.IMPORT_TRANSACTION, kind = PillKind.GHOST, icon = BrambleIconName.CHEVRON_RIGHT) {
+            open(MultisigFlow.Import(record.id))
+        }
     }
 }
+
+/** `compactIntentList`'s heading: all stale, some stale, or all awaiting. */
+private fun intentsHeading(intents: List<MultisigIntent>): String =
+    when {
+        intents.all { it.state == IntentState.STALE } -> MultisigTxText.ATTENTION
+        intents.any { it.state == IntentState.STALE } -> MultisigTxText.NEEDING_YOU
+        else -> MultisigTxText.WAITING
+    }
 
 /** The status copy for one "Check for updates" (iOS `sync`). */
 private fun syncMessage(outcome: Result<org.bramble.core.CoordinationSyncOutcome>): String =

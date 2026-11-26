@@ -1,7 +1,12 @@
 package org.bramble.wallet.send
 
+import org.bramble.core.PriceView
+import org.bramble.core.SendAmountError
+import org.bramble.core.SendException
 import org.bramble.core.TokenInfo
+import org.bramble.core.TransferPlan
 import org.bramble.core.formatTokenAmount
+import org.bramble.core.parseTokenAmount
 import org.bramble.core.validateRecipient
 import org.bramble.wallet.send.SendFlowModel.Stage
 
@@ -101,3 +106,36 @@ fun SendFlowModel.fill(half: Boolean) {
         dropPlan()
     }
 }
+
+/**
+ * Why [amount] is not a sendable amount of a token with [decimals], or null when the core parses
+ * it. Only `InvalidAmount` is mapped; any other core refusal propagates.
+ */
+internal fun amountProblem(
+    amount: String,
+    decimals: UByte,
+): String? =
+    try {
+        parseTokenAmount(amount, decimals)
+        null
+    } catch (error: SendException.InvalidAmount) {
+        when (error.reason) {
+            SendAmountError.NOT_POSITIVE -> SendCopy.amountGate
+            SendAmountError.TOO_MANY_DECIMALS -> SendCopy.amountTooManyDecimals
+            else -> SendCopy.amountInvalid
+        }
+    }
+
+/**
+ * What a Send journey reports back to its owner (the store).
+ *
+ * @property track receives every plan the journey opens, so a lock can close it.
+ * @property notice shows the outcome toast: `true` for a confirmation, `false` for an error.
+ * @property gaslessPrices the wallet's own USD prices for these token addresses (STRK among
+ *   them), for the gasless fee reference; null when it has none.
+ */
+data class SendHooks(
+    val track: (TransferPlan) -> Unit = {},
+    val notice: (message: String, success: Boolean) -> Unit = { _, _ -> },
+    val gaslessPrices: suspend (addresses: List<String>) -> PriceView? = { null },
+)

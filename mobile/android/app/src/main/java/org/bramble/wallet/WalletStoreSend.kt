@@ -14,8 +14,10 @@ import org.bramble.core.activityNeedsObservation
 import org.bramble.core.activityObservationPeriodFor
 import org.bramble.core.activityObservationPeriodMs
 import org.bramble.core.validateRecipient
+import org.bramble.wallet.portfolio.gaslessPrices
 import org.bramble.wallet.portfolio.rawBalances
 import org.bramble.wallet.privacy.refreshPrivacy
+import org.bramble.wallet.send.GaslessDriver
 import org.bramble.wallet.send.RecipientBook
 import org.bramble.wallet.send.SendDriver
 import org.bramble.wallet.send.SendFlowModel
@@ -38,13 +40,16 @@ fun WalletStore.makeSendModel(startToken: String? = null): SendFlowModel? {
         networkInfo,
         account,
         current,
-        SendHooks(track = { plans += it }) { message, success ->
-            showToast(message, positive = success)
-        },
+        SendHooks(
+            track = { plans += it },
+            notice = { message, success -> showToast(message, positive = success) },
+            gaslessPrices = { addresses -> portfolio.gaslessPrices(addresses) },
+        ),
         startToken,
         trackedTokens = portfolio.preferences.trustedTokenAddresses(networkInfo.network),
         transport = rpc.transport,
         pricing = portfolio.priceBook to portfolio.currency,
+        gasless = GaslessDriver(portfolio.transport),
     )
 }
 

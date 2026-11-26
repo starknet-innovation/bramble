@@ -13,6 +13,11 @@ enum CoordinationFlow: Hashable {
     case createMultisig(resume: String?)
     case sharedAccount(id: String)
     case sharedReceive(id: String)
+    /// Multisig transactions (M18): a transfer, a signer change, an import, one intent.
+    case propose(id: String)
+    case signers(id: String)
+    case importIntent(id: String)
+    case intent(multisigId: String, intentId: String)
 }
 
 /// Pushes a coordination screen onto the wallet's stack.
@@ -58,6 +63,18 @@ struct CoordinationDestination: View {
 
         case .sharedReceive(let id):
             SharedReceiveView(id: id)
+
+        case .propose(let id):
+            MultisigProposeView(multisigId: id)
+
+        case .signers(let id):
+            MultisigSignersView(multisigId: id)
+
+        case .importIntent(let id):
+            MultisigImportView(multisigId: id)
+
+        case let .intent(multisigId, intentId):
+            MultisigIntentView(multisigId: multisigId, intentId: intentId)
         }
     }
 }
