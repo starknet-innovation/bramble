@@ -269,8 +269,9 @@ internal fun isOutsideExecution(summary: String): Boolean =
     summary == "OutsideExecution" || summary.startsWith("OutsideExecution · ")
 
 /**
- * [json] re-indented one value per line, its text untouched: it is never parsed, so no number or
- * key order can change between what is shown and what is signed (as iOS `indented`).
+ * [json] re-indented one value per line: it is never parsed, so no number or key order can change
+ * between what is shown and what is signed (as iOS `indented`). String contents are copied verbatim;
+ * only whitespace outside strings moves.
  */
 internal fun indentedJson(json: String): String = JsonIndenter().apply { json.forEach(::take) }.text
 

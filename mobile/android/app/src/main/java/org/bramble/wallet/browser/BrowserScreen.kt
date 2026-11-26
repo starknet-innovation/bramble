@@ -324,13 +324,27 @@ private class BrowserClient(
         view: WebView,
         url: String?,
         favicon: Bitmap?,
-    ) = bridge.newPage()
+    ) {
+        bridge.newPage()
+        stopsBlocked(view, url)
+    }
 
     override fun doUpdateVisitedHistory(
         view: WebView,
         url: String?,
         isReload: Boolean,
-    ) = bridge.commit(url)
+    ) {
+        if (!stopsBlocked(view, url)) bridge.commit(url)
+    }
+
+    /**
+     * A main-frame POST never reaches [shouldOverrideUrlLoading], so a blocklisted page is also
+     * stopped as it starts, and never committed as the page.
+     */
+    private fun stopsBlocked(
+        view: WebView,
+        url: String?,
+    ): Boolean = (url != null && bridge.stopsBlocked(url)).also { if (it) view.stopLoading() }
 
     override fun shouldOverrideUrlLoading(
         view: WebView,
