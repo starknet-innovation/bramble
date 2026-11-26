@@ -25,6 +25,12 @@ import {
 import { renderAndroidTokenLogos } from "./mobile-assets/android-token-logos";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { parseCss } from "./mobile-assets/css";
+import {
+  DAPP_COPY_KOTLIN_PATH,
+  DAPP_COPY_SWIFT_PATH,
+  renderKotlinDappCopy,
+  renderSwiftDappCopy,
+} from "./mobile-assets/dapp-copy";
 import { TOAST_SOURCE } from "./mobile-assets/feedback";
 import { renderFriendlyErrors } from "./mobile-assets/friendly-errors";
 import { renderKotlin } from "./mobile-assets/kotlin";
@@ -202,6 +208,8 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [PRIVACY_JSON_PATH, renderPrivacyRouting()],
     [ALLOWANCE_COPY_SWIFT_PATH, renderSwiftAllowanceCopy()],
     [ALLOWANCE_COPY_KOTLIN_PATH, renderKotlinAllowanceCopy()],
+    [DAPP_COPY_SWIFT_PATH, renderSwiftDappCopy()],
+    [DAPP_COPY_KOTLIN_PATH, renderKotlinDappCopy()],
     [MULTISIG_COPY_SWIFT_PATH, renderSwiftMultisigCopy()],
     [MULTISIG_COPY_KOTLIN_PATH, renderKotlinMultisigCopy()],
     [COMMON_PASSWORDS_PATH, `${COMMON_WORDS}\n`],

@@ -2,7 +2,7 @@
 import XCTest
 
 /// The in-app browser's admission rules (P16): only the main frame's committed `https` origin is
-/// answered, and every admitted request is refused with the wallet API's 113 until `DappSession`.
+/// answered, and a request is read only in the shape the page's bridge sends.
 final class DappOriginTests: XCTestCase {
     private let page = URL(string: "https://app.example.com/swap?x=1")
     private let id = "0f8fad5b-d9cb-469f-a165-70867728950e"
@@ -46,34 +46,23 @@ final class DappOriginTests: XCTestCase {
 
     func testReadsOnlyAWellFormedRequest() {
         let origin = "https://app.example.com"
-        let body = #"{"id":"\#(id)","method":"wallet_requestAccounts"}"#
+        let body = #"{"id":"\#(id)","method":"wallet_requestAccounts","params":null}"#
         XCTAssertEqual(
             DappRequest.read(origin: origin, body: body),
-            DappRequest(origin: origin, id: id, method: "wallet_requestAccounts")
+            DappRequest(origin: origin, id: id, method: "wallet_requestAccounts", params: nil)
         )
+        let withParams = #"{"id":"\#(id)","method":"wallet_requestAccounts","params":"{\"silent_mode\":true}"}"#
+        XCTAssertEqual(DappRequest.read(origin: origin, body: withParams)?.params, #"{"silent_mode":true}"#)
         for refused in [
             "not json", "[]", #"{"method":"wallet_requestAccounts"}"#,
             #"{"id":"1","method":"wallet_requestAccounts"}"#, #"{"id":"\#(id)","method":7}"#,
-            #"{"id":"\#(id)","method":""}"#
+            #"{"id":"\#(id)","method":""}"#,
+            #"{"id":"\#(id)","method":"wallet_requestAccounts","params":{"silent_mode":true}}"#
         ] {
             XCTAssertNil(DappRequest.read(origin: origin, body: refused), refused)
         }
         let padding = String(repeating: " ", count: DappRequest.maxBodyBytes)
         XCTAssertNil(DappRequest.read(origin: origin, body: body + padding))
-    }
-
-    func testEveryRequestIsRefusedWithUserRefused() throws {
-        for method in ["wallet_requestAccounts", "wallet_addInvokeTransaction", "wallet_signTypedData"] {
-            let request = DappRequest(origin: "https://app.example.com", id: id, method: method)
-            let reply = try XCTUnwrap(
-                JSONSerialization.jsonObject(with: Data(DappRequestSink().answer(request).utf8)) as? [String: Any]
-            )
-            XCTAssertEqual(reply["id"] as? String, id)
-            let error = try XCTUnwrap(reply["error"] as? [String: Any])
-            XCTAssertEqual(error["code"] as? Int, 113)
-            XCTAssertEqual(error["message"] as? String, "The user refused the operation")
-            XCTAssertNil(reply["result"])
-        }
     }
 
     @MainActor

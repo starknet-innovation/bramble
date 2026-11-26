@@ -8,8 +8,8 @@ import java.io.File
 
 /**
  * The in-app browser's admission rules (P16), as iOS `DappOriginTests`: only the main frame's
- * committed `https` origin is answered, and every admitted request is refused with the wallet API's
- * 113 until `DappSession`.
+ * committed `https` origin is answered, and a request is read only in the shape the page's bridge
+ * sends. Connect itself runs through the native core, covered by iOS `DappRequestSinkTests`.
  */
 class DappOriginTest {
     private val page = "https://app.example.com/swap?x=1"
@@ -63,22 +63,16 @@ class DappOriginTest {
     @Test
     fun readsOnlyAWellFormedRequest() {
         val method = "wallet_requestAccounts"
-        assertEquals(DappRequest(origin, id, method), DappRequest.read(origin, 64, id, method))
-        assertNull(DappRequest.read(origin, 64, null, method))
-        assertNull(DappRequest.read(origin, 64, "1", method))
-        assertNull(DappRequest.read(origin, 64, id, 7))
-        assertNull(DappRequest.read(origin, 64, id, ""))
-        assertNull(DappRequest.read(origin, DappRequest.MAX_BODY_BYTES + 1, id, method))
-    }
-
-    @Test
-    fun everyRequestIsRefused() {
-        listOf("wallet_requestAccounts", "wallet_addInvokeTransaction", "wallet_signTypedData").forEach { method ->
-            assertEquals(
-                """{"error":{"code":113,"message":"The user refused the operation"},"id":"$id"}""",
-                DappRequestSink().answer(DappRequest(origin, id, method)),
-            )
-        }
+        val params = """{"silent_mode":true}"""
+        assertEquals(DappRequest(origin, id, method), DappRequest.read(origin, 64, id, method, null))
+        assertEquals(DappRequest(origin, id, method, params), DappRequest.read(origin, 64, id, method, params))
+        assertNull(DappRequest.read(origin, 64, null, method, null))
+        assertNull(DappRequest.read(origin, 64, "1", method, null))
+        assertNull(DappRequest.read(origin, 64, id, 7, null))
+        assertNull(DappRequest.read(origin, 64, id, "", null))
+        // Params travel as the page's JSON text, never as a parsed value.
+        assertNull(DappRequest.read(origin, 64, id, method, mapOf("silent_mode" to true)))
+        assertNull(DappRequest.read(origin, DappRequest.MAX_BODY_BYTES + 1, id, method, null))
     }
 
     @Test

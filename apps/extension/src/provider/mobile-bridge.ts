@@ -72,6 +72,8 @@ if (send) {
       if (misaddressed) window.postMessage(misaddressed, pageOrigin);
       return;
     }
-    send(JSON.stringify(request));
+    // `params` travels as its own JSON text, so the host hands the core the page's exact JSON.
+    const params = request.params === undefined ? null : JSON.stringify(request.params);
+    send(JSON.stringify({ id: request.id, method: request.method, params }));
   });
 }

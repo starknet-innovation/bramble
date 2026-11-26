@@ -21,6 +21,7 @@ import org.bramble.core.SecurityStatus
 import org.bramble.core.TransferPlan
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
+import org.bramble.wallet.browser.DappRequestSink
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.ThemeChoice
 import org.bramble.wallet.security.BiometricVault
@@ -134,6 +135,9 @@ class WalletStore(
 
     /** True while a core call runs ([CoreCalls]); the screens disable their actions on it. */
     val busy: Boolean get() = calls.busy
+
+    /** The in-app browser's dapp requests over this wallet (P16); its cards outlive the screen. */
+    internal val dappRequests: DappRequestSink by lazy { DappRequestSink(core) }
 
     /**
      * Words of a just-created wallet, or of one whose backup is still pending (revealed through

@@ -41,8 +41,9 @@ enum DappOrigin {
 }
 
 /// A provider request read from the page's untrusted message body, bound to the origin the host
-/// admitted. The body is a JSON object with a UUID `id` and a string `method`; anything else is
-/// dropped, since without an id there is nothing to answer.
+/// admitted. The body is a JSON object with a UUID `id`, a string `method`, and `params` as the
+/// page's own JSON text (or null); anything else is dropped, since without an id there is nothing to
+/// answer.
 struct DappRequest: Equatable {
     /// The hostile-JSON budget the extension's provider bridge applies (1 MiB).
     static let maxBodyBytes = 1_048_576
@@ -51,6 +52,7 @@ struct DappRequest: Equatable {
     let origin: String
     let id: String
     let method: String
+    let params: String?
 
     /// Reads `body` for `origin`, or nil when it is not a request the page's provider would send.
     static func read(origin: String, body: String) -> Self? {
@@ -60,24 +62,8 @@ struct DappRequest: Equatable {
               let requestId = object["id"] as? String, requestId.wholeMatch(of: uuid) != nil,
               let name = object["method"] as? String, !name.isEmpty, name.count <= maxMethodLength
         else { return nil }
-        return Self(origin: origin, id: requestId, method: name)
-    }
-}
-
-/// Where every admitted dapp request lands. Today it refuses each one, connect included, with the
-/// wallet API's user-refused error (113), as the extension answers a request the person declined.
-/// wallet-core's `DappSession` replaces `answer` once mobile pins a core that exports it.
-final class DappRequestSink {
-    private static let userRefused = 113
-    private static let userRefusedMessage = "The user refused the operation"
-
-    /// The JSON reply for `request`: `{ id, error }`, which the page's bridge hands to the provider.
-    func answer(_ request: DappRequest) -> String {
-        let reply: [String: Any] = [
-            "id": request.id,
-            "error": ["code": Self.userRefused, "message": Self.userRefusedMessage]
-        ]
-        let data = (try? JSONSerialization.data(withJSONObject: reply, options: [.sortedKeys])) ?? Data()
-        return String(decoding: data, as: UTF8.self)
+        let raw = object["params"]
+        guard raw == nil || raw is NSNull || raw is String else { return nil }
+        return Self(origin: origin, id: requestId, method: name, params: raw as? String)
     }
 }

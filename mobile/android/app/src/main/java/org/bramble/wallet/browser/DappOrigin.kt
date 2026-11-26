@@ -57,13 +57,14 @@ object DappOrigin {
 
 /**
  * A provider request read from the page's untrusted message, bound to the [origin] the host admitted:
- * a UUID [id] and a [method] name. Without an id there is nothing to answer, so anything else is
- * dropped.
+ * a UUID [id], a [method] name and [params] as the page's own JSON text (or null). Without an id
+ * there is nothing to answer, so anything else is dropped.
  */
 data class DappRequest(
     val origin: String,
     val id: String,
     val method: String,
+    val params: String? = null,
 ) {
     /** Reading rules for the fields the bridge pulled from the message body. */
     companion object {
@@ -73,35 +74,24 @@ data class DappRequest(
         private val UUID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
         /**
-         * The request for [origin], from a body of [bodyBytes] whose `id` and `method` fields are
-         * [id] and [method] (any JSON value), or null when the page's provider would not send it.
+         * The request for [origin], from a body of [bodyBytes] whose `id`, `method` and `params`
+         * fields are [id], [method] and [params] (any JSON value, JSON null read as null), or null
+         * when the page's bridge would not send it.
          */
         fun read(
             origin: String,
             bodyBytes: Int,
             id: Any?,
             method: Any?,
+            params: Any?,
         ): DappRequest? {
             if (bodyBytes > MAX_BODY_BYTES || id !is String || method !is String) return null
-            val valid = UUID.matches(id) && method.isNotEmpty() && method.length <= MAX_METHOD_LENGTH
-            return if (valid) DappRequest(origin, id, method) else null
+            val valid =
+                UUID.matches(id) &&
+                    method.isNotEmpty() &&
+                    method.length <= MAX_METHOD_LENGTH &&
+                    (params == null || params is String)
+            return if (valid) DappRequest(origin, id, method, params as? String) else null
         }
-    }
-}
-
-/**
- * Where every admitted dapp request lands. Today it refuses each one, connect included, with the
- * wallet API's user-refused error (113), as the extension answers a request the person declined.
- * wallet-core's `DappSession` replaces [answer] once mobile pins a core that exports it.
- */
-class DappRequestSink {
-    /** The JSON reply for [request]: `{ id, error }`, which the page's bridge hands to the provider. */
-    fun answer(request: DappRequest): String =
-        // The id is a validated UUID, so it needs no escaping.
-        """{"error":{"code":$USER_REFUSED,"message":"$USER_REFUSED_MESSAGE"},"id":"${request.id}"}"""
-
-    private companion object {
-        const val USER_REFUSED = 113
-        const val USER_REFUSED_MESSAGE = "The user refused the operation"
     }
 }

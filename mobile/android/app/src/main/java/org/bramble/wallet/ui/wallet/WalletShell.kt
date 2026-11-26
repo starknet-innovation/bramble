@@ -203,7 +203,7 @@ private fun FlowScreen(
 
         Flow.BROWSER -> {
             org.bramble.wallet.browser
-                .BrowserScreen(back = pop)
+                .BrowserScreen(store, back = pop)
         }
 
         Flow.ALLOWANCES -> {
