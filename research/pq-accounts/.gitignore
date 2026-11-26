@@ -1,0 +1,4 @@
+# Sepolia run state and SLH key files never belong in the repository.
+sepolia/state.json
+*key*.json
+*.env

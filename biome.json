@@ -17,6 +17,7 @@
       "!node_modules",
       "!output",
       "!playwright-report",
+      "!research",
       "!test-results",
       "!vendor"
     ]

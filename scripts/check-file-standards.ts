@@ -32,8 +32,10 @@ const EXCLUDED = new Set([
  * name — as this list did while `src/` was the extension root — would silently
  * disable every `apps/extension/src` rule below, including the secret-material
  * and browser-global boundaries. Skipping by path keeps the extension scanned.
+ * `research` holds standalone Cairo and Python research, never built into the
+ * extension.
  */
-const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
+const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab", "research"]);
 const BINARY_EXTENSIONS = [".jpg", ".otf", ".png", ".wasm", ".webp", ".woff2", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
