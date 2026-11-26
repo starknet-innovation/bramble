@@ -236,8 +236,8 @@ final class SwapFlowModel {
     /// Re-probes the endpoints and asks the plan for a new fee estimate.
     func retryFee() async {
         guard let driver, stage == .review else { return }
-        await driver.releaseEndpoint()
         stage = .preparing
+        await driver.releaseEndpoint()
         do {
             showReview(try await driver.run(from: .retryEstimate), from: driver)
         } catch {
