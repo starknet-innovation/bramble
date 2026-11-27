@@ -36,6 +36,7 @@ import {
   MULTISIG_IMPORT_FIXTURE_PATH,
   renderMultisigImportParity,
 } from "./mobile-parity-multisig-import";
+import { NFTS_PARITY_FIXTURE_PATH, renderNftsParity } from "./mobile-parity-nfts";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 import { renderSettingsParity, SETTINGS_PARITY_FIXTURE_PATH } from "./mobile-parity-settings";
@@ -209,6 +210,9 @@ console.log(`wrote ${GASLESS_PARITY_FIXTURE_PATH}`);
 
 await writeFile(DAPP_PARITY_FIXTURE_PATH, await renderDappParity());
 console.log(`wrote ${DAPP_PARITY_FIXTURE_PATH}`);
+
+await writeFile(NFTS_PARITY_FIXTURE_PATH, await renderNftsParity());
+console.log(`wrote ${NFTS_PARITY_FIXTURE_PATH}`);
 
 // So are the privacy fixture and the privacy copy tables.
 await import("./generate-mobile-privacy-vectors");
