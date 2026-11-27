@@ -1,5 +1,7 @@
-# CODEOWNERS — reviewers auto-requested on PRs, and the set GitHub can *require*
-# through the active main ruleset's required code-owner review.
+# CODEOWNERS — reviewers auto-requested on PRs. Code Owner review is NOT a
+# required merge gate on main (DEVELOPMENT.md, "Branch protection"); for the
+# security-sensitive paths below, asking for this review before merging is
+# strongly encouraged.
 #
 # Existing push-authorized maintainers supply independent review coverage and
 # avoid making the PR author the only possible code owner.

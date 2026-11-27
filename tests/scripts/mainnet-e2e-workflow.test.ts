@@ -57,7 +57,7 @@ describe("mainnet E2E workflow policy", () => {
     const ref = mutate(
       sources,
       "          persist-credentials: false\n",
-      "          persist-credentials: false\n          ref: release/v0.10.9\n",
+      "          persist-credentials: false\n          ref: refs/heads/feature\n",
     );
     expect(mainnetE2eWorkflowFailures(ref[WORKFLOW] ?? "")).toContain(CHECKOUT_FAILURE);
   });
@@ -114,7 +114,7 @@ describe("mainnet E2E workflow policy", () => {
       `      - name: Install dependencies\n        env:\n          RPC: ${EXPRESSION} secrets.MAINNET_E2E_RPC_URL }}\n        run: bun install --frozen-lockfile\n`,
     );
     expect(mainnetE2eWorkflowFailures(keyed[WORKFLOW] ?? "")).toContain(
-      "the mainnet build runs release code and must not receive any secret",
+      "the mainnet build runs the commit under test and must not receive any secret",
     );
   });
 

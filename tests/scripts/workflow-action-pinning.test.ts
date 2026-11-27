@@ -26,7 +26,7 @@ describe("workflow action pinning", () => {
   test("every workflow in the repository is inspected", async () => {
     const files = Object.keys(await readWorkflowSources());
     expect(files.length).toBeGreaterThan(0);
-    expect(files).toContain("auto-release.yml");
+    expect(files).toContain("release.yml");
     expect(files).toContain("terminal-ci.yml");
     expect(files).toContain("ui-lab.yml");
   });

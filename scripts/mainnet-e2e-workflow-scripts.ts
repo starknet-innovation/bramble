@@ -8,9 +8,6 @@
  * token without a reviewed change to this file.
  */
 
-/** The manual dispatch input's description, shown in the Actions UI. */
-export const BRANCH_INPUT_DESCRIPTION = `Override the release branch to run against (e.g. release/v0.10.9). Blank = auto-resolve.`;
-
 /** The post job's summary step, line by line. */
 export const SUMMARY_SCRIPT: readonly string[] = [
   `set -euo pipefail`,
@@ -29,17 +26,16 @@ export const SUMMARY_SCRIPT: readonly string[] = [
 /** The reporter's `github-script` body, line by line. */
 export const REPORT_SCRIPT: readonly string[] = [
   `const { owner, repo } = context.repo;`,
-  `const branch = process.env.BRANCH || "unknown";`,
   `const amount = (value) => /^-?[0-9]{1,12}(\\.[0-9]{1,18})?$/.test(value || "") ? value : "unavailable";`,
   `const felt = (value) => /^0x[0-9a-fA-F]{1,64}$/.test(value || "") ? value : "unavailable";`,
   `const verdicts = ["ok", "above-maximum", "below-minimum", "over-cap", "unavailable"];`,
   `const verdict = verdicts.includes(process.env.VERDICT) ? process.env.VERDICT : "unavailable";`,
   `const tier = process.env.TIER === "strk20" || process.env.TIER === "standard" ? process.env.TIER : "unavailable";`,
   `const revision = /^[0-9a-f]{40}$/.test(process.env.REVISION || "") ? process.env.REVISION : "unavailable";`,
-  `const title = \`Mainnet E2E: \${branch} — failing checks\`;`,
+  `const title = "Mainnet E2E: main — failing checks";`,
   `const runUrl = \`\${process.env.GITHUB_SERVER_URL}/\${process.env.GITHUB_REPOSITORY}/actions/runs/\${process.env.GITHUB_RUN_ID}\`;`,
   `const body = [`,
-  `  \`Automated mainnet E2E run for \\\`\${branch}\\\` failed or the hot wallet is outside its spend policy.\`,`,
+  `  "Automated mainnet E2E run for \`main\` failed or the hot wallet is outside its spend policy.",`,
   `  "",`,
   `  \`**Run:** \${runUrl}\`,`,
   `  \`**Commit:** \\\`\${revision}\\\`\`,`,
@@ -55,20 +51,15 @@ export const REPORT_SCRIPT: readonly string[] = [
   `  \`| USDC | \${amount(process.env.USDC_BEFORE)} | \${amount(process.env.USDC_AFTER)} | \${amount(process.env.USDC_DELTA)} |\`,`,
   `  "",`,
   `  "below-minimum: fund the hot wallet. above-maximum: move the excess off. over-cap: this run spent more than the per-run cap.",`,
-  `  "Upserted by .github/workflows/mainnet-e2e.yml. Close once the branch is green.",`,
+  `  "Upserted by .github/workflows/mainnet-e2e.yml. Close once main is green.",`,
   `].join("\\n");`,
-  `const existingList = await github.paginate(github.rest.issues.listForRepo, {`,
-  `  owner, repo, state: "open", labels: "ci-cd", per_page: 100,`,
-  `});`,
+  `const existingList = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: "open", labels: "ci-cd", per_page: 100 });`,
   `const existing = existingList.find((item) => item.title === title && !item.pull_request);`,
   `if (existing) {`,
   `  await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });`,
   `  core.info(\`Updated tracking issue #\${existing.number}.\`);`,
   `} else {`,
-  `  const created = await github.rest.issues.create({`,
-  `    owner, repo, title, body,`,
-  `    labels: ["ci-cd", "release"],`,
-  `  });`,
+  `  const created = await github.rest.issues.create({ owner, repo, title, body, labels: ["ci-cd"] });`,
   `  core.info(\`Created tracking issue #\${created.data.number}.\`);`,
   `}`,
 ];

@@ -252,7 +252,11 @@ describe("Ledger E2E workflow policy", () => {
       `${PATH} must offer record mode only as a boolean input, off by default`,
     );
     expect(await failuresAfter('      - "tests/e2e/ledger/**"\n', "")).toContain(
-      `${PATH} must run on Ledger changes into main and release branches`,
+      `${PATH} must run on Ledger changes into main`,
+    );
+    // Trunk-based: no other long-lived branch may be a trigger target.
+    expect(await failuresAfter("branches: [main]\n", 'branches: [main, "release/**"]\n')).toContain(
+      `${PATH} must run on Ledger changes into main`,
     );
     expect(
       await failuresAfter(
@@ -285,7 +289,7 @@ describe("Ledger E2E workflow policy", () => {
     ).toContain(`${PATH} job speculos must use exactly the reviewed actions and inputs, in order`);
     expect(
       await failuresAfter('      - "bun.lock"\n', '      - "bun.lock"\n      - "!**"\n', true),
-    ).toContain(`${PATH} must run on Ledger changes into main and release branches`);
+    ).toContain(`${PATH} must run on Ledger changes into main`);
     expect(
       await failuresAfter(
         "        run: bun run scripts/ledger-e2e-results.ts nanosp flex\n",

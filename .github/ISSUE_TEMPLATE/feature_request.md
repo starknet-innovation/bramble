@@ -24,7 +24,7 @@ Anything else relevant (security or permission implications, links, screenshots)
 
 ## Target release / milestone
 
-Which release should this land in? Use a milestone like `v0.4` (mapped to a
-`release/vX.Y` branch) and, if known, the roadmap phase (`phase:N`, tracking
-issues #79–#87). Leave blank if unsure — a maintainer will triage it into a
-milestone. See DEVELOPMENT.md for how phases and releases relate.
+Which release should this ship in? Use a milestone for the planned version
+(e.g. `v0.11.0`) and, if known, the roadmap phase (`phase:N`, tracking issues
+#79–#87). Leave blank if unsure — a maintainer will triage it. See
+DEVELOPMENT.md for how phases and milestones relate.

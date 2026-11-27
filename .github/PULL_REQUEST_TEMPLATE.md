@@ -1,18 +1,16 @@
 <!-- Thanks for contributing. This wallet handles private keys and extension permissions; treat every change as security-sensitive. -->
-<!-- New here? Read DEVELOPMENT.md for the roadmap-driven release-branch workflow (where to branch, where to target). -->
+<!-- New here? Read DEVELOPMENT.md: branch from main, keep the PR small, target main, squash-merge. -->
 
 ## Summary
 
 <!-- What does this change do, and why? -->
 
-## Roadmap & release
+## Issue & scope
 
-<!-- Required for PRs into a release/vX.Y branch. See DEVELOPMENT.md. -->
-
-- **Roadmap issue:** Closes #<!-- issue --> <!-- or "Refs #N" if it doesn't fully close it -->
-- **Target release:** `release/v<!-- X.Y -->` <!-- this PR's base branch; working-branch PRs target the active release branch, NOT main -->
-- **Acceptance criterion satisfied:** <!-- which release/milestone acceptance criterion this advances -->
-- [ ] This change is **in scope** for the target release. Scope changes go to the milestone/roadmap first, not implicitly through this PR.
+- **Issue:** Closes #<!-- issue --> <!-- or "Refs #N" if it doesn't fully close it -->
+- [ ] This change is **in scope** for the linked issue. New scope goes to a new issue, not into this PR.
+- [ ] Safe to release as soon as it merges: unfinished user-facing work is unwired or behind a feature flag (or this PR has none).
+- [ ] If this touches signing, the vault, the background, the provider, privacy, or workflows, a review was requested before merge.
 
 ## Checks
 

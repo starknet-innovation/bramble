@@ -7,6 +7,8 @@
  * structural one replaced; each must now fail with the named failure.
  * `EQUIVALENT` entries change only spelling and must still pass.
  */
+import { NOTIFY_WEAKENINGS } from "./mainnet-e2e-notify-mutations";
+
 const E = "$" + "{{";
 const PATH = ".github/workflows/mainnet-e2e.yml";
 
@@ -34,14 +36,12 @@ const REFUSED_RPC =
 const MISSING = "mainnet execution must fail when any hot-wallet secret is missing";
 const BASELINE = "the post-run check must take its baseline from the preflight job output";
 const REPORT_ORDER =
-  "the hosted mainnet reporter must run only its reviewed step: no checkout and no release-branch source";
+  "the hosted mainnet reporter must run only its reviewed step: no checkout and no source under test";
 
 const HTTPS_LINE = `          [[ "$MAINNET_E2E_RPC_URL" == https://* ]] || { echo "::error::The mainnet RPC must be HTTPS."; exit 1; }\n`;
 const MISSING_IF = `          if [ "\${#missing[@]}" -ne 0 ]; then\n`;
-const DISPATCH_IF =
-  '          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/main" ]; then\n';
-const REGEX_IF =
-  '          if [[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]; then\n';
+const MAIN_IF = '          if [ "$TRIGGER_REF" != "refs/heads/main" ]; then\n';
+const SHA_IF = '          if [[ ! "$TRIGGER_SHA" =~ ^[0-9a-f]{40}$ ]]; then\n';
 const STRK_BASELINE = `MAINNET_E2E_STRK_BEFORE_RAW: ${E} needs.preflight.outputs.strk_before_raw }}`;
 
 /** Weakenings the text policy accepted, by item. */
@@ -219,17 +219,31 @@ export const FAIL_WITHOUT: readonly Weakening[] = [
   },
   {
     item: "9 guards",
-    label: "dispatch-from-main test only in a comment",
-    search: DISPATCH_IF,
-    replacement: `          # ${DISPATCH_IF.trimStart()}          if false; then\n`,
-    failure: `${PATH} manual dispatches must reject workflow revisions outside main`,
+    label: "run-from-main test only in a comment",
+    search: MAIN_IF,
+    replacement: `          # ${MAIN_IF.trimStart()}          if false; then\n`,
+    failure: `${PATH} must run only the workflow and commit from main`,
   },
   {
     item: "9 guards",
-    label: "release-branch regex only in a comment",
-    search: REGEX_IF,
-    replacement: `          # ${REGEX_IF.trimStart()}          if false; then\n`,
-    failure: `${PATH} must constrain configured refs to canonical release branches`,
+    label: "immutable-commit check only in a comment",
+    search: SHA_IF,
+    replacement: `          # ${SHA_IF.trimStart()}          if false; then\n`,
+    failure: `${PATH} must resolve main to an immutable commit`,
+  },
+  {
+    item: "9 guards",
+    label: "commit under test taken from a caller-supplied input",
+    search: `          TRIGGER_SHA: ${E} github.sha }}\n`,
+    replacement: `          TRIGGER_SHA: ${E} github.event.inputs.revision }}\n`,
+    failure: `${PATH} must resolve main to its commit in the reviewed step`,
+  },
+  {
+    item: "9 triggers",
+    label: "dispatch regains a branch input",
+    search: "  workflow_dispatch:\n",
+    replacement: '  workflow_dispatch:\n    inputs:\n      branch: { type: string, default: "" }\n',
+    failure: `${PATH} must allow manual dispatch with no inputs`,
   },
   {
     item: "9 guards",
@@ -241,8 +255,8 @@ export const FAIL_WITHOUT: readonly Weakening[] = [
   {
     item: "9 triggers",
     label: "quoted pull_request_target key",
-    search: "  workflow_dispatch:\n    inputs:",
-    replacement: '  "pull_request_target": {}\n  workflow_dispatch:\n    inputs:',
+    search: "  workflow_dispatch:\n",
+    replacement: '  "pull_request_target": {}\n  workflow_dispatch:\n',
     failure: `${PATH} must not trigger on pull_request_target:`,
   },
   {
@@ -317,8 +331,9 @@ export const FAIL_WITHOUT: readonly Weakening[] = [
     search: "            const { owner, repo } = context.repo;\n",
     replacement:
       "            const { owner, repo } = context.repo;\n            await github.rest.issues.createComment({ owner, repo, issue_number: 1, body: 'x' });\n",
-    failure: "the hosted mainnet reporter must not check out or execute release-branch source",
+    failure: "the hosted mainnet reporter must not check out or execute the commit under test",
   },
+  ...NOTIFY_WEAKENINGS,
 ];
 
 /** Edits the text policy rejected that must still fail: kept so they never regress. */

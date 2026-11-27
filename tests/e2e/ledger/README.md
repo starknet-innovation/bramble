@@ -29,12 +29,9 @@ emulator fails every test. Without Docker or a vendored binary the runner prints
 
 `.github/workflows/ledger-e2e.yml` runs the suite on a GitHub-hosted
 `ubuntu-latest` runner (Docker included) for pull requests and pushes into
-`main` and `release/**` that touch Ledger code, nightly at 04:30 UTC, and on
-manual dispatch. The nightly run tests the active release branch, resolved as
-`nightly.yml` does: `vars.ACTIVE_RELEASE_BRANCH`, else the highest
-`release/vX.Y[.Z]`, checked against that pattern and against the repository's
-branches, and checked out at the commit it resolved to. A scheduled run uses
-the workflow file on `main`, so this applies once the workflow reaches `main`. It holds no repository secret and a read-only token, so fork
+`main` that touch Ledger code, nightly at 04:30 UTC, and on manual dispatch.
+The nightly run tests the current `main` commit, resolved once and checked out
+at that exact commit. It holds no repository secret and a read-only token, so fork
 pull requests run it as they are. It builds the extension, builds the pinned
 app for `nanosp` and `flex`, runs `BRAMBLE_SPECULOS_REQUIRED=1 bun run
 test:e2e:ledger`, and then requires each model's Playwright JSON report to show

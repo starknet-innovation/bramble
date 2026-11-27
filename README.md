@@ -178,7 +178,7 @@ access only the validated provider protocol. The package graph and its enforced 
 - **[Documentation portal](docs/index.md)** — host-ready project and security-audit documentation.
 - **[User guide](docs/USER-GUIDE.md)** — install, first run, backup, and everyday use.
 - **[Engineering](docs/ENGINEERING.md)** — reading order, import layers, and the untrusted-message path.
-- **[Development](DEVELOPMENT.md)** — release branches, where pull requests go, and which CI runs.
+- **[Development](DEVELOPMENT.md)** — trunk-based workflow, pull requests into `main`, releases, and which CI runs.
 - **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, Ledger trust boundary, pinned class hashes, storage migrations, design system, and full tour.
 - **[Modular architecture](docs/MODULAR_ARCHITECTURE.md)** — package ownership, dependency direction, typed invariants, and local package workflows.
 - **[Wallet store architecture](docs/WALLET_STORE.md)** — persistence layout, account scoping, Chrome update migrations, and Ledger viewing-key custody.

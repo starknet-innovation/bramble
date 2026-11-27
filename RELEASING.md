@@ -1,27 +1,25 @@
 # Releasing Bramble
 
-This runbook takes Bramble from a version bump to a published Chrome Web Store
-listing. Two paths exist and share the same packaged bytes:
+This runbook takes Bramble from a version bump on `main` to a published Chrome
+Web Store listing. Releases are cut from `main` (trunk-based development; see
+**[DEVELOPMENT.md](DEVELOPMENT.md)**). Two paths exist and share the same
+packaged bytes:
 
-- **Automatic (release-on-merge)** — merging a `release/*` (or `hotfix/*`) branch
-  into `main` runs `.github/workflows/auto-release.yml`, which derives the
-  version from the merged branch, creates the `vX.Y.Z` tag on the merge commit,
-  and calls the reusable `release-build.yml` to build, package, generate the
-  changelog notes, and create the GitHub Release. **No manual tag push.**
-- **Tag-driven** — pushing a `vX.Y.Z` tag by hand runs
-  `.github/workflows/release.yml`, which calls the same reusable build. Use this
-  only for a one-off or backfilled release; the normal path is the automatic one.
+- **Tag-driven (normal)** — merge a version-bump PR into `main`, then push a
+  `vX.Y.Z` tag on that commit. `.github/workflows/release.yml` calls the
+  reusable `release-build.yml` to build, package, generate the changelog notes,
+  and create the GitHub Release. It refuses a tag whose commit is not on `main`.
 - **Manual** — the same steps done by hand. This is the fallback when automation
   is unavailable or a credential is missing, and it is the source of truth for
   the human prerequisites (store account, listing assets, review, rollback) that
   the automation cannot create.
 
-Both automated paths share one heavy pipeline (`release-build.yml`) and one
-**single-source version gate**: the tag must equal the `package.json` /
-`apps/extension/public/manifest.json` version, or the release fails before any artifact is
-built (`bun run check:release-version`). Source and dependencies execute on the
-self-hosted builder with read-only repository permission; a fresh hosted job
-receives the narrow write permission needed to publish inert release artifacts.
+The release build has one **single-source version gate**: the tag must equal
+the `package.json` / `apps/extension/public/manifest.json` version, or the
+release fails before any artifact is built (`bun run check:release-version`).
+Source and dependencies execute on the self-hosted builder with read-only
+repository permission; a fresh hosted job receives the narrow write permission
+needed to publish inert release artifacts.
 An **optional, currently disabled** job can publish to the Chrome Web Store (see
 [Chrome Web Store publish](#6-triggering-the-optional-chrome-web-store-publish)).
 
@@ -30,36 +28,33 @@ An **optional, currently disabled** job can publish to the Chrome Web Store (see
 > yet. Nothing below embeds a secret value — only secret **names** and the
 > people/roles who hold access.
 
-## 0. Release-branch completion checklist (roadmap-driven model)
+## 0. Release checklist
 
-Under the release-branch model (see **[DEVELOPMENT.md](DEVELOPMENT.md)**), a
-release is a milestone (`vX.Y`) on a `release/vX.Y` branch cut from `main`. The
-steps below take a scope-complete release branch through a release candidate to
-a tagged, published `vX.Y.0` on `main`. Sections 1–9 remain the mechanics each
-step relies on.
+There are no release branches: a release is a tag on a `main` commit. Sections
+1–9 are the mechanics each step relies on.
 
-1. **Scope complete.** Every roadmap issue in the `vX.Y` milestone is closed or
-   explicitly deferred to a later milestone; the release's acceptance criteria
-   are met; no unresolved release-blocking regressions remain (check the
-   `Nightly: release/vX.Y — failing checks` tracking issue, if any).
-2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
-   `X.Y.0` in lockstep (section 1) and run the single-source guard.
-3. **Gates green.** Required PR CI is green on the release-branch tip; the
-   nightly / full suite (E2E, live Sepolia import paths, dependency audit, build —
-   `.github/workflows/nightly.yml`) is green on `release/vX.Y`.
-4. **Release notes.** Draft the notes (CHANGELOG section once #60 lands;
-   otherwise the tag's auto-generated notes).
-5. **Release candidate (when appropriate).** Tag `vX.Y.0-rc.1` on the release
-   branch and run a final validation pass — build + package + `sha256sum -c`
-   (section 2), load the unpacked build, confirm E2E. Dispatch the nightly on
-   the release branch and check its Sepolia import-path verdicts in the job
-   summary (it uploads nothing). Then run `verify-sepolia.ts` locally with
+1. **Ready to ship.** Issues planned for the `vX.Y.Z` milestone (if one exists)
+   are merged or moved to a later milestone, and nothing unfinished is reachable
+   by users (DEVELOPMENT.md, "Keeping unfinished work away from users"). No
+   release-blocking regression is open (check the
+   `Nightly: main — failing checks` tracking issue, if any).
+2. **Bump PR.** Open `chore/release-vX.Y.Z` from the latest `main`: bump
+   `package.json` **and** `apps/extension/public/manifest.json` to `X.Y.Z` in
+   lockstep (section 1), fill the `CHANGELOG.md` `[X.Y.Z]` section
+   (`bun run changelog`), and run the single-source gate.
+3. **Gates green.** The PR's required checks (`pr-guards`, `fast-checks`,
+   `release-validation`) are green, and the nightly suite (E2E, live Sepolia
+   import paths, sends and deploys, dependency audit, build —
+   `.github/workflows/nightly.yml`) is green on `main`.
+4. **Pre-release validation (when appropriate).** Before tagging, validate the
+   `main` commit you intend to release: build + package + `sha256sum -c`
+   (section 2), load the unpacked build, confirm E2E. Dispatch the nightly and
+   check its Sepolia import-path verdicts in the job summary (it uploads
+   nothing). Then run `verify-sepolia.ts` locally with
    `BRAMBLE_SEPOLIA_LEDGER=1` and the test Ledger for TA-32…TA-37, check TA-38 by
    hand, and commit that local run's scorecard as
    `tools/vendor-dataset/verification-sepolia-<date>.json`
-   (`tools/vendor-dataset/README.md`). Iterate `-rc.2`, … if the
-   RC turns up blockers. RC tags are validation only; they do not publish.
-6. **Full validation.** Confirm the RC against the acceptance criteria.
+   (`tools/vendor-dataset/README.md`) through a normal PR.
    The physical test Ledger check stays: import and blind-sign on the real
    device (TA-32…TA-38). The Speculos suite (`bun run test:e2e:ledger`) answers
    the dashboard steps with canned replies and fakes WebHID, so it does not
@@ -70,24 +65,19 @@ step relies on.
    second independent build (another record run or a local build), and a
    second maintainer reviews that pull request
    (`tests/e2e/ledger/README.md`, "Recording the app hashes").
-7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
-   (not squash — preserve release history), done explicitly by a maintainer.
-8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the
-   version from the merged branch, cross-checks it against
-   `package.json`/`manifest` (the single-source gate — a promotion that skipped
-   step 2 fails here), tags `vX.Y.0` on the merge commit, and cuts the GitHub
-   Release with the artifact + changelog notes. No manual tag push is needed;
-   push `vX.Y.0` by hand only to backfill a release the automation missed.
-9. **Publish.** Confirm the GitHub Release; run the optional, gated Chrome Web
+   `release.yml` ignores hyphenated tags, so an RC tag (`vX.Y.Z-rc.N`) builds
+   nothing; validate the commit directly.
+5. **Merge** the bump PR (squash).
+6. **Tag.** A maintainer tags the bump's merge commit on `main` and pushes the
+   tag (section 3). The release build runs and creates the GitHub Release.
+7. **Publish.** Confirm the GitHub Release; run the optional, gated Chrome Web
    Store publish via manual dispatch (sections 5–7) when a store account exists.
-10. **Close / archive the `vX.Y` milestone.**
-11. **Cut the next release** branch from the updated `main` and point
-    `vars.ACTIVE_RELEASE_BRANCH` at it (used by the nightly workflow).
+8. **Close the `vX.Y.Z` milestone**, if there is one.
 
-**Hotfixes:** branch `hotfix/<desc>` from `main` (or the affected release tag),
-merge into `main`, tag the patch `vX.Y.Z`, then **forward-apply** the same fix to
-any active `release/vX.Y` branch that lacks it. Never leave a fix only on an
-older release branch. See DEVELOPMENT.md → "Hotfixes & backports".
+**Hotfixes:** there is no hotfix branch. Fix the bug on `main` through a normal
+PR, then release a patch `vX.Y.Z+1` with the same checklist. Fix forward; never
+re-tag or re-publish an older version (section 8). See DEVELOPMENT.md →
+"Hotfixes".
 
 ## 1. Versioning and bump
 
@@ -98,13 +88,12 @@ The release version has **one source of truth**: `package.json` → `version`.
 - `scripts/check-config-standards.ts` and `scripts/check-extension-manifest.ts`
   fail the build if the two versions differ or are not `x.y.z` (offline, every PR).
 - `scripts/release-version.ts` (`bun run check:release-version`) is the **release
-  gate**: it asserts the tag equals `v<version>` and, on an auto-release, that the
-  `release/vX.Y` (or `release/vX.Y.Z`) branch implies exactly that version — the check that was missing
+  gate**: it asserts the tag equals `v<version>` — the check that was missing
   when `v0.4.0` shipped as `mc-wallet-0.3.0.zip`. Its pure logic is unit-tested in
   `tests/conformance/release-version-single-source.test.ts`.
 
-To bump, edit **both** files to the same new semver (a `release/vX.Y` branch
-ships `X.Y.0`, a `release/vX.Y.Z` branch ships `X.Y.Z`), then run the gates:
+To bump, edit **both** files to the same new semver in the `chore/release-vX.Y.Z`
+PR, then run the gates:
 
 ```sh
 bun test tests/conformance/release-version-single-source.test.ts
@@ -150,19 +139,23 @@ bun test
 
 The full `bun run check` (plus `vendor:argent`, `build`, `test:e2e`) runs in CI.
 
-## 3. Cutting a release (automatic on merge)
+## 3. Cutting a release (tag on `main`)
 
-The normal path needs **no tag push**. When `release/vX.Y` (or a `hotfix/*`
-branch) is merged into `main`, `.github/workflows/auto-release.yml`:
+After the `chore/release-vX.Y.Z` PR is merged, a maintainer tags its merge
+commit and pushes the tag. Agents never push tags unless the user explicitly
+asks.
 
-1. resolves the merged head branch from the PR on the merge commit; a chore/docs
-   merge resolves to no release and the workflow exits cleanly;
-2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y`, `X.Y.Z`
-   from a `release/vX.Y.Z` patch branch (or the package version for a hotfix) and **fails** if `package.json`/`manifest` do
-   not match, so a promotion that skipped the version bump cannot ship;
-3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
-   idempotent, so a re-run never double-cuts);
-4. calls the reusable `release-build.yml`, which installs the toolchain exactly
+```sh
+git fetch origin
+git tag -s vX.Y.Z <merge-commit-sha>   # must match the version in package.json / manifest
+git push origin vX.Y.Z
+```
+
+The tag push runs `.github/workflows/release.yml`, which:
+
+1. resolves the tag to its commit and **refuses** it unless that commit is on
+   `main`;
+2. calls the reusable `release-build.yml`, which installs the toolchain exactly
    as CI does, runs `vendor:argent`, builds and packages both browser targets,
    runs AMO's validator (`check:firefox`) over the Gecko build, re-asserts the
    tag ↔ version gate, verifies each `.zip` matches its `.sha256`, and uploads
@@ -171,21 +164,12 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
    `.sha256` files attached: `bramble-<version>.zip` for Chromium and
    `bramble-firefox-<version>.zip` for addons.mozilla.org.
 
-Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
-current on the release branch via `bun run changelog` — falling back to a
-deterministic section generated from the commit range since the previous tag.
+Release notes come from the matching `CHANGELOG.md` section (issue #60) — filled
+in the bump PR via `bun run changelog` — falling back to a deterministic section
+generated from the commit range since the previous tag.
 
-### Backfill / one-off (tag-driven)
-
-To cut a release the automation missed, push the tag by hand; it drives the same
-reusable build via `.github/workflows/release.yml`:
-
-```sh
-git tag v0.2.0      # must match the version in package.json / manifest
-git push origin v0.2.0
-```
-
-A tag that does not match `v*` triggers nothing.
+Only `vX.Y.Z` tags trigger a build; hyphenated tags (`vX.Y.Z-rc.N`) and anything
+not matching `v*` trigger nothing.
 
 ### Cutting a release (manual fallback)
 
@@ -377,15 +361,12 @@ recovery steps are in the README ("Upgrading") and on the website support page.
 
 ## 9. Where automation hooks in
 
-- `.github/workflows/auto-release.yml` — automatic release-on-merge: derive the
-  version from the merged branch, tag, and cut the Release.
-- `.github/workflows/release.yml` — tag-driven backfill Release + optional CWS
-  publish.
-- `.github/workflows/release-build.yml` — the reusable heavy build both paths
-  call (read-only self-hosted build/package/tag ↔ version gate/notes, followed
+- `.github/workflows/release.yml` — tag-driven Release (tag must be on `main`)
+  + optional CWS publish.
+- `.github/workflows/release-build.yml` — the reusable heavy build `release.yml`
+  calls (read-only self-hosted build/package/tag ↔ version gate/notes, followed
   by hosted Release publication).
-- `scripts/release-version.ts` — the single-source version gate and
-  branch → version derivation (#59).
+- `scripts/release-version.ts` — the single-source version gate (#59).
 - `scripts/generate-changelog.ts` — deterministic `CHANGELOG.md` section
   generation and release-notes extraction (#60).
 - `scripts/package-extension.ts` — the single source of the packaged artifact.

@@ -97,7 +97,7 @@ extension.
   drives first-run import and blind-sign with the public test phrase (#861):
   `BRAMBLE_SEPOLIA_LEDGER=1 BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts`.
 - The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
-  the Ledger, on the active release branch against the newest committed
+  the Ledger, on the current `main` commit against the newest committed
   scorecard, so a failing import path blocks the release like any other nightly
   gate. The `BRAMBLE_SEPOLIA_SEEDS` repository secret has been set since
   2026-11-10; if it is ever removed, the gate is skipped and the summary lists
@@ -113,8 +113,8 @@ extension.
   Ledger seed and the guardian, 2FA and rotation keys included. Only that one
   step sees the secret, and it masks each value in the log
   (`scripts/workflow-sepolia-policy.ts` holds it there). The secret reaches
-  whatever code is on the release branch, so release branches must stay
-  protected. It records no tape and uploads nothing, since the repository is
+  whatever code is on `main`, so `main` must stay protected
+  (DEVELOPMENT.md, "Branch protection"). It records no tape and uploads nothing, since the repository is
   public; the verdicts are in the job log and summary.
 - `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records the network answers of a live
   run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)

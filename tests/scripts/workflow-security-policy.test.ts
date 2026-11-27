@@ -31,9 +31,9 @@ describe("workflow security policy", () => {
 
   test("inspects every workflow on disk, not a hand-maintained list", async () => {
     const sources = await readWorkflowSources();
-    // The three the previous table omitted. They are ordinary hosted workflows,
-    // which is exactly why nothing noticed they were unchecked.
-    for (const name of ["auto-release.yml", "terminal-ci.yml", "ui-lab.yml"]) {
+    // Ordinary hosted workflows the previous table omitted, which is exactly why
+    // nothing noticed they were unchecked.
+    for (const name of ["terminal-ci.yml", "ui-lab.yml"]) {
       expect(Object.keys(sources)).toContain(name);
     }
   });
@@ -251,18 +251,11 @@ describe("workflow security policy", () => {
       failure: "manual store publication must require an existing immutable release tag",
     },
     {
-      name: "rejects an unconstrained nightly branch",
-      workflow: "nightly.yml",
-      search: '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]',
-      replacement: '[[ -z "$candidate" ]]',
-      failure: "nightly must constrain configured refs to canonical release branches",
-    },
-    {
       name: "rejects configured nightly checkout refs",
       workflow: "nightly.yml",
       search:
-        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n      - name: Check out resolved release commit",
-      replacement: `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n          ref: ${GITHUB_EXPRESSION} needs.resolve.outputs.branch }}\n      - name: Check out resolved release commit`,
+        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n      - name: Check out resolved main commit",
+      replacement: `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n          ref: main\n      - name: Check out resolved main commit`,
       failure: "self-hosted nightly execution must not pass configured refs to checkout",
     },
     {
@@ -288,20 +281,6 @@ describe("workflow security policy", () => {
       search: "          persist-credentials: false\n",
       replacement: "",
       failure: "self-hosted nightly execution must not leave the checkout token in .git/config",
-    },
-    {
-      name: "rejects self-hosted release integration that persists the checkout token",
-      workflow: "release-integration.yml",
-      search: "          persist-credentials: false\n",
-      replacement: "",
-      failure: "self-hosted release integration must not leave the checkout token in .git/config",
-    },
-    {
-      name: "rejects self-hosted release integration on a pull request",
-      workflow: "release-integration.yml",
-      search: 'push:\n    branches: ["release/**"]',
-      replacement: "pull_request:\n    branches: [main]",
-      failure: "release integration must run only on pushes to release branches",
     },
     // The deploy credential's in-tree half. The enforcing control against a
     // foreign ref is the environment's deployment-branch policy, which lives in

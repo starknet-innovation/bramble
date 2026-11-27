@@ -18,7 +18,7 @@ const loadScript = async (): Promise<string> => {
 };
 
 const GREEN = {
-  BRANCH: "release/v1.2",
+  REVISION: "a".repeat(40),
   VENDOR: "success",
   BUILD: "success",
   AUDIT: "success",
@@ -83,6 +83,9 @@ describe("nightly report", () => {
       issues,
     );
     expect(issues).toHaveLength(1);
+    // One tracking issue for main; the run names the exact commit it tested.
+    expect(issues[0]?.title).toBe("Nightly: main — failing checks");
+    expect(first.summary).toContain(`Nightly run for \`main\` at \`${"a".repeat(40)}\``);
     expect(first.summary).toContain(
       "### New failures\n- Full E2E (Playwright) (failure)\n- `a.e2e.ts › sends`",
     );

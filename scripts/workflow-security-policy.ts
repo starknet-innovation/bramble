@@ -33,10 +33,9 @@ const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.1.0
         with:
           node-version: 24`;
 
-// Upstream verification is all-or-nothing: a workflow that builds one pinned
-// source against a stale or unverified other one is not running the reviewed artifact set. The
-// rule selects itself from content, so it reaches any future workflow that
-// vendors anything.
+// Upstream verification is all-or-nothing: building one pinned source against a
+// stale or unverified other is not the reviewed artifact set. The rule selects
+// itself from content, so it reaches any future workflow that vendors anything.
 const VENDOR_STEPS = [
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
@@ -137,14 +136,57 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
   return failures;
 };
 
+// Trunk CI: the heavy pipeline on same-repo PRs and pushes to `main`, never a
+// fork PR on the self-hosted runner, no skip-on-edit, guards advisory.
 const ciFailures = (source: string): string[] => {
   const failures: string[] = [];
+  const guards = jobBody(source, "pr-guards");
   const validation = jobBody(source, "release-validation");
+  requireText(
+    failures,
+    source,
+    `types: [opened, synchronize, reopened]\n    branches: [main]\n  push:\n    branches: [main]\n\n# A new push to a PR cancels its superseded run, so the self-hosted pipeline\n# does not queue stale work. Pushes to \`main\` group by commit and are never\n# cancelled: each one is the post-merge validation of what actually landed.\nconcurrency:\n  group: ci-${GITHUB_EXPRESSION} github.event.pull_request.number || github.sha }}\n  cancel-in-progress: ${GITHUB_EXPRESSION} github.event_name == 'pull_request' }}\n`,
+    "CI must run on pull requests into main and on pushes to main only",
+  );
+  forbidText(
+    failures,
+    jobBody(source, "fast-checks"),
+    "\n    if:",
+    "fast-checks is a required gate and must never report a skip",
+  );
+  forbidText(
+    failures,
+    guards,
+    "setFailed",
+    "pr-guards must stay advisory and never fail a pull request",
+  );
   requireText(
     failures,
     validation,
     "github.event.pull_request.head.repo.full_name == github.repository",
     "release-validation must reject fork-controlled branches before using the self-hosted runner",
+  );
+  requireText(
+    failures,
+    validation,
+    `if: >-
+      (github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository))
+`,
+    "release-validation must run only on pushes to main and same-repository pull requests",
+  );
+  forbidText(
+    failures,
+    validation,
+    "\n          ref:",
+    "self-hosted release validation must not pass caller-controlled refs to checkout",
+  );
+  requireText(
+    failures,
+    validation,
+    "persist-credentials: false",
+    "self-hosted release validation must not leave the checkout token in .git/config",
   );
   return failures;
 };
@@ -270,6 +312,21 @@ const releaseFailures = (source: string): string[] => {
   );
   requireText(
     failures,
+    prepare,
+    'git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"',
+    "release preparation must fetch the current main before checking ancestry",
+  );
+  requireText(
+    failures,
+    prepare,
+    `if ! git merge-base --is-ancestor "$commit_sha" refs/remotes/origin/main; then
+            echo "::error::Release tag ${SHELL_EXPANSION}tag} points at ${SHELL_EXPANSION}commit_sha}, which is not reachable from main. Releases are cut only from commits on main."
+            exit 1
+          fi`,
+    "releases must refuse a tag whose commit is not reachable from main",
+  );
+  requireText(
+    failures,
     publish,
     "github.ref == 'refs/heads/main'",
     "Chrome Web Store publication must accept dispatches from main only",
@@ -309,20 +366,26 @@ const nightlyFailures = (source: string): string[] => {
   requireText(
     failures,
     resolve,
-    '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]',
-    "nightly must constrain configured refs to canonical release branches",
+    `revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"`,
+    "nightly must resolve main to a commit",
   );
   requireText(
     failures,
     resolve,
-    'grep -Fxq -- "$candidate"',
-    "nightly must require the exact configured branch to exist in the base repository",
+    '[[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]',
+    "nightly must require main to resolve to an immutable commit",
   );
-  requireText(
+  forbidText(
     failures,
-    resolve,
-    `revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"`,
-    "nightly must resolve the selected branch to an immutable commit",
+    source,
+    "ACTIVE_RELEASE_BRANCH",
+    "nightly must test main, not a configured release branch",
+  );
+  forbidText(
+    failures,
+    source,
+    "inputs.",
+    "nightly must not accept a dispatch input that selects what it tests",
   );
   requireText(
     failures,
@@ -382,47 +445,7 @@ const nightlyFailures = (source: string): string[] => {
     failures,
     report,
     "actions/checkout@",
-    "the hosted nightly reporter must not check out or execute release-branch source",
-  );
-  return failures;
-};
-
-// Post-merge integration on the self-hosted runner. Its whole safety argument is
-// that nothing outside the base repository can choose what it executes: the only
-// trigger is a push to a release branch, no caller-supplied ref reaches checkout,
-// and the job holds no write scope.
-const releaseIntegrationFailures = (source: string): string[] => {
-  const failures: string[] = [];
-  const integration = jobBody(source, "integration");
-  requireText(
-    failures,
-    source,
-    'push:\n    branches: ["release/**"]',
-    "release integration must run only on pushes to release branches",
-  );
-  forbidText(
-    failures,
-    source,
-    "pull_request",
-    "release integration must not execute pull-request revisions on the self-hosted runner",
-  );
-  forbidText(
-    failures,
-    integration,
-    "contents: write",
-    "self-hosted release integration must not receive repository write permission",
-  );
-  forbidText(
-    failures,
-    integration,
-    "\n          ref:",
-    "self-hosted release integration must not pass caller-controlled refs to checkout",
-  );
-  requireText(
-    failures,
-    integration,
-    "persist-credentials: false",
-    "self-hosted release integration must not leave the checkout token in .git/config",
+    "the hosted nightly reporter must not check out or execute the tested source",
   );
   return failures;
 };
@@ -436,7 +459,6 @@ const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
   "mainnet-e2e.yml": mainnetE2eWorkflowFailures,
   "nightly.yml": nightlyFailures,
   "release-build.yml": releaseBuildFailures,
-  "release-integration.yml": releaseIntegrationFailures,
   "release.yml": releaseFailures,
 };
 

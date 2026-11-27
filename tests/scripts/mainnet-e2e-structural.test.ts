@@ -47,7 +47,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
         throw new Error(`item ${item} accepted: ${label}\n${failures.join("\n")}`);
       }
     }
-    expect(new Set(FAIL_WITHOUT.map(({ item }) => item.split(" ")[0])).size).toBe(10);
+    expect(new Set(FAIL_WITHOUT.map(({ item }) => item.split(" ")[0])).size).toBe(11);
   });
 
   test("refuses directives and scalars another YAML reader could type differently", async () => {
@@ -77,7 +77,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
   test("fails closed on a document it cannot read as the reviewed shape", async () => {
     const source = await workflow();
     const order = "the resolve job must run exactly the reviewed steps, in order";
-    const jobSet = `${PATH} must define exactly the jobs build, execute, gate, post, preflight, report, resolve`;
+    const jobSet = `${PATH} must define exactly the jobs build, execute, gate, notify, post, preflight, report, resolve`;
     const jobs = [order, jobSet];
     expect(mainnetE2eDocumentFailures("[]\n")).toEqual(
       expect.arrayContaining([`${PATH} must keep the name Mainnet E2E`, ...jobs]),
@@ -86,21 +86,21 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
     expect(mainnetE2eDocumentFailures(listSteps)).toContain(jobSet);
     const notList = mutated(
       source,
-      "    steps:\n      - name: Resolve active release branch",
-      "    steps: {}\n    x-steps:\n      - name: Resolve active release branch",
+      "    steps:\n      - name: Resolve main to its commit",
+      "    steps: {}\n    x-steps:\n      - name: Resolve main to its commit",
     );
     expect(mainnetE2eDocumentFailures(notList)).toEqual(
       expect.arrayContaining([
         order,
         "the resolve job must not declare x-steps",
-        `${PATH} must resolve the release branch in the reviewed step`,
+        `${PATH} must resolve main to its commit in the reviewed step`,
       ]),
     );
     const listTriggers = mutated(source, "on:\n  schedule:", "on: [push]\nx-on:\n  schedule:");
     expect(mainnetE2eDocumentFailures(listTriggers)).toEqual(
       expect.arrayContaining([
         `${PATH} must schedule at 06:00 UTC, offset from nightly`,
-        `${PATH} must allow manual dispatch with only the branch input`,
+        `${PATH} must allow manual dispatch with no inputs`,
         `${PATH} must not declare workflow-level x-on`,
       ]),
     );
@@ -189,7 +189,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       `          PLAYWRIGHT_BROWSERS_PATH: ${E} github.workspace }}/.playwright-browsers\n          X: ${E} secrets.MAINNET_E2E_DISCOVERY_URL }}\n        run: bun run test:e2e:install`,
     );
     expect(mainnetE2eDocumentFailures(build)).toContain(
-      "the mainnet build runs release code and must not receive any secret",
+      "the mainnet build runs the commit under test and must not receive any secret",
     );
   });
 

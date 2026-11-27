@@ -3,14 +3,17 @@
  *
  * `resolve` and `gate` decide whether a run happens at all, so their scripts
  * are stated as named guard blocks that together are the whole script; every
- * other script is compared whole. `preflight` and `post`
- * run trusted `main` code with the RPC secret and nothing else; `build` runs
- * release code with no secret; `report` runs one pinned action and no
- * checkout. Every step list is an allowlist, so an action can appear only in
- * the job reviewed for it (an artifact upload only in `build`, a checkout
- * never in `execute` or `report`).
+ * other script is compared whole. `resolve` takes main's commit from the
+ * triggering event, never from an input or variable. `preflight` and `post`
+ * run checked-out `main` code with the RPC secret and nothing else; `build`
+ * runs the commit under test with no secret; `report` and `notify` each run
+ * one pinned action and no checkout (`notify` is pinned in
+ * `mainnet-e2e-workflow-notify.ts`). Every step list is an allowlist, so an
+ * action can appear only in the job reviewed for it (an artifact upload only
+ * in `build`, a checkout never in `execute`, `report` or `notify`).
  */
 import { SETUP_BUN, SETUP_NODE } from "./mainnet-e2e-workflow-execute";
+import { NOTIFY_STEPS } from "./mainnet-e2e-workflow-notify";
 import { REPORT_SCRIPT, SUMMARY_SCRIPT } from "./mainnet-e2e-workflow-scripts";
 import { type StepShape, script } from "./mainnet-e2e-workflow-shape";
 
@@ -33,19 +36,16 @@ const CHECKOUT: StepShape = {
 
 const step = (fields: StepShape["fields"], failure: string): StepShape => ({ fields, failure });
 
-const RESOLVE = `${PATH} must resolve the release branch in the reviewed step`;
+const RESOLVE = `${PATH} must resolve main to its commit in the reviewed step`;
 
 const RESOLVE_STEPS: readonly StepShape[] = [
   {
     fields: {
-      name: "Resolve active release branch",
+      name: "Resolve main to its commit",
       id: "pick",
       env: {
-        GH_TOKEN: expression("github.token"),
-        ACTIVE_RELEASE_BRANCH: expression("vars.ACTIVE_RELEASE_BRANCH"),
-        EVENT_NAME: expression("github.event_name"),
-        INPUT_BRANCH: expression("github.event.inputs.branch"),
         TRIGGER_REF: expression("github.ref"),
+        TRIGGER_SHA: expression("github.sha"),
         REPOSITORY_FORK: expression("github.event.repository.fork"),
       },
     },
@@ -63,66 +63,22 @@ const RESOLVE_STEPS: readonly StepShape[] = [
       },
       {
         lines: [
-          'if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/main" ]; then',
-          '  echo "::error::Mainnet E2E manual runs must use the workflow from main."; exit 1',
+          'if [ "$TRIGGER_REF" != "refs/heads/main" ]; then',
+          '  echo "::error::Mainnet E2E runs only the workflow and commit from main."; exit 1',
           "fi",
         ],
-        failure: `${PATH} manual dispatches must reject workflow revisions outside main`,
+        failure: `${PATH} must run only the workflow and commit from main`,
       },
       {
         lines: [
-          `available="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name')"`,
-          `candidate=""`,
-          `if [ -n "\${INPUT_BRANCH:-}" ]; then`,
-          `  echo "Using workflow_dispatch input: $INPUT_BRANCH"`,
-          `  candidate="$INPUT_BRANCH"`,
-          `elif [ -n "\${ACTIVE_RELEASE_BRANCH:-}" ]; then`,
-          `  echo "Using vars.ACTIVE_RELEASE_BRANCH: $ACTIVE_RELEASE_BRANCH"`,
-          `  candidate="$ACTIVE_RELEASE_BRANCH"`,
-          `else`,
-          `  echo "Auto-resolving the highest-semver release/* branch ..."`,
-          `  branches="$(printf '%s\\n' "$available" | grep -E '^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$' || true)"`,
-          `  if [ -z "$branches" ]; then`,
-          `    echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."`,
-          `    echo "branch=" >> "$GITHUB_OUTPUT"`,
-          `    echo "revision=" >> "$GITHUB_OUTPUT"`,
-          `    exit 0`,
-          `  fi`,
-          `  best="$(printf '%s\\n' "$branches" | sed 's#^release/v##' | sort -V | tail -1)"`,
-          `  candidate="release/v$best"`,
-          `fi`,
-          ``,
-        ],
-        failure: RESOLVE,
-      },
-      {
-        lines: [
-          'if [[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]; then',
-          '  echo "::error::Mainnet E2E branch must match release/vX.Y or release/vX.Y.Z exactly."; exit 1',
+          'if [[ ! "$TRIGGER_SHA" =~ ^[0-9a-f]{40}$ ]]; then',
+          '  echo "::error::Mainnet E2E did not resolve main to an immutable commit."; exit 1',
           "fi",
+          'echo "Resolved: main at $TRIGGER_SHA"',
+          'echo "branch=main" >> "$GITHUB_OUTPUT"',
+          'echo "revision=$TRIGGER_SHA" >> "$GITHUB_OUTPUT"',
         ],
-        failure: `${PATH} must constrain configured refs to canonical release branches`,
-      },
-      {
-        lines: [
-          'if ! grep -Fxq -- "$candidate" <<< "$available"; then',
-          `  echo "::error::Mainnet E2E branch '$candidate' does not exist in $GITHUB_REPOSITORY."; exit 1`,
-          "fi",
-        ],
-        failure: `${PATH} must require the exact configured branch to exist in the base repository`,
-      },
-      {
-        lines: [
-          `encoded_candidate="\${candidate//\\//%2F}"`,
-          `revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"`,
-          'if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then',
-          '  echo "::error::Mainnet E2E branch did not resolve to an immutable commit."; exit 1',
-          "fi",
-          'echo "Resolved: $candidate at $revision"',
-          'echo "branch=$candidate" >> "$GITHUB_OUTPUT"',
-          'echo "revision=$revision" >> "$GITHUB_OUTPUT"',
-        ],
-        failure: `${PATH} must resolve the selected branch to an immutable commit`,
+        failure: `${PATH} must resolve main to an immutable commit`,
       },
     ],
     failure: RESOLVE,
@@ -249,13 +205,13 @@ const POST: readonly StepShape[] = [
   ),
 ];
 
-const KEYLESS = "the mainnet build runs release code and must not receive any secret";
+const KEYLESS = "the mainnet build runs the commit under test and must not receive any secret";
 
 const BUILD: readonly StepShape[] = [
   CHECKOUT,
   {
     fields: {
-      name: "Check out resolved release commit",
+      name: "Check out the resolved main commit",
       env: {
         REVISION: expression("needs.resolve.outputs.revision"),
         FETCH_TOKEN: expression("github.token"),
@@ -342,11 +298,10 @@ const REPORT: readonly StepShape[] = [
       name: "Upsert mainnet tracking issue",
       uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
       env: {
-        BRANCH: expression("needs.resolve.outputs.branch"),
         REVISION: expression("needs.resolve.outputs.revision"),
         ADDRESS,
         TIER,
-        VERDICT: post("verdict"),
+        VERDICT: expression("needs.post.outputs.verdict || needs.preflight.outputs.verdict"),
         STRK_BEFORE: post("strk_before"),
         STRK_AFTER: post("strk_after"),
         STRK_DELTA: post("strk_delta"),
@@ -357,7 +312,7 @@ const REPORT: readonly StepShape[] = [
       },
       with: { script: script(REPORT_SCRIPT) },
     },
-    "the hosted mainnet reporter must not check out or execute release-branch source",
+    "the hosted mainnet reporter must not check out or execute the commit under test",
   ),
 ];
 
@@ -369,4 +324,5 @@ export const OTHER_JOB_STEPS: Readonly<Record<string, readonly StepShape[]>> = {
   build: BUILD,
   post: POST,
   report: REPORT,
+  notify: NOTIFY_STEPS,
 };

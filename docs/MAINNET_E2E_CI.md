@@ -7,7 +7,7 @@ permalink: /mainnet-e2e-ci/
 # Mainnet E2E in CI
 
 `.github/workflows/mainnet-e2e.yml` runs the live Starknet mainnet suites against
-the active release branch. It is not part of pull-request CI, and it does not
+the current `main` commit. It is not part of pull-request CI, and it does not
 run the offline Playwright suite. The offline suite still blackholes DNS.
 
 Two runs never overlap. The concurrency group is `mainnet-e2e` and
@@ -16,17 +16,18 @@ transaction that already has a nonce.
 
 ## How the jobs split trust
 
-The release commit is code that any writer to a `release/*` branch controls,
+The commit under test is code that anyone who can merge into `main` controls,
 so the workflow never lets it run on the same runner as something it must not
 reach.
 
 | Job | Runner | Code | Secrets |
 | --- | --- | --- | --- |
 | `preflight` | hosted | `main` | `MAINNET_E2E_RPC_URL` (`mainnet-e2e-balance`) |
-| `build` | CodeBuild | release commit | none |
+| `build` | CodeBuild | the resolved `main` commit | none |
 | `execute` | CodeBuild | the `build` output | the hot-wallet key (`mainnet-e2e`) |
 | `post` | hosted | `main` | `MAINNET_E2E_RPC_URL` (`mainnet-e2e-balance`) |
 | `report` | hosted | none | issue write only |
+| `notify` | hosted | none | `SLACK_MAINNET_E2E_WEBHOOK_URL` only |
 
 - `build` installs dependencies, verifies the pinned upstreams, builds the
   extension, installs Chromium into the workspace, and uploads one tarball
@@ -42,9 +43,11 @@ reach.
   workflow's own inline code (Playwright's JSON stats, fixed markers from the
   gasless script). Rerun locally to see the full output.
 
-The release code in `execute` still runs with the key. That is the point of
-the test, and why the [maintainer setup](#maintainer-setup) restricts who can
-write a release branch and who approves a run.
+The code in `execute` still runs with the key. That is the point of the test,
+and why the [maintainer setup](#maintainer-setup) requires an approval before
+each run. Merging into `main` needs no approval (DEVELOPMENT.md), so the
+environment reviewer is the person who decides that the code on `main` may hold
+the key.
 
 ## One RPC endpoint
 
@@ -68,19 +71,32 @@ The URL is compared by hash and never printed or passed as an output.
 
 ## When it runs
 
-- Schedule: 06:00 UTC, three hours after nightly's 03:00 UTC run.
-- Manual: Actions → **Mainnet E2E** → **Run workflow**. Choose the workflow
-  file on **`main`**. An optional input overrides the release branch
-  (`release/v0.10.9`). A blank input resolves the branch the same way nightly
-  does: `vars.ACTIVE_RELEASE_BRANCH`, otherwise the highest `release/vX.Y` or
-  `release/vX.Y.Z`.
+- Schedule: daily at 06:00 UTC, three hours after nightly's 03:00 UTC run.
+- Manual: Actions → **Mainnet E2E** → **Run workflow**, with the workflow file
+  on **`main`**. There is no branch input.
+
+Every run tests the `main` commit it started from, and refuses any other ref.
 
 GitHub schedules a workflow only from the default branch. Manual dispatch of
 any other copy is rejected. Until this file is on `main`, the schedule does
 not fire.
 
 The job is not a required check for merging. A failure opens or updates one
-issue titled `Mainnet E2E: release/vX.Y.Z — failing checks`.
+issue titled `Mainnet E2E: main — failing checks`.
+
+## Slack report
+
+Every run that passes the configuration gate, pass or fail, posts one message
+to Slack through an incoming webhook. It carries only the overall status, the
+short `main` commit, each job's result, the Playwright and gasless outcomes,
+the balance verdict and spend, and a link to the run. It never carries test
+output, addresses, RPC URLs or secrets. If Slack rejects the post or times
+out, `notify` logs a warning and the run's result stands. A secret that is not a
+`https://hooks.slack.com/services/` URL fails `notify`.
+
+When the `SLACK_MAINNET_E2E_WEBHOOK_URL` secret is unset, the `notify` job
+skips Slack with a notice. Setup is step 8 of the
+[maintainer setup](#maintainer-setup).
 
 ## What runs
 
@@ -111,10 +127,10 @@ line feed. To change the workflow:
 Do this once, in order. The workflow cannot create environments, rulesets or
 secrets. **Do not fund the key until steps 1 to 3 are done.**
 
-1. Restrict who can create and update `release/*` branches (a branch ruleset
-   with restricted creation and updates, admins only or a release team). The
-   environment's branch rule checks the workflow's ref (`main`), not the
-   release commit the job runs.
+1. Protect `main` with the ruleset in DEVELOPMENT.md (pull requests only, no
+   force-push or deletion, no bypass actors). The run's code is whatever is on
+   `main`, so the approval in step 2 is the only review that code is
+   guaranteed to get before it holds the key.
 2. Create the GitHub Environment `mainnet-e2e`:
    - deployment branches: **`main`** only;
    - **required reviewers** on, with **prevent self-review** on. Each run,
@@ -131,6 +147,14 @@ secrets. **Do not fund the key until steps 1 to 3 are done.**
 6. Confirm the CodeBuild project starts a fresh build per job, with no shared
    cache, volume, or Docker layer cache that keeps files between runs.
 7. Set the repository variable `MAINNET_E2E_CONFIGURED` to `true`.
+8. Optional: create a Slack incoming webhook for the channel that should get
+   the results. Create a `mainnet-e2e-slack` environment restricted to `main`
+   and store the URL there as the environment secret
+   `SLACK_MAINNET_E2E_WEBHOOK_URL`. It must be a
+   `https://hooks.slack.com/services/` URL. Rotate it by replacing the secret;
+   no workflow edit is needed.
+9. If the repository variable `ACTIVE_RELEASE_BRANCH` still exists from the old
+   release-branch model, delete it. Nothing reads it.
 
 Until that variable is `true`, the workflow exits green after the hosted
 `resolve` and `gate` jobs. No self-hosted runner starts and no job reads a
@@ -145,6 +169,7 @@ the run.
 | `MAINNET_E2E_RPC_URL` | `mainnet-e2e` and `mainnet-e2e-balance` | Dedicated HTTPS mainnet RPC. Not `wallet.nodes.starknet.org` or `mainnet.nodes.starknet.org`. Must be the same value in both environments |
 | `MAINNET_E2E_DISCOVERY_URL` | `mainnet-e2e`, STRK20 tier only | STRK20 discovery service |
 | `MAINNET_E2E_PROVER_URL` | `mainnet-e2e`, STRK20 tier only | STRK20 proving service |
+| `SLACK_MAINNET_E2E_WEBHOOK_URL` | `mainnet-e2e-slack` (optional; setup step 8) | Slack incoming webhook for the run report |
 
 `vars.MAINNET_E2E_STRK20=true` opts into the STRK20 lifecycle. Leave it unset
 for the standard tier. **Keep the STRK20 tier off** until every STRK20 signing
@@ -272,3 +297,5 @@ The next run picks up the new secret. No workflow edit is required.
 | The gasless send is skipped or does not pass | Red. `execute` ends by requiring it |
 | A test fails, or the spend exceeds the cap | Red, with before/after/spent in the summary and the issue |
 | A run ends below the minimum, inside the cap | Green. The next preflight asks for a top-up |
+| `SLACK_MAINNET_E2E_WEBHOOK_URL` unset | Run result unchanged; `notify` skips Slack with a notice |
+| Slack rejects or times out | Run result unchanged; `notify` logs a warning |
