@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountRecord
 import org.bramble.core.GaslessFeeException
 import org.bramble.core.GaslessFeeInterface
 import org.bramble.core.GaslessOffer
@@ -12,6 +13,9 @@ import org.bramble.core.GaslessSubmitStep
 import org.bramble.core.PriceView
 import org.bramble.core.SendFailure
 import org.bramble.core.SendFailureCode
+import org.bramble.core.StepReply
+import org.bramble.wallet.ledger.DeviceSigning
+import org.bramble.wallet.ledger.LedgerSigner
 import org.bramble.wallet.portfolio.BoundedHttp
 import org.bramble.wallet.portfolio.PortfolioTransport
 
@@ -25,6 +29,8 @@ class GaslessDriver(
     private val transport: PortfolioTransport = BoundedHttp,
     /** The host's wall clock in epoch milliseconds. */
     val clock: () -> Long = System::currentTimeMillis,
+    /** The Ledger a relay signature goes to; null is the app's ([LedgerSigner.shared]). */
+    private val signer: DeviceSigning? = null,
 ) {
     /** How a submission ended, as the Send journey shows it. */
     sealed interface Outcome {
@@ -96,6 +102,22 @@ class GaslessDriver(
         fee: GaslessFeeInterface,
         offer: GaslessOffer,
         prices: PriceView?,
+        account: AccountRecord? = null,
+    ): Outcome {
+        var used: DeviceSigning? = null
+        try {
+            return submitting(fee, offer, prices, account) { used = it }
+        } finally {
+            used?.finish()
+        }
+    }
+
+    private suspend fun submitting(
+        fee: GaslessFeeInterface,
+        offer: GaslessOffer,
+        prices: PriceView?,
+        account: AccountRecord?,
+        using: (DeviceSigning) -> Unit,
     ): Outcome =
         try {
             var step = core { fee.choose(offer, prices, now()) }
@@ -119,11 +141,9 @@ class GaslessDriver(
                     }
 
                     is GaslessSubmitStep.Device, is GaslessSubmitStep.DeviceRetry -> {
-                        // Mobile signs on no device (P8): a Ledger account's gasless send ends here, unsigned.
-                        outcome =
-                            Outcome.Refused(
-                                SendFailureText.message(SendFailure(SendFailureCode.SIGNING_FAILED, null, null)),
-                            )
+                        val next = device(fee, current, account, using)
+                        step = next ?: current
+                        outcome = CANCELLED.takeIf { next == null }
                     }
                 }
             }
@@ -139,6 +159,33 @@ class GaslessDriver(
 
     private fun now(): ULong = clock().toULong()
 
+    /** The core's next step after the Ledger answers [step]; null when the person cancelled. */
+    private suspend fun device(
+        fee: GaslessFeeInterface,
+        step: GaslessSubmitStep,
+        account: AccountRecord?,
+        using: (DeviceSigning) -> Unit,
+    ): GaslessSubmitStep? {
+        val ledger = (signer ?: LedgerSigner.shared)?.also(using)
+        val reply =
+            when (step) {
+                is GaslessSubmitStep.Device -> {
+                    ledger?.exchange(step.apdu, account)
+                }
+
+                is GaslessSubmitStep.DeviceRetry -> {
+                    StepReply.RetryDevice.takeIf {
+                        ledger?.refused(step.reason, account) == true
+                    }
+                }
+
+                else -> {
+                    null
+                }
+            }
+        return reply?.let { core { fee.advanceDevice(it, now()) } }
+    }
+
     /** Core calls sign and write the journal, so they stay off the caller's (main) thread, as [SendDriver]. */
     private suspend fun <T> core(call: () -> T): T = withContext(Dispatchers.Default) { call() }
 
@@ -148,6 +195,12 @@ class GaslessDriver(
 
     /** The journey's reading of each core refusal. */
     companion object {
+        /** Cancelled on the device sheet: nothing was signed, so nothing was submitted. */
+        val CANCELLED =
+            Outcome.Refused(
+                SendFailureText.message(SendFailure(SendFailureCode.SIGNING_FAILED, null, null)),
+            )
+
         /** The journey's reading of a core refusal. */
         fun outcome(error: GaslessFeeException): Outcome =
             when (error) {

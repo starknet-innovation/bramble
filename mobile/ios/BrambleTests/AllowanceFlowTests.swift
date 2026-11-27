@@ -109,7 +109,7 @@ final class AllowanceFlowTests: XCTestCase {
         try RevokeFlowModel(
             core: core,
             network: sepolia(),
-            accountId: ozRecord(core, .sepolia).id,
+            account: ozRecord(core, .sepolia),
             allowance: allowance,
             tokens: TokenPreferences(persisted: nil),
             feeBalance: feeBalance,

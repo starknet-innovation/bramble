@@ -70,7 +70,7 @@ the difference with **Decision**.
 | Option | Mobile |
 | --- | --- |
 | Regular account: "Create the next account from this wallet's recovery phrase." | **Yes.** OZ at `next_account_index(network)`, set active, toast "Account added". |
-| Ledger account / Restore a Ready Ledger account | Hidden (Ledger over BLE is Phase 2, out of scope). |
+| Ledger account / Restore a Ready Ledger account | Over Bluetooth (P8): Bramble's scheme as Bramble and Argent accounts; Ready's as Argent (the core refuses Braavos). |
 | Multisig account | Slot left for the nostr-multisig workstream; hidden here. |
 | Import an existing account → Private key | **Yes** (wallet-core P3, `importPrivateKey`): "Import private key", Bramble (OpenZeppelin) only, set active, toast "Account imported". No Ready contract choice and no salt: the core imports neither. The onboarding "Private key" option stays disabled, since the core cannot create a wallet from a key alone. |
 | Import an existing account → Recovery phrase | Out of scope: needs multi-seed vaults (`seedId`). |
@@ -127,7 +127,7 @@ signs. Manage, as `account-names.ts` does:
 **Kept accounts (P7).** `unusable_accounts()` lists the records the vault holds that mobile keeps
 but does not operate. Manage shows them read-only under "Not usable on this device", with the
 hint "These accounts stay in your wallet. Use them in the Bramble extension." and one line per
-`UnusableReason`: "Ledger account. Ledger isn't on mobile yet." / "From another recovery phrase." /
+`UnusableReason`: "Ledger account that doesn't match its device key." (a Ledger record the core cannot place; one it can is operated) / "From another recovery phrase." /
 "On <network id>, which mobile doesn't support." / "Mobile can't derive this account's key." The
 extension has no counterpart (it operates them all), so this wording is mobile's own. The section
 is absent when the list is empty.

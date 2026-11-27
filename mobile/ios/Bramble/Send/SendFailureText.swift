@@ -5,7 +5,10 @@ import BrambleCore
 enum SendFailureText {
     /// The failure screen's body: "The transaction was not sent. <reason>". `{hash}` is the
     /// failure's hash and `{label}` the account class a Ready refusal names.
+    /// A Ledger signature that did not verify (`deviceRefused`) is the Ledger catalogue's sentence
+    /// for its code.
     static func message(_ failure: SendFailure) -> String {
+        if failure.code == .deviceRefused { return FriendlyError.message(failure.detail ?? "signature-verify-failed") }
         guard let reason = reason(failure.code) else { return SendCopy.failureDefault }
         return SendCopy.failurePrefix + reason
             .replacingOccurrences(of: "{hash}", with: failure.hash ?? "")

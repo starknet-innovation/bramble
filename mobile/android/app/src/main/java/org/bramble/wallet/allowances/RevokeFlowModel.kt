@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bramble.core.AccountRecord
 import org.bramble.core.AllowanceView
 import org.bramble.core.NetworkInfo
 import org.bramble.core.RevokeException
@@ -48,7 +49,8 @@ internal data class RevokeLinks(
 internal class RevokeFlowModel(
     private val core: WalletCore,
     private val network: NetworkInfo,
-    private val accountId: String,
+    /** The account the plan is built for, and shown as the Ledger's signer. */
+    private val account: AccountRecord,
     /** The listed allowance being revoked; the core re-resolves it by id. */
     val allowance: AllowanceView,
     private val tokens: TokenPreferences,
@@ -119,7 +121,7 @@ internal class RevokeFlowModel(
         val plan =
             try {
                 val revoke =
-                    withContext(Dispatchers.Default) { core.prepareRevoke(accountId, allowance.id, tokens) }
+                    withContext(Dispatchers.Default) { core.prepareRevoke(account.id, allowance.id, tokens) }
                 // Unanswered, the read stays unfinished and `plan` refuses an untrusted contract.
                 links.reads.drive(AllowanceReads(revoke::nextCalls, revoke::accept, revoke::restart), network)
                 withContext(Dispatchers.Default) { revoke.plan(feeBalance) }
@@ -133,7 +135,7 @@ internal class RevokeFlowModel(
         // A newer preparation or a close overtook this one: its plan is never tracked or shown.
         if (started != epoch) return plan.cancel()
         links.track(plan)
-        val fresh = SendDriver(plan, network, links.transport).also { driver = it }
+        val fresh = SendDriver(plan, network, links.transport, account).also { driver = it }
         settle(fresh, StepReply.Start)
     }
 

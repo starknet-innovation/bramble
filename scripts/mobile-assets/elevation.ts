@@ -45,7 +45,7 @@ const ELEVATION_IGNORED: Readonly<Record<string, string>> = {
   ".drawer-network-menu":
     "not ported yet: mobile switches network from Settings, and its drawer has no network menu",
   ".onboarding-surface .ledger-onboard-overlay > *":
-    "not ported yet: mobile has no Ledger onboarding (the import choice reads Coming to Bramble mobile)",
+    "mobile shows Ledger onboarding as a step of the onboarding card, not an overlay",
   ".token-dropdown-panel":
     "mobile picks a token on its own screen, the platform idiom, not in a floating panel",
 };

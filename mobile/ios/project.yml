@@ -76,6 +76,7 @@ targets:
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         # Generated copy (scripts/mobile-assets/security-copy.ts); checked in bun run check.
         INFOPLIST_KEY_NSFaceIDUsageDescription: "Bramble uses Face ID to unlock your wallet instead of typing your passphrase."
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Bramble uses Bluetooth to connect to your Ledger."
 
   BrambleTests:
     type: bundle.unit-test
@@ -125,6 +126,9 @@ targets:
         buildPhase: resources
       # The multisig proposal the multisig transaction tests replay (docs/multisig-transactions.md).
       - path: ../core/tests/fixtures/extension-multisig-transactions.json
+        buildPhase: resources
+      # The Speculos transcripts the Ledger Bluetooth driver replays (LedgerBleDriverTests).
+      - path: ../core/tests/fixtures/extension-ledger.jsonl
         buildPhase: resources
     dependencies:
       # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code,

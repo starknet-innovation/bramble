@@ -11,6 +11,7 @@ enum BrambleCopy {
     static let biometricOnStatus = "{biometry} will unlock this wallet. Your passphrase still works and is still needed to reveal secrets."
     static let biometricPromptReason = "Unlock your wallet"
     static let biometricUnavailable = "{biometry} is not set up on this device."
+    static let bluetoothUsage = "Bramble uses Bluetooth to connect to your Ledger."
     static let clipboardCleared = "Clipboard cleared"
     static let faceIdUsage = "Bramble uses Face ID to unlock your wallet instead of typing your passphrase."
     static let incorrectPassphrase = "Incorrect passphrase"

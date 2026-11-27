@@ -24,6 +24,7 @@ import org.bramble.core.WalletStatus
 import org.bramble.wallet.browser.DappRequestSink
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.ThemeChoice
+import org.bramble.wallet.ledger.LedgerSigner
 import org.bramble.wallet.security.BiometricVault
 
 /**
@@ -256,6 +257,7 @@ class WalletStore(
         session.end()
         plans.forEach { it.cancel() }
         plans.clear()
+        LedgerSigner.shared?.close()
         deployment = DeploymentState.UNKNOWN
         observationTicker?.cancel()
         observationTicker = null

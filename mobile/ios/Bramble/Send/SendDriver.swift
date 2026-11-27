@@ -8,13 +8,30 @@ import Foundation
 /// the first `ChainId` step picks the first endpoint that proves the plan's chain, and every later
 /// step of the plan goes to that same endpoint, with no failover; a write is sent exactly once,
 /// never retried, never redirected.
+///
+/// A Ledger account's plan asks for its device (`Device`, `DeviceRetry`): the driver relays each
+/// APDU through `signer` and, after a refusal, asks the person to try again or cancel. A cancel
+/// closes the plan. The device link closes whenever `run` returns.
 actor SendDriver {
     let plan: TransferPlan
     private let endpoint: RpcEndpoint
+    private let signer: (any DeviceSigning)?
+    private let account: AccountRecord?
 
-    init(plan: TransferPlan, network: NetworkInfo, transport: RpcTransport) {
+    /// `signer` nil signs on the app's Bluetooth Ledger (`LedgerSigner.shared`) when the plan asks.
+    /// `account` is the record the caller built `plan` for, shown on the Ledger sheet as the
+    /// signer; nil shows none. Never pass any other record.
+    init(
+        plan: TransferPlan,
+        network: NetworkInfo,
+        transport: RpcTransport,
+        account: AccountRecord? = nil,
+        signer: (any DeviceSigning)? = nil
+    ) {
         self.plan = plan
         endpoint = RpcEndpoint(network: network, transport: transport)
+        self.account = account
+        self.signer = signer
     }
 
     /// Lets a review retry probe the endpoints again. Refused once a write has been sent.
@@ -23,11 +40,28 @@ actor SendDriver {
     }
 
     /// Advances the plan from `reply` until it needs the user (`Review`, `Broadcast`, `Finished`,
-    /// `Failed`); a device step is `Failed` as `signingFailed`. `onStep` sees every RPC step before
-    /// it is sent, so the UI can follow progress.
+    /// `Failed`). Device steps are answered on the Ledger; a cancel there is `Failed` as
+    /// `signingFailed`, the plan closed. `onStep` sees every RPC step before it is sent, so the UI
+    /// can follow progress.
     func run(
         from initial: StepReply,
         onStep: @Sendable (SendStep) async -> Void = { _ in /* No progress to follow. */ }
+    ) async throws -> SendStep {
+        var device: (any DeviceSigning)?
+        do {
+            let step = try await relay(from: initial, onStep: onStep) { device = $0 }
+            await device?.finish()
+            return step
+        } catch {
+            await device?.finish()
+            throw error
+        }
+    }
+
+    private func relay(
+        from initial: StepReply,
+        onStep: @Sendable (SendStep) async -> Void,
+        using: (any DeviceSigning) -> Void
     ) async throws -> SendStep {
         var reply = initial
         while true {
@@ -41,15 +75,35 @@ actor SendDriver {
                 try await Task.sleep(for: .milliseconds(Int(delayMs)))
                 reply = .waitElapsed
 
-            case .device, .deviceRetry:
-                // Mobile signs on no device (P8): a Ledger account's plan ends here, unsigned, for
-                // every flow this driver runs.
-                return .failed(failure: SendFailure(code: .signingFailed, hash: nil))
+            case let .device(apdu):
+                let ledger = await deviceSigner()
+                using(ledger)
+                guard let answer = await ledger.exchange(apdu, for: account) else { return cancelled() }
+                reply = answer
+
+            case let .deviceRetry(reason):
+                let ledger = await deviceSigner()
+                using(ledger)
+                guard await ledger.refused(reason, for: account) else { return cancelled() }
+                reply = .retryDevice
 
             default:
                 return step
             }
         }
+    }
+}
+
+extension SendDriver {
+    private func deviceSigner() async -> any DeviceSigning {
+        if let signer { return signer }
+        return await MainActor.run { LedgerSigner.shared }
+    }
+
+    /// The person cancelled on the device sheet: the plan closes with nothing signed.
+    private func cancelled() -> SendStep {
+        plan.cancel()
+        return .failed(failure: SendFailure(code: .signingFailed, hash: nil))
     }
 }
 

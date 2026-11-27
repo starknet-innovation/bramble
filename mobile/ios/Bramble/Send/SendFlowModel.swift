@@ -264,7 +264,7 @@ final class SendFlowModel {
         // Before Confirm: the core reads the cached, fresh price only when it writes the record.
         if let pricing { plan.priceWith(prices: pricing.prices, currency: pricing.currency) }
         track(plan)
-        let started = SendDriver(plan: plan, network: network, transport: transport)
+        let started = SendDriver(plan: plan, network: network, transport: transport, account: account)
         driver = started
         stage = .reviewing
         await settle { try await started.run(from: .start) }
@@ -368,7 +368,7 @@ final class SendFlowModel {
             fail(with: failure)
 
         case .rpc, .wait, .device, .deviceRetry:
-            // The driver answers these (`SendDriver.run`); a device step comes back as `.failed`.
+            // The driver answers these (`SendDriver.run`), device steps on the Ledger sheet.
             break
         }
     }
@@ -429,7 +429,7 @@ extension SendFlowModel {
         guard stage == .review, let gasless, let fee = gaslessFee else { return }
         stage = .authorizing
         let prices = await gasless.prices(network.tokens.map(\.address))
-        let outcome = await gasless.driver.submit(fee, offer: offer, prices: prices)
+        let outcome = await gasless.driver.submit(fee, offer: offer, prices: prices, account: account)
         // Closed while the execute was out (`dropPlan`): the core's row carries it from here.
         guard gaslessFee === fee else { return }
         // `choose` closed the STRK plan; the review stays for the receipt.
@@ -469,7 +469,7 @@ extension SendFlowModel {
             stage = .pending
             return
         }
-        let started = SendDriver(plan: plan, network: network, transport: transport)
+        let started = SendDriver(plan: plan, network: network, transport: transport, account: account)
         driver = started
         await settle { try await started.run(from: .start) }
     }

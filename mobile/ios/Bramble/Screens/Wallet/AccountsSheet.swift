@@ -263,10 +263,11 @@ struct FolderPicker: View {
 }
 
 /// `addAccountChooser`: "Add a new account" with the options this app offers today: a regular
-/// account, a multisig through the Ready Multisig gateway, and "Import an existing account", which
-/// leads to `importAccountChooser` and the private-key form. Ledger is left out (another workstream).
+/// account (not in a Ledger-only wallet, which has no phrase), a Ledger account, a multisig through
+/// the Ready Multisig gateway, and "Import an existing account", which leads to
+/// `importAccountChooser` and the private-key form.
 struct AddAccountChooser: View {
-    private enum Stage { case add, importChooser, importKey }
+    private enum Stage { case add, ledger, readyLedger, importChooser, importKey }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -281,8 +282,18 @@ struct AddAccountChooser: View {
         case .add:
             chooser
 
+        case .ledger:
+            LedgerAddAccountFlow(route: .bramble, back: { stage = .add }, added: added)
+
+        case .readyLedger:
+            LedgerAddAccountFlow(route: .ready, back: { stage = .importChooser }, added: added)
+
         case .importChooser:
-            ImportAccountChooser(back: { stage = .add }, importKey: { stage = .importKey })
+            ImportAccountChooser(
+                back: { stage = .add },
+                importKey: { stage = .importKey },
+                readyLedger: { stage = .readyLedger }
+            )
 
         case .importKey:
             ImportKeyForm(back: { stage = .importChooser }, imported: added)
@@ -303,20 +314,9 @@ struct AddAccountChooser: View {
                 IconButton(icon: .x, label: "Close Add account", tint: skin.text, action: close)
             }
             VStack(spacing: BrambleMetrics.Onboarding.fieldsGap) {
-                OptionCard(
-                    icon: .wallet,
-                    title: "Regular account",
-                    detail: "Create the next account from this wallet’s recovery phrase."
-                ) {
-                    guard !busy else { return }
-                    busy = true
-                    Task {
-                        do {
-                            try await store.addRegularAccount()
-                            added()
-                        } catch { store.toast = describe(error) }
-                        busy = false
-                    }
+                if store.hasRecoveryPhrase { regular }
+                OptionCard(icon: .shield, title: "Ledger account", detail: LedgerCopy.optionDetail) {
+                    stage = .ledger
                 }
                 OptionCard(
                     icon: .users,
@@ -331,6 +331,24 @@ struct AddAccountChooser: View {
                 ) { stage = .importChooser }
             }
             Spacer(minLength: 0)
+        }
+    }
+
+    private var regular: some View {
+        OptionCard(
+            icon: .wallet,
+            title: "Regular account",
+            detail: "Create the next account from this wallet’s recovery phrase."
+        ) {
+            guard !busy else { return }
+            busy = true
+            Task {
+                do {
+                    try await store.addRegularAccount()
+                    added()
+                } catch { store.toast = describe(error) }
+                busy = false
+            }
         }
     }
 }

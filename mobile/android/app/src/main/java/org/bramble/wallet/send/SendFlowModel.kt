@@ -248,7 +248,7 @@ class SendFlowModel(
                 // Before Confirm: the core reads the cached, fresh price only when it writes the record.
                 pricing?.let { (prices, currency) -> plan.priceWith(prices, currency) }
                 hooks.track(plan)
-                val driver = SendDriver(plan, network, transport).also { this.driver = it }
+                val driver = SendDriver(plan, network, transport, account).also { this.driver = it }
                 stage = Stage.REVIEWING
                 settle { driver.run(StepReply.Start) }
                 offerGasless()

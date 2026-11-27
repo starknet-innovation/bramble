@@ -36,7 +36,9 @@ final class RevokeFlowModel {
     let allowance: AllowanceView
     private let core: WalletCore
     private let network: NetworkInfo
-    private let accountId: String
+    /// The account the plan is built for, and shown as the Ledger's signer.
+    private let account: AccountRecord
+    private var accountId: String { account.id }
     private let tokens: TokenPreferences
     /// The live STRK balance, read at each prepare so Try again sees a refreshed one.
     private let feeBalance: () -> String?
@@ -51,7 +53,7 @@ final class RevokeFlowModel {
     init(
         core: WalletCore,
         network: NetworkInfo,
-        accountId: String,
+        account: AccountRecord,
         allowance: AllowanceView,
         tokens: TokenPreferences,
         feeBalance: @escaping () -> String?,
@@ -61,7 +63,7 @@ final class RevokeFlowModel {
     ) {
         self.core = core
         self.network = network
-        self.accountId = accountId
+        self.account = account
         self.allowance = allowance
         self.tokens = tokens
         self.feeBalance = feeBalance
@@ -97,7 +99,7 @@ final class RevokeFlowModel {
             return
         }
         track(plan)
-        let fresh = SendDriver(plan: plan, network: network, transport: transport)
+        let fresh = SendDriver(plan: plan, network: network, transport: transport, account: account)
         driver = fresh
         await settle(plan) { try await fresh.run(from: .start) }
     }
@@ -183,7 +185,7 @@ final class RevokeFlowModel {
             fail(failure)
 
         case .rpc, .wait, .device, .deviceRetry:
-            // The driver answers these (`SendDriver.run`); a device step comes back as `.failed`.
+            // The driver answers these (`SendDriver.run`), device steps on the Ledger sheet.
             break
         }
     }

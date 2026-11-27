@@ -29,7 +29,7 @@ final class DeployFlowModelTests: XCTestCase {
     }
 
     private func model() throws -> DeployFlowModel {
-        try DeployFlowModel(core: core, network: sepolia(), accountId: ozRecord(core, .sepolia).id, transport: node)
+        try DeployFlowModel(core: core, network: sepolia(), account: ozRecord(core, .sepolia), transport: node)
     }
 
     private func screen(_ state: String) throws -> [String] {

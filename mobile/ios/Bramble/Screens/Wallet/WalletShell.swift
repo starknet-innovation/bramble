@@ -69,6 +69,7 @@ struct WalletShell: View {
             }
         }
         .brambleHaptic(.selection, trigger: store.activeRecord?.id)
+        .ledgerSigning()
         .environment(\.openCoordinationFlow, CoordinationNavigator { flows.append(.coordination($0)) })
         .sheet(isPresented: $accountsOpen) {
             SkinProvider {

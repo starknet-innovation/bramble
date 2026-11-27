@@ -12,6 +12,7 @@ object BrambleCopy {
     const val biometricOnStatus = "{biometry} will unlock this wallet. Your passphrase still works and is still needed to reveal secrets."
     const val biometricPromptReason = "Unlock your wallet"
     const val biometricUnavailable = "{biometry} is not set up on this device."
+    const val bluetoothUsage = "Bramble uses Bluetooth to connect to your Ledger."
     const val clipboardCleared = "Clipboard cleared"
     const val faceIdUsage = "Bramble uses Face ID to unlock your wallet instead of typing your passphrase."
     const val incorrectPassphrase = "Incorrect passphrase"

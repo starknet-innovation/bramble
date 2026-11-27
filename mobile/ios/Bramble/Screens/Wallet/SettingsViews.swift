@@ -48,13 +48,7 @@ struct SettingsHubView: View {
                     value: "\(theme == .light ? "Light" : "Dark") · \(store.portfolio.currency.code)"
                 ) { open(.appearance) }
             }
-            SettingsSection(title: "Backup & recovery") {
-                MenuRow(
-                    icon: .lock,
-                    title: "Reveal recovery secrets",
-                    hint: "Asks for your passphrase first"
-                ) { open(.reveal) }
-            }
+            backupSection
             securitySection
             let info = coreInfo()
             Text("Bramble core \(info.coreVersion) · Krusty KMS \(info.krustyVersion)")
@@ -62,6 +56,19 @@ struct SettingsHubView: View {
                 .foregroundStyle(skin.muted)
                 .frame(maxWidth: .infinity)
                 .padding(.top, BrambleSpace.sm)
+        }
+    }
+
+    /// A Ledger-only wallet has no phrase to reveal, so it has no backup section.
+    @ViewBuilder private var backupSection: some View {
+        if store.hasRecoveryPhrase {
+            SettingsSection(title: "Backup & recovery") {
+                MenuRow(
+                    icon: .lock,
+                    title: "Reveal recovery secrets",
+                    hint: "Asks for your passphrase first"
+                ) { open(.reveal) }
+            }
         }
     }
 

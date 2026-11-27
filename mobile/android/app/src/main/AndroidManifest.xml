@@ -4,6 +4,17 @@
     <!-- Normal permission for Window.setHideOverlayWindows (API 31+): no overlay over the wallet. -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
 
+    <!-- Ledger over Bluetooth LE (ledger/LedgerGattLink.kt). API 31+: scan without location, and
+         connect. API 28-30 need the legacy pair, and location for a scan to return results. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+
     <!-- No cloud backup or device transfer of app data: the vault lives in noBackupFilesDir,
          and these rules keep everything else out of backups too. -->
     <application

@@ -50,6 +50,39 @@ final class GaslessDriverTests: XCTestCase {
         XCTAssertEqual(transport.count, 1)
     }
 
+    func testALedgerRelaySignatureGoesThroughTheDeviceAndARefusalCanBeRetried() async throws {
+        let transport = ScriptedTransport()
+        let apdu = Data([0x5a, 0x02])
+        let fee = ScriptedFee(
+            chosen: { .device(apdu: apdu) },
+            submitSteps: [{ .submitted(transactionHash: "0x7a1ce5", explorerUrl: nil) }],
+            device: [
+                { .deviceRetry(reason: "rejected-on-device") }, { .device(apdu: apdu) }, { .post(post: Self.post) }
+            ]
+        )
+        let signer = await ScriptedSigner(again: [true])
+        let driver = GaslessDriver(transport: transport, signer: signer)
+        let account = try ozRecord(unlockedCore(), .sepolia, 1)
+        let outcome = await driver.submit(fee, offer: Self.offer, prices: nil, account: account)
+        let shown = await signer.accounts
+        XCTAssertEqual(shown, [account, account], "the Ledger sheet names the reviewed plan's account")
+        XCTAssertEqual(outcome, .submitted(hash: "0x7a1ce5", explorerUrl: nil))
+        let answer = StepReply.device(reply: ScriptedSigner.okay)
+        XCTAssertEqual(fee.deviceReplies, [answer, .retryDevice, answer])
+        let finished = await signer.finished
+        XCTAssertEqual(finished, 1)
+    }
+
+    func testACancelOnTheLedgerSubmitsNothing() async {
+        let transport = ScriptedTransport()
+        let fee = ScriptedFee(chosen: { .deviceRetry(reason: "device-locked") }, submitSteps: [])
+        let signer = await ScriptedSigner(again: [false])
+        let driver = GaslessDriver(transport: transport, signer: signer)
+        let outcome = await driver.submit(fee, offer: Self.offer, prices: nil)
+        XCTAssertEqual(outcome, GaslessDriver.cancelled)
+        XCTAssertEqual(transport.count, 0)
+    }
+
     func testAWaitResumesThroughTheCoreBeforeTheExecuteIsPostedAgain() async {
         let transport = ScriptedTransport()
         let fee = ScriptedFee(chosen: { .wait(delayMs: 1) }, resumed: { throw GaslessFeeError.Locked })
@@ -125,6 +158,8 @@ private final class ScriptedFee: GaslessFeeProtocol, @unchecked Sendable {
     private let chosen: () throws -> GaslessSubmitStep
     private var submitSteps: [() throws -> GaslessSubmitStep]
     private let resumed: () throws -> GaslessSubmitStep
+    private var device: [() throws -> GaslessSubmitStep]
+    private(set) var deviceReplies: [StepReply] = []
     private(set) var replies = 0
     private(set) var resumes = 0
 
@@ -132,8 +167,10 @@ private final class ScriptedFee: GaslessFeeProtocol, @unchecked Sendable {
         offerSteps: [GaslessOfferStep] = [],
         chosen: @escaping () throws -> GaslessSubmitStep = { throw GaslessFeeError.NotFound },
         submitSteps: [() throws -> GaslessSubmitStep] = [],
-        resumed: @escaping () throws -> GaslessSubmitStep = { throw GaslessFeeError.NotFound }
+        resumed: @escaping () throws -> GaslessSubmitStep = { throw GaslessFeeError.NotFound },
+        device: [() throws -> GaslessSubmitStep] = []
     ) {
+        self.device = device
         self.offerSteps = offerSteps
         self.chosen = chosen
         self.submitSteps = submitSteps
@@ -161,8 +198,34 @@ private final class ScriptedFee: GaslessFeeProtocol, @unchecked Sendable {
         return try submitSteps.removeFirst()()
     }
 
-    /// The driver never reaches a device: it stops at `.device`.
-    func advanceDevice(reply _: StepReply, nowMs _: UInt64) throws -> GaslessSubmitStep {
-        throw GaslessFeeError.NotFound
+    func advanceDevice(reply: StepReply, nowMs _: UInt64) throws -> GaslessSubmitStep {
+        deviceReplies.append(reply)
+        guard !device.isEmpty else { throw GaslessFeeError.NotFound }
+        return try device.removeFirst()()
     }
+}
+
+/// A Ledger that answers every APDU `9000`; `again` answers each refusal in turn.
+@MainActor
+private final class ScriptedSigner: DeviceSigning {
+    private var again: [Bool]
+    private(set) var finished = 0
+    private(set) var accounts: [AccountRecord?] = []
+
+    init(again: [Bool]) {
+        self.again = again
+    }
+
+    /// The status word of an accepted APDU.
+    static let accepted: UInt8 = 0x90
+    static let okay = Data([accepted, 0])
+
+    func exchange(_: Data, for account: AccountRecord?) -> StepReply? {
+        accounts.append(account)
+        return .device(reply: Self.okay)
+    }
+
+    func refused(_: String, for _: AccountRecord?) -> Bool { again.isEmpty ? false : again.removeFirst() }
+
+    func finish() { finished += 1 }
 }

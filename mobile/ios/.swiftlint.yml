@@ -243,3 +243,8 @@ indentation_width:
   indentation_width: 4
   include_comments: true
   include_multiline_strings: false
+# CoreBluetooth's centralManager(_:didDiscover:advertisementData:rssi:) takes `rssi: NSNumber`; a
+# Ledger never paired before is found only through it (Ledger/LedgerBleLink.swift). Allow no other.
+legacy_objc_type:
+  allowed_types:
+    - NSNumber

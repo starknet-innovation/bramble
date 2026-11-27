@@ -23,7 +23,7 @@ fun List<AccountRecord>.hidden(): List<AccountRecord> = filter { it.hidden }
 /** Why mobile keeps [account] without operating it, in one plain line (iOS `unusableReasonText`). */
 fun unusableReasonText(account: UnusableAccount): String =
     when (account.reason) {
-        UnusableReason.LEDGER -> "Ledger account. Ledger isn't on mobile yet."
+        UnusableReason.LEDGER -> "Ledger account that doesn't match its device key."
         UnusableReason.IMPORTED_PHRASE -> "From another recovery phrase."
         UnusableReason.OTHER_NETWORK -> "On ${account.networkId}, which mobile doesn't support."
         UnusableReason.NOT_DERIVED_HERE -> "Mobile can't derive this account's key."

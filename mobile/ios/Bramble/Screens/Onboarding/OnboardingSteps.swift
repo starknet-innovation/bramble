@@ -50,6 +50,7 @@ struct WelcomeStep: View {
 struct ImportMethodStep: View {
     let back: () -> Void
     let recoveryPhrase: () -> Void
+    let ledger: () -> Void
 
     var body: some View {
         OnboardingStep(
@@ -65,10 +66,12 @@ struct ImportMethodStep: View {
                     detail: "Import 12 or 24 recovery words from another wallet.",
                     action: recoveryPhrase
                 )
-                OptionCard(icon: .shield, title: "Ledger hardware wallet", detail: "Coming to Bramble mobile.") {
-                    // No action: not yet available on mobile, so the card is disabled.
-                }
-                .disabled(true)
+                OptionCard(
+                    icon: .shield,
+                    title: "Ledger hardware wallet",
+                    detail: LedgerCopy.optionDetail,
+                    action: ledger
+                )
                 OptionCard(icon: .link, title: "Private key", detail: "Coming to Bramble mobile.") {
                     // No action: not yet available on mobile, so the card is disabled.
                 }
@@ -177,7 +180,7 @@ struct PassphraseStep: View {
                 PassphraseMeter(strength: strength, status: meterStatus(strength, matches: matches), ready: matches)
             }
         } cta: {
-            PillButton(path == .create ? "Continue" : "Find your accounts", busy: store.busy) {
+            PillButton(path == .recover ? "Find your accounts" : "Continue", busy: store.busy) {
                 Task {
                     do {
                         try await submit(passphrase)

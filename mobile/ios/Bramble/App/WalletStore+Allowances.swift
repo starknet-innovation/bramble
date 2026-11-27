@@ -75,7 +75,7 @@ extension WalletStore {
         return RevokeFlowModel(
             core: core,
             network: networkInfo,
-            accountId: account.id,
+            account: account,
             allowance: allowance,
             tokens: portfolio.preferences,
             feeBalance: feeBalance,

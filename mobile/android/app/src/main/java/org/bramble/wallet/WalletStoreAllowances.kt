@@ -91,7 +91,7 @@ internal fun WalletStore.makeRevokeModel(allowance: AllowanceView): RevokeFlowMo
     return RevokeFlowModel(
         walletCore,
         networkInfo,
-        account.id,
+        account,
         allowance,
         portfolio.preferences,
         RevokeLinks(portfolio.reads, rpc.transport) { plans += it },

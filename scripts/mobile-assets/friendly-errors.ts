@@ -1,7 +1,8 @@
 /**
  * The extension's friendly-error tables and classifier rules (`friendly-error*.ts`), rendered for
  * Swift and Kotlin so the mobile apps map a raw core refusal to the same sentence the side panel
- * shows. Only data is rendered: the copy table, the reviewed plumbing, the Ledger catalog, the
+ * shows. Only data is rendered: the copy table, the reviewed plumbing, the Ledger catalog (in its
+ * Bluetooth wording, `ledger-copy.ts`), the
  * transport markers, every pattern `friendlyError` tests (as `source` + flags) and the STRK20
  * category sentences. The matching order is ported by hand in `FriendlyError.swift` /
  * `FriendlyError.kt` and pinned by their unit tests; a table or pattern change here changes the
@@ -11,7 +12,6 @@
  */
 import { readFileSync } from "node:fs";
 import { NETWORK_ERROR_MESSAGE, NETWORK_FAILURE_MARKERS } from "@bramble/core/network-error";
-import { LEDGER_MESSAGES } from "@bramble/ledger-protocol/errors";
 import {
   FRIENDLY_ERROR_RULES,
   friendlyError,
@@ -30,6 +30,7 @@ import {
   REVIEWED_PLUMBING,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal";
 import { PRIVACY_LEAK } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-shared";
+import { MOBILE_LEDGER_MESSAGES } from "./ledger-copy";
 import { HEADER } from "./shared";
 
 /** Repository-relative paths of the generated copy table and rules. */
@@ -197,7 +198,7 @@ const swiftRules = (): string =>
     ...NETWORK_FAILURE_MARKERS.map((marker) => `        ${swift(marker)},`),
     "    ]",
     "    static let ledgerMessages: [String: String] = [",
-    ...byKey(Object.entries(LEDGER_MESSAGES)).map(
+    ...byKey(Object.entries(MOBILE_LEDGER_MESSAGES)).map(
       ([key, value]) => `        ${swift(key)}: ${swift(value)},`,
     ),
     "    ]",
@@ -234,7 +235,7 @@ const kotlinRules = (): string =>
     "        )",
     "    val ledgerMessages: Map<String, String> =",
     "        mapOf(",
-    ...byKey(Object.entries(LEDGER_MESSAGES)).map(
+    ...byKey(Object.entries(MOBILE_LEDGER_MESSAGES)).map(
       ([key, value]) => `            ${kotlin(key)} to ${kotlin(value)},`,
     ),
     "        )",

@@ -40,6 +40,7 @@ import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.ui.HEADLINE_TRACKING
+import org.bramble.wallet.ui.ledger.LedgerCopy
 
 // Each step reproduces its extension counterpart in `onboarding-views.ts` /
 // `onboarding-surface.ts`, through the iOS OnboardingSteps: same badge, heading, lede, CTA copy.
@@ -81,6 +82,7 @@ fun WelcomeStep(
 fun ImportMethodStep(
     back: () -> Unit,
     recoveryPhrase: () -> Unit,
+    ledger: () -> Unit,
 ) {
     OnboardingStep(
         back = back,
@@ -101,9 +103,9 @@ fun ImportMethodStep(
                 OptionCard(
                     BrambleIconName.SHIELD,
                     "Ledger hardware wallet",
-                    "Coming to Bramble mobile.",
-                    enabled = false,
-                ) {}
+                    LedgerCopy.OPTION_DETAIL,
+                    onClick = ledger,
+                )
                 OptionCard(BrambleIconName.LINK, "Private key", "Coming to Bramble mobile.", enabled = false) {}
             }
         },

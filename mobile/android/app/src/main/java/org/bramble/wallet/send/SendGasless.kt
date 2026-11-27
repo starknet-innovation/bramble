@@ -59,7 +59,7 @@ suspend fun SendFlowModel.payFee(offer: GaslessOffer) {
             // Nothing is signed yet; without a price `choose` refuses, so the journey says why.
             null
         }
-    val outcome = host.submit(fee, offer, prices)
+    val outcome = host.submit(fee, offer, prices, account)
     // Closed while the execute was out (`dropPlan`): the core's row carries it from here.
     if (gaslessFee !== fee) return
     // `choose` closed the STRK plan; the review stays for the receipt.
@@ -104,7 +104,7 @@ internal suspend fun SendFlowModel.watch(hash: String) {
             stage = Stage.PENDING
             return
         }
-    val started = SendDriver(plan, network, transport).also { driver = it }
+    val started = SendDriver(plan, network, transport, account).also { driver = it }
     settle { started.run(StepReply.Start) }
 }
 

@@ -37,7 +37,7 @@ final class SwapFlowModelTests: XCTestCase {
         try SwapFlowModel(
             core: core,
             network: sepolia(),
-            accountId: ozRecord(core, .sepolia).id,
+            account: ozRecord(core, .sepolia),
             preferences: TokenPreferences(persisted: nil),
             balances: balances,
             prices: nil,

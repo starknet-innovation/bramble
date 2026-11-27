@@ -10,7 +10,11 @@ import { readFile } from "node:fs/promises";
 import { readMobileAssetSources, renderMobileAssets } from "../../scripts/mobile-assets";
 import { mobilePrivacyRoutes } from "../../scripts/mobile-assets/privacy";
 import { MOBILE_PROVIDER_PATH } from "../../scripts/mobile-assets/provider";
-import { FACE_ID_USAGE, SECURITY_POLICY } from "../../scripts/mobile-assets/security-copy";
+import {
+  BLUETOOTH_USAGE,
+  FACE_ID_USAGE,
+  SECURITY_POLICY,
+} from "../../scripts/mobile-assets/security-copy";
 import {
   computeParityAccounts,
   computeUiParity,
@@ -177,6 +181,11 @@ describe("mobile vault security", () => {
   test("the iOS Face ID usage string is the generated copy", async () => {
     const spec = await readFile("mobile/ios/project.yml", "utf8");
     expect(spec).toContain(`INFOPLIST_KEY_NSFaceIDUsageDescription: "${FACE_ID_USAGE}"`);
+  });
+
+  test("the iOS Bluetooth usage string is the generated copy", async () => {
+    const spec = await readFile("mobile/ios/project.yml", "utf8");
+    expect(spec).toContain(`INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "${BLUETOOTH_USAGE}"`);
   });
 
   test("the parity fixture carries an extension-sealed DEK slot", async () => {
