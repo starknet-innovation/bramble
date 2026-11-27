@@ -109,6 +109,7 @@ jobs:
       e2e: ${{ steps.e2e.outcome }}
       e2e_failed: ${{ steps.e2e_results.outputs.failed }}
       e2e_flaky: ${{ steps.e2e_results.outputs.flaky }}
+      e2e_next: ${{ steps.e2e_next.outcome }}
       sepolia: ${{ steps.sepolia.outcome }}
       sepolia_configured: ${{ steps.sepolia_seeds.outputs.configured }}
       sepolia_txn: ${{ steps.sepolia_txn.outcome }}
@@ -312,6 +313,14 @@ jobs:
           bun tools/vendor-dataset/verify-sepolia-deploys.ts || status=1
           exit "$status"
 
+      # Early warning (tests/e2e/chrome-beta.ts): last and capped, so no blocking gate waits on it.
+      - name: Full E2E on next Chromium (early warning)
+        id: e2e_next
+        if: steps.build.outcome == 'success' && hashFiles('tests/e2e/chrome-beta.ts') != ''
+        continue-on-error: true
+        timeout-minutes: 60
+        env: { BRAMBLE_E2E_CHANNEL: chrome-for-testing-beta }
+        run: bun run test:e2e:install:beta && bun run test:e2e --reporter=list
       - name: Fail the job if any gate failed
         if: always()
         env:
@@ -361,6 +370,7 @@ jobs:
           E2E: ${{ needs.nightly.outputs.e2e }}
           E2E_FAILED: ${{ needs.nightly.outputs.e2e_failed }}
           E2E_FLAKY: ${{ needs.nightly.outputs.e2e_flaky }}
+          E2E_NEXT: ${{ needs.nightly.outputs.e2e_next }}
           SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
           SEPOLIA_CONFIGURED: ${{ needs.nightly.outputs.sepolia_configured }}
           SEPOLIA_TXN: ${{ needs.nightly.outputs.sepolia_txn }}
@@ -419,6 +429,8 @@ jobs:
             const still = failing.filter((key) => known.includes(key));
             const fixed = known.filter((key) => !failing.includes(key));
 
+            // Shown, but never in `failing` or the state line: alone it never opens the issue.
+            const next = { success: "pass", skipped: "not run (no build, or the branch predates it)" }[env.E2E_NEXT];
             const runUrl = `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`;
             const section = (heading, lines) => (lines.length ? ["", `### ${heading}`, ...lines] : []);
             const report = [
@@ -428,6 +440,7 @@ jobs:
               ...section("Fixed since last run", fixed.map(show)),
               ...section("Flaky (passed on retry)", flakyTests.map((t) => `- ${code(t)}`)),
               ...section("Not run", notRun.map((g) => `- ${g.name}: the ${g.secret} secret is not configured`)),
+              ...section("Early warning (non-blocking)", [`- Next Chromium E2E: ${next ?? `fail (${env.E2E_NEXT || "no result"})`}`]),
               "",
               failing.length
                 ? "Do not promote this branch to `main` until it is green. \"Sepolia bank low\" means refill the bank, not a wallet bug."
