@@ -4,6 +4,7 @@
  * own collaborators (memory stores, an unlocked session on a fixed clock) with the two chain reads
  * an import makes, the authority and the nonce, answered from the case. Every value is public.
  */
+import { WalletError } from "@bramble/core/errors";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import type { ArgentMultisigCall, ArgentMultisigConfig } from "@bramble/multisig/chain";
 import {
@@ -13,7 +14,7 @@ import {
   memoryMultisigStore,
 } from "@bramble/multisig/repository";
 import { createPreferencesStore } from "@bramble/settings/preferences";
-import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { argentSignerGuid, isArgentMultisigClassHash } from "@bramble/starknet/account-contracts";
 import { prepareArgentMultisigInvokeV3 } from "@bramble/starknet/multisig-invoke";
 import { createMemoryStore } from "@bramble/store/kv";
 import { memoryActivityLog } from "@bramble/transactions/activity";
@@ -119,6 +120,11 @@ export const caseWallet = async (
       multisig: {
         async getConfig() {
           if ("error" in reads.authority) throw new Error(reads.authority.error);
+          // The real read (`@bramble/multisig/chain`) refuses any other class before it reads an
+          // authority, so a config never carries one.
+          if (!isArgentMultisigClassHash(reads.authority.classHash)) {
+            throw new WalletError("Account is not the pinned Argent Multisig 0.2 class");
+          }
           return reads.authority;
         },
         async getNonce() {
