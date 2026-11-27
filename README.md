@@ -1,3 +1,26 @@
+## Building for addons.mozilla.org reviewers
+
+One command, run from this directory:
+
+```sh
+npm run build-for-amo
+```
+
+Tested on Mozilla's default reviewer environment: Ubuntu 24.04 LTS ARM64, Node.js 24.14.0,
+npm 11.9.0, as a normal user. It also needs `git` and `zip` (`sudo apt install git zip`) and
+network access, because it downloads pinned dependencies: npm packages from `bun.lock`, the
+pinned Argent contract release, and the Starknet Privacy SDK from GitHub at a pinned commit.
+
+Please do not install Bun yourself or run `bun run ...` commands directly. The packaged bytes
+depend on the exact Bun release named by `packageManager` in `package.json`. The script installs
+that release into a temporary directory with npm, then runs every step in order:
+`bun install --frozen-lockfile`, `bun run vendor:argent`, `bun run vendor:privacy` and
+`bun run package:extension:firefox`. Skipping any of them fails the build.
+
+Output: `artifacts/bramble-firefox-<version>.zip`, its sha256 in the `.sha256` file next to it,
+and the unpacked build in `dist-firefox/`. `BUILDING.md` has the manual steps and the reason
+for each requirement.
+
 <div align="center">
 
 # Bramble
