@@ -10,6 +10,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { INVOKE_NOT_JOURNALED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
+import { reviewMessages } from "@bramble/transactions/review-messages";
 import {
   PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
   privacyShortfall,
@@ -72,6 +73,14 @@ describe("known-not-sent refusals", () => {
       .filter((sentence) => MAYBE.test(sentence))
       .sort();
     expect(contradictory).toEqual([]);
+  });
+
+  // Both poisoning refusals (a lookalike payee and a lookalike spender) are
+  // returned before anything is signed, so neither may read as outcome unknown.
+  test("the poisoned-recipient and poisoned-spender refusals are known not sent", () => {
+    for (const key of ["review.flag.addressPoisoning", "review.flag.spenderPoisoning"] as const) {
+      expect(knownNotSent(new Error(reviewMessages.en[key]))).toBe(true);
+    }
   });
 
   test("a typed unknown outcome is never known-not-sent", () => {

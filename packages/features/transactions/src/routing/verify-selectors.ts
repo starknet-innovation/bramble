@@ -40,6 +40,8 @@ export const APPROVE_ENTRYPOINTS: readonly string[] = [
 // decrease hands out no spending authority, so the reviewer must not summarize
 // it as a grant — but bookkeeping still has to see it, or the log keeps
 // reporting an allowance the user has already pulled back.
+// A decrease is not a grant either for the spender-poisoning refusal (see
+// `spenderFeltIndex`): lowering a lookalike's allowance only takes reach away.
 const DECREASE_ENTRYPOINTS: readonly string[] = ["decreaseAllowance", "decrease_allowance"];
 
 /**
@@ -128,10 +130,12 @@ const TRANSFER_FROM_ENTRYPOINTS: readonly string[] = [
  * proceeds to the `beneficiary` felt of the pinned route layout, so a dapp swap
  * whose payee mimics a saved address is refused like any other poisoned send.
  *
- * Exact match; any other selector — including the allowance and operator grants,
- * whose first felt is a SPENDER the user is authorizing rather than an address
- * being paid — reports null, and callers must then run no recipient rule at all
- * rather than inventing a recipient from felt zero.
+ * Exact match; any other selector reports null, and callers must then run no
+ * recipient rule at all rather than inventing a recipient from felt zero. The
+ * allowance and operator grants report null HERE because their first felt is a
+ * SPENDER the user is authorizing, not an address being paid: the payee-only
+ * rules (self-send, token-contract recipient) do not apply to it. Address
+ * poisoning does, and reads that felt through {@link spenderFeltIndex}.
  */
 export const recipientFeltIndex = (entrypoint: string): number | null => {
   if (entrypoint === "transfer") {
@@ -142,3 +146,21 @@ export const recipientFeltIndex = (entrypoint: string): number | null => {
   }
   return TRANSFER_FROM_ENTRYPOINTS.includes(entrypoint) ? 1 : null;
 };
+
+/**
+ * Which calldata felt carries the address a call AUTHORIZES — the spender of an
+ * ERC20 allowance grant (every {@link APPROVE_ENTRYPOINTS} spelling), the
+ * approved address of an ERC721 `approve` (same selector, same position), or
+ * the operator of a {@link OPERATOR_APPROVAL_ENTRYPOINTS} grant — or null for
+ * any other selector.
+ *
+ * Read for the address-poisoning refusal only: a spender that mimics a saved
+ * contact or one of the user's own accounts is never a legitimate grant, and a
+ * lookalike spender drains exactly as a lookalike payee does. Like
+ * {@link recipientFeltIndex} it answers from the selector alone, so the refusal
+ * still runs on a span the decoder could not describe. Exact match.
+ */
+export const spenderFeltIndex = (entrypoint: string): number | null =>
+  APPROVE_ENTRYPOINTS.includes(entrypoint) || OPERATOR_APPROVAL_ENTRYPOINTS.includes(entrypoint)
+    ? 0
+    : null;

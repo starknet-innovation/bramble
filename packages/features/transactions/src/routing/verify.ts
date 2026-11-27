@@ -28,6 +28,7 @@ import {
   tokenFor,
   type VerificationContext,
 } from "./verify-decode";
+import { isLookalikeAddress, spenderForFlags } from "./verify-poisoning";
 import { isDecreaseAllowanceEntrypoint } from "./verify-selectors";
 
 /**
@@ -47,6 +48,10 @@ export {
   trustedTokens,
   verificationContext,
 } from "./verify-decode";
+/**
+ * The lookalike test the poisoning refusal applies, re-exported for the same reason.
+ */
+export { isLookalikeAddress } from "./verify-poisoning";
 
 /**
  * Risk flag codes surfaced on the review step.
@@ -89,7 +94,10 @@ export type VerificationReport = {
 
 /**
  * The one recipient policy every send line applies: a recipient that visually
- * mimics an address this wallet trusts is refused, not merely annotated.
+ * mimics an address this wallet trusts is refused, not merely annotated. The
+ * same flag is raised on the spender of an allowance or NFT approval and the
+ * operator of a collection-wide grant (but not on a revoke), so a lookalike
+ * grant is refused on every route that refuses a lookalike payee.
  *
  * Returns the refusal — the verifier's own wording, so the user reads the same
  * sentence whichever screen they came from — or `null` when the report raises no
@@ -123,45 +131,6 @@ export const refuseOnAccountSelfCall = (
   calls.some((call) => sameFelt(call.contractAddress, accountAddress))
     ? { error: "Dapps cannot call the wallet account contract itself" }
     : null;
-
-// The visible `0x` + four digits a felt shows in each zero-padded spelling,
-// from the canonical form up to the 64-digit padded one. Past four leading
-// zeros every spelling renders `0x0000`, so the set is at most five windows.
-const displayPrefixes = (value: string): ReadonlySet<string> => {
-  const digits = value.startsWith("0x") ? value.slice(2) : value;
-  const maxZeros = Math.min(4, Math.max(0, 64 - digits.length));
-  const prefixes = new Set<string>();
-  for (let zeros = 0; zeros <= maxZeros; zeros += 1) {
-    prefixes.add(`${"0".repeat(zeros)}${digits}`.slice(0, 4));
-  }
-  return prefixes;
-};
-
-/**
- * Detects address poisoning: a candidate that visually mimics a trusted
- * address (same leading and trailing digits) while being a different account.
- * Every spelling the wallet can render is compared, not only the canonical
- * form (accounts) and the 64-digit padded form (contacts): a typed recipient was
- * once labelled with the spelling the user pasted, so an attacker who handed out
- * a partially zero-padded address controlled which window was displayed. Matching
- * only the canonical window let 15 of every 16 twins of a padded contact pass,
- * and matching canonical plus padded still let a one-leading-zero spelling
- * render exactly like the padded contact (audit #242). Labels now always show
- * the padded window, but the check still compares every spelling rather than
- * trusting the label.
- */
-export const isLookalikeAddress = (candidate: string, trusted: string): boolean => {
-  const left = canonical(candidate).toLowerCase();
-  const right = canonical(trusted).toLowerCase();
-  if (left === right) {
-    return false;
-  }
-  if (left.slice(-4) !== right.slice(-4)) {
-    return false;
-  }
-  const trustedPrefixes = displayPrefixes(right);
-  return [...displayPrefixes(left)].some((prefix) => trustedPrefixes.has(prefix));
-};
 
 // Each rule is a pure predicate returning the flag it raises or null; the
 // assembled list is filtered so absent rules simply drop out (see flagsForCall).
@@ -348,22 +317,27 @@ const tokenContractRecipientFlag = (
   return tokens.some((token) => sameFelt(recipient, token)) ? TOKEN_CONTRACT_RECIPIENT_FLAG : null;
 };
 
-const addressPoisoningFlag = (recipient: string, context: VerificationContext): RiskFlag | null => {
-  if (!recipient) {
+// Raised on a payee and, with its own sentence, on a spender or operator: one
+// code, so every route that refuses a poisoned payee refuses a poisoned grant.
+const addressPoisoningFlag = (
+  address: string,
+  context: VerificationContext,
+  key: "review.flag.addressPoisoning" | "review.flag.spenderPoisoning",
+): RiskFlag | null => {
+  if (!address) {
     return null;
   }
   // Every address the user can be expected to recognize: this account, their
   // other accounts, saved contacts, and recipients this wallet has paid (audit
-  // #163). Chain-discovered history is deliberately absent — see
-  // `walletPaidRecipients`.
+  // #163). Chain-discovered history is absent — see `walletPaidRecipients`.
   const trusted = [
     context.account.address,
     ...(context.ownAccounts ?? []),
     ...context.addressBook.map((entry) => entry.address),
     ...(context.recentRecipients ?? []),
   ];
-  return trusted.some((known) => isLookalikeAddress(recipient, known))
-    ? riskFlag("address-poisoning", reviewText("review.flag.addressPoisoning"))
+  return trusted.some((known) => isLookalikeAddress(address, known))
+    ? riskFlag("address-poisoning", reviewText(key))
     : null;
 };
 
@@ -404,12 +378,12 @@ const recipientFlags = (
     ? [
         decoded.kind === "swap" ? null : UNDECODED_SWAP_FLAG,
         foreignBeneficiaryFlag(recipient, context),
-        addressPoisoningFlag(recipient, context),
+        addressPoisoningFlag(recipient, context, "review.flag.addressPoisoning"),
       ]
     : [
         selfTransferFlag(recipient, context),
         tokenContractRecipientFlag(recipient, context),
-        addressPoisoningFlag(recipient, context),
+        addressPoisoningFlag(recipient, context, "review.flag.addressPoisoning"),
       ];
 
 // `unlimitedApproval` and `operatorApproval` are decided across the whole
@@ -435,6 +409,11 @@ const flagsForCall = (
     raised.unlimitedApproval ? UNLIMITED_APPROVAL_FLAG : null,
     raised.operatorApproval ? OPERATOR_APPROVAL_FLAG : null,
     ...recipientFlags(call, decoded, recipient, context),
+    addressPoisoningFlag(
+      spenderForFlags(call, calldata, context),
+      context,
+      "review.flag.spenderPoisoning",
+    ),
   ];
   return candidates.filter((flag): flag is RiskFlag => flag !== null);
 };
