@@ -70,7 +70,12 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
   "apps/extension/src/content/index.ts",
 ]);
 
-import { SECRET_MATERIAL_FILES, SECRET_MATERIAL_PATTERN } from "./file-standards-policy";
+import {
+  CONDITIONAL_SKIP_FILES,
+  DIRECT_BROWSER_STORAGE_FILES,
+  SECRET_MATERIAL_FILES,
+  SECRET_MATERIAL_PATTERN,
+} from "./file-standards-policy";
 
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
@@ -221,7 +226,11 @@ for (const file of await walk(".")) {
     failures.push(`${file} must not suppress TypeScript or lint rules`);
   }
 
-  if (isSourceModule(file) && /\b(?:describe|test|it)\.(?:only|skip)\s*\(/.test(text)) {
+  if (
+    isSourceModule(file) &&
+    (/\b(?:describe|test|it)\.only\s*\(/.test(text) ||
+      (!CONDITIONAL_SKIP_FILES.has(file) && /\b(?:describe|test|it)\.skip\s*\(/.test(text)))
+  ) {
     failures.push(`${file} must not commit focused or skipped tests`);
   }
 
@@ -318,7 +327,7 @@ for (const file of await walk(".")) {
 
   if (
     isSourceModule(file) &&
-    file !== "apps/extension/src/browser-storage.ts" &&
+    !DIRECT_BROWSER_STORAGE_FILES.has(file) &&
     /\b(?:chrome|browser)\.storage\b/.test(text)
   ) {
     failures.push(`${file} must use the storage adapter instead of browser storage directly`);

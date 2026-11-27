@@ -350,3 +350,24 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/service/shadow-account-scopes.ts",
   "packages/platform/vault/src/service/service-types.ts",
 ]);
+
+/**
+ * Modules permitted to reach extension storage areas directly. Everything
+ * else goes through the storage adapter.
+ */
+export const DIRECT_BROWSER_STORAGE_FILES = new Set([
+  "apps/extension/src/browser-storage.ts",
+  // The upgrade E2E test reads the encrypted vault envelope from the built
+  // worker's storage.local to check its schema after migration. Read-only,
+  // test-only, and it opens the envelope with the published test passphrase.
+  "tests/e2e/upgrade-from-previous.e2e.ts",
+]);
+
+/**
+ * Test files permitted a skip call. Each skip is a runtime condition
+ * on its environment, reported as skipped, never a parked test.
+ */
+export const CONDITIONAL_SKIP_FILES = new Set([
+  // Runs only when BRAMBLE_E2E_PREVIOUS_BUILD names a previous release build.
+  "tests/e2e/upgrade-from-previous.e2e.ts",
+]);

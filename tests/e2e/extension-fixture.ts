@@ -44,6 +44,12 @@ const isWalletServiceWorker = (worker: Worker): boolean =>
 export type LaunchExtensionOptions = {
   /** Extra Chromium switches appended to the extension-loading ones. */
   readonly args?: readonly string[];
+  /**
+   * The unpacked build to load; defaults to `dist/`. The manifest has no `key`,
+   * so Chromium derives the extension ID, and with it the storage, from this
+   * path: a test that upgrades a profile must load both builds from one path.
+   */
+  readonly extensionPath?: string;
   readonly headless?: boolean;
   /**
    * A profile directory to reuse. When supplied it is treated as the caller's
@@ -60,7 +66,8 @@ export type LaunchExtensionOptions = {
 };
 
 /**
- * Launches bundled Chromium with the built extension loaded from dist/.
+ * Launches bundled Chromium with the built extension loaded from dist/ (or
+ * `options.extensionPath`).
  *
  * Throws if the extension's background service worker never appears, which is
  * how a missing or broken `dist/` surfaces.
@@ -70,10 +77,11 @@ export const launchExtension = async (
 ): Promise<LoadedExtension> => {
   const ownedProfile = options.userDataDir === undefined;
   const userDataDir = options.userDataDir ?? (await mkdtemp(resolve(tmpdir(), "bramble-e2e-")));
+  const extensionPath = options.extensionPath ?? distPath;
   const context = await chromium.launchPersistentContext(userDataDir, {
     args: [
-      `--disable-extensions-except=${distPath}`,
-      `--load-extension=${distPath}`,
+      `--disable-extensions-except=${extensionPath}`,
+      `--load-extension=${extensionPath}`,
       ...(options.args ?? []),
       ...(liveNetworkAllowed() ? [] : NETWORK_BLOCK_ARGS),
     ],
