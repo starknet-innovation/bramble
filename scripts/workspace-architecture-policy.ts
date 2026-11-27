@@ -67,6 +67,7 @@ export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
   ["scripts/check-privacy-sdk.ts", 1],
   // Cache-busting query so the provider runs again under this test's stand-ins.
   ["tests/conformance/inpage-provider-version.test.ts", 1],
+  ["tests/conformance/inpage-wallet-discovery.test.ts", 1],
 ]);
 
 /**

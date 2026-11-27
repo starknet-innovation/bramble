@@ -42,6 +42,7 @@ declare global {
       readonly name: "Bramble";
       readonly off: (event: unknown, handler: unknown) => void;
       readonly on: (event: unknown, handler: unknown) => void;
+      readonly provider: undefined;
       readonly request: (args: unknown) => Promise<unknown>;
       readonly selectedAddress?: string;
       readonly version: string;
@@ -184,6 +185,11 @@ const starknetWallet = {
   name: "Bramble" as const,
   off: events.off,
   on: events.on,
+  // starknet-react 5 lists an injected wallet only if `"provider" in wallet`
+  // (`isWalletObject`, src/connectors/discovery.ts), a leftover of the legacy
+  // `provider?: ProviderInterface`. Present but empty: no RPC surface is added,
+  // and the opt-in legacy connector reads `!wallet.provider` as not connected.
+  provider: undefined,
   request,
   get selectedAddress(): string | undefined {
     return connectedAddresses[0];
