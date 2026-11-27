@@ -435,11 +435,12 @@ merge-blocking then takes adding `Claude Approvals` as a required check on the
 
 The policy file is judged by the copy on `main`, so a change to it takes effect
 only once merged. Changes under `.claude/` take two people, and so do changes
-to dependency and toolchain files (`package.json`, `bun.lock`, `bunfig.toml`,
-`.npmrc`, `Scarb.toml`, `Scarb.lock`, `.tool-versions`). Those two rules hold
-even if a later edit lets Claude approve elsewhere. Claude Code Review
-is `advisory`: it follows the repository's Code Review settings and is billed
-to the Claude organization.
+to dependency, toolchain and vendored-code pins (`package.json`, `bun.lock`,
+`bunfig.toml`, `.npmrc`, `Scarb.toml`, `Scarb.lock`, `.tool-versions`, the
+`scripts/vendor-*.ts` and `scripts/*-pins.ts` revisions, and the CI workflows
+that pin Bun). Those two rules hold even if a later edit lets Claude approve
+elsewhere. Claude Code Review is `advisory`: it follows the repository's Code
+Review settings and is billed to the Claude organization.
 
 ### Repository settings
 
