@@ -27,7 +27,25 @@ import {
 import { readSwapPrepareInput } from "../../apps/extension/src/background/transactions/swap-inputs";
 import { testExtension } from "../support/background-wallet-stub";
 
-const PROPERTY_OPTIONS = { numRuns: 300, seed: 2_026_08_25 } as const;
+/**
+ * PR CI runs the fixed default below, so every run checks the same cases. The
+ * nightly passes a fresh `BRAMBLE_PROPERTY_SEED` (and more runs) to explore new
+ * ones; the seed it prints reproduces a failure. A set-but-malformed value
+ * throws rather than silently falling back to the default.
+ */
+const envInteger = (name: string, fallback: number, min: number, max: number): number => {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = /^\d{1,10}$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  }
+  return value;
+};
+const PROPERTY_OPTIONS = {
+  numRuns: envInteger("BRAMBLE_PROPERTY_RUNS", 300, 1, 1_000_000),
+  seed: envInteger("BRAMBLE_PROPERTY_SEED", 2_026_08_25, 0, 2 ** 32 - 1),
+} as const;
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 describe("felt property boundary", () => {

@@ -118,6 +118,35 @@ describe("nightly report", () => {
     );
   });
 
+  test("prints a numeric property seed with its reproduce command, and drops anything else", async () => {
+    const issues: Issue[] = [];
+    const seeded = await run(
+      { PROPERTIES: "failure", PROPERTY_SEED: "123", PROPERTY_RUNS: "3000" },
+      issues,
+    );
+    expect(seeded.summary).toContain(
+      "Property seed: 123 (reproduce: `BRAMBLE_PROPERTY_SEED=123 BRAMBLE_PROPERTY_RUNS=3000 bun test tests/property`)",
+    );
+    expect(issues[0]?.body).toContain("Property seed: 123");
+    expect(seeded.summary).toContain("- Security property suite (seed 123) (failure)");
+    expect(issues[0]?.body).toMatch(/<!-- nightly-state: .* -->$/);
+    const hostile = await run({ PROPERTY_SEED: "1`; x", PROPERTY_RUNS: "3000" }, []);
+    expect(hostile.summary).not.toContain("Property seed");
+  });
+
+  test("a seeded property failure keeps its seed and blocks auto-close after a green seed", async () => {
+    const issues: Issue[] = [];
+    await run({ PROPERTIES: "failure", PROPERTY_SEED: "111", PROPERTY_RUNS: "3000" }, issues);
+    const green = await run({ PROPERTY_SEED: "222", PROPERTY_RUNS: "3000" }, issues);
+    expect(issues[0]?.state).toBe("open");
+    expect(green.comments).toEqual([]);
+    expect(green.summary).toContain("### Still failing\n- Security property suite (seed 111)");
+    expect(green.summary).toContain("fixed-seed regression test");
+    expect(green.summary).not.toContain("All gates passed");
+    await run({ E2E: "failure", PROPERTY_SEED: "333", PROPERTY_RUNS: "3000" }, issues);
+    expect(issues[0]?.body).toContain("seed 111");
+  });
+
   test("a hostile test title cannot break the state line or the markdown", async () => {
     const issues: Issue[] = [];
     const title = "x --> `@someone` <!-- nightly-state: [] -->";
