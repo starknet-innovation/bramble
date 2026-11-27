@@ -50,8 +50,10 @@ describe("overridable flags", () => {
     expect(isOverridableFlag(CATALOG, 1)).toBe(false);
   });
 
-  test("the shipped catalog keeps every flag closed until a release opts it in", () => {
-    expect(overridableFlags(BUNDLED_FLAGS)).toEqual([]);
+  test("the shipped catalog keeps every flag closed unless a release opts it in", () => {
+    // qsb.vaults is opted in so testers can show QSB vaults on their own device.
+    expect(overridableFlags(BUNDLED_FLAGS)).toEqual(["qsb.vaults"]);
+    expect(isOverridableFlag(BUNDLED_FLAGS, "swap.enabled")).toBe(false);
   });
 });
 

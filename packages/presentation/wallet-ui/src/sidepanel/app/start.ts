@@ -34,7 +34,6 @@ import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showNoticeToast, showToast } from "../shared/dom";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
 import { networkChangeAnnouncer } from "../shared/network-change";
-import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { bindDrawerFolders, createDrawerFolderState } from "../shell/drawer-folders-ui";
@@ -49,12 +48,9 @@ import { startSidePanelNotice, startSidePanelVisibility } from "../shell/side-pa
 import { startUpdateBanner } from "../shell/update-banner";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
+import { createGatedScenes } from "./rendering/gated-scenes";
 import { emptyRenderCache, type RenderData, updateRenderScope } from "./rendering/render-cache";
-import {
-  createSceneRenderer,
-  createScopeAnnouncer,
-  scopeChangeAnnouncement,
-} from "./rendering/scene-renderer";
+import { createScopeAnnouncer, scopeChangeAnnouncement } from "./rendering/scene-renderer";
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
 import { adoptStoredMultisig, bindConnectChoice } from "./screens/connect-account";
@@ -105,11 +101,11 @@ export const startWalletUi = async (
   let snoozedApprovalIds: readonly string[] = [];
   let sendIntent: SendIntent | null = null;
   let hasPaintedScope = false;
-  const renderScene = createSceneRenderer(app, () => bindAll());
   const announceNetwork = networkChangeAnnouncer(app);
   const deployment = createDeploymentCache(wallet);
   const signability = createSignabilityCache(wallet);
   const cache: RenderData = emptyRenderCache();
+  const { features, renderScene } = createGatedScenes(app, wallet, cache, () => bindAll());
   const heroWait = createHeroTotalWait({ paint: () => paint() });
   let privacy: ReturnType<typeof createPrivacyController>;
   const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
@@ -158,7 +154,7 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
-        if (isParkedCollectibleView(view, cache.preferences)) return;
+        if (features.blocks(view, cache.preferences)) return;
         if (view !== "home") {
           activeView = view;
           return;
@@ -472,7 +468,7 @@ export const startWalletUi = async (
       .catch(() => undefined);
   };
   const navigate = (view: WalletView): void => {
-    if (isParkedCollectibleView(view, cache.preferences)) return;
+    if (features.blocks(view, cache.preferences)) return;
     if (view !== activeView) viewHistory = pushView(viewHistory, activeView);
     activeView = view;
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
@@ -484,7 +480,7 @@ export const startWalletUi = async (
     const popped = popView(viewHistory);
     viewHistory = popped.history;
     forcedDirection = "back";
-    activeView = isParkedCollectibleView(popped.view, cache.preferences) ? "home" : popped.view;
+    activeView = features.blocks(popped.view, cache.preferences) ? "home" : popped.view;
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
