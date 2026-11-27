@@ -67,6 +67,13 @@ export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
   ["scripts/check-privacy-sdk.ts", 1],
   // The mobile privacy fixture drives the extension's service over the same vendored bundle.
   ["scripts/mobile-privacy-wire.ts", 1],
+  // The STRK20 port fixtures (wallet-core #182) load the pinned SDK's sources and bundle the same way:
+  // its `sdk/src` modules, its own `starknet`, and a private copy of the bundle for the job harness.
+  ["scripts/mobile-strk20-batches-invoke.ts", 1],
+  ["scripts/mobile-strk20-batches.ts", 1],
+  ["scripts/mobile-strk20-jobs.ts", 1],
+  ["scripts/mobile-strk20-primitives.ts", 3],
+  ["scripts/mobile-strk20-shadow.ts", 1],
   // Cache-busting query so the provider runs again under this test's stand-ins.
   ["tests/conformance/inpage-provider-version.test.ts", 1],
 ]);
