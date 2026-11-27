@@ -423,6 +423,25 @@ owner.
   the next patch release branch (`release/vX.Y.Z`) for follow-up work; it cuts
   its own `X.Y.Z` release on promotion exactly as a minor branch does.
 
+### Claude Approvals
+
+`.claude/approvals.yml` is the Claude Approvals policy: every change takes two
+people (the author and one more), and Claude only comments. It is in observe
+mode, so its `Claude Approvals` check reports what it would decide and blocks
+nothing. In observe mode only pull requests into `main` get the check. Once the
+`mode: observe` line is deleted, the policy also covers `release/*`. Making it
+merge-blocking then takes adding `Claude Approvals` as a required check on the
+`main` and `release/*` rulesets, with the Claude app as its source.
+
+The policy file is judged by the copy on `main`, so a change to it takes effect
+only once merged. Changes under `.claude/` take two people, and so do changes
+to dependency, toolchain and vendored-code pins (`package.json`, `bun.lock`,
+`bunfig.toml`, `.npmrc`, `Scarb.toml`, `Scarb.lock`, `.tool-versions`, the
+`scripts/vendor-*.ts` and `scripts/*-pins.ts` revisions, and the CI workflows
+that pin Bun). Those two rules hold even if a later edit lets Claude approve
+elsewhere. Claude Code Review is `advisory`: it follows the repository's Code
+Review settings and is billed to the Claude organization.
+
 ### Repository settings
 
 - Keep default workflow token permissions **read-only** and prevent Actions from
