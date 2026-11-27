@@ -6,6 +6,8 @@
  * switch prompt can never reconnect an origin the user has disconnected.
  */
 import { describe, expect, test } from "bun:test";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -91,6 +93,14 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
 });
 
 const switchMessage = { chainId: MAINNET_CHAIN_ID, origin, type: "wallet.switchChain" as const };
+
+// The default preferences already sit on Mainnet, where a Mainnet switch has
+// nothing to approve (mc-wallet 1041). Tests of the approval start on Sepolia.
+const onSepolia = async () => {
+  const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+  await preferencesStore.setActiveNetwork("SN_SEPOLIA");
+  return preferencesStore;
+};
 
 const sepolia: AccountRef = {
   ...account,
@@ -201,6 +211,7 @@ describe("switchChain grant gate (A-M1)", () => {
             return operation();
           },
         },
+        preferencesStore: await onSepolia(),
         session,
       },
     );
@@ -225,7 +236,7 @@ describe("switchChain grant gate (A-M1)", () => {
     const handler = createMessageHandler(
       walletStub(() => [account]),
       testExtension,
-      { session },
+      { preferencesStore: await onSepolia(), session },
     );
 
     const held = handler({ ...switchMessage, chainId: "0x0534e5f4d41494e" }, contentSender);
@@ -242,6 +253,8 @@ describe("switchChain grant gate (A-M1)", () => {
     }
   });
 
+  // The two refusals below run on the default Mainnet preferences, so they also
+  // pin that a switch to the active network is refused before it is answered.
   test("rejects a switch from an origin with no grant", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
@@ -316,20 +329,79 @@ describe("switchChain grant gate (A-M1)", () => {
     expect(visible).toEqual([grantedMainnet]);
   });
 
-  test("keeps the active account when it is already on the target network", async () => {
+  test("answers a switch to the network it is already on without a prompt (mc-wallet 1041)", async () => {
     // The active Mainnet account is connected and the grant also covers an
-    // earlier Mainnet account, which the stored-grant lookup would prefer. A
-    // switch to the network the wallet is already on must not hop accounts.
+    // earlier Mainnet account, which the stored-grant lookup would prefer.
+    // Nothing would change, so the page is answered at once: no card, no
+    // account hop, no grant, and the canonical id for a zero-padded spelling.
     const grantedMainnet: AccountRef = { ...account, address: "0x7777", id: "SN_MAIN:0x7777" };
     const vault = vaultWallet({
       accounts: [sepolia, grantedMainnet, account],
       active: account.id,
       grant: [account.id, grantedMainnet.id],
     });
-    const { approved, visible } = await approveSwitch(vault.wallet);
-    expect(approved).toEqual({ chainId: MAINNET_CHAIN_ID, ok: true, pending: [] });
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(vault.wallet, testExtension, { session });
+    const answers = Promise.all(
+      [MAINNET_CHAIN_ID, "0x0534e5f4d41494e"].map((chainId) =>
+        handler({ ...switchMessage, chainId }, contentSender),
+      ),
+    );
+    await flushHeld();
+    await expect(handler({ type: "wallet.pendingApprovals" }, extensionSender)).resolves.toEqual(
+      expect.objectContaining({ pending: [] }),
+    );
+    // Answered, not held: a queued card would leave `answers` pending.
+    const answered = await Promise.race([answers, flushHeld().then(() => "held")]);
+    expect(answered).toEqual([
+      { chainId: MAINNET_CHAIN_ID, ok: true },
+      { chainId: MAINNET_CHAIN_ID, ok: true },
+    ]);
     expect(vault.activeId()).toBe(account.id);
-    expect(visible).toEqual([account]);
+    expect(vault.grants).toEqual([]);
+  });
+
+  test("refuses a switch when the wallet locks during the preferences read", async () => {
+    // Already on Mainnet, so the answer would be immediate: a lock landing
+    // after the grant read must still refuse it rather than answer for the
+    // session that just ended.
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const base = createPreferencesStore({ store: createMemoryStore() });
+    let armed = false;
+    const preferencesStore = {
+      ...base,
+      async read() {
+        const value = await base.read();
+        if (armed) session.lock();
+        return value;
+      },
+    };
+    const wallet = {
+      ...walletStub(() => [account]),
+      async getGrantedAccounts(target: string) {
+        armed = true;
+        return target === origin ? [account] : [];
+      },
+    };
+    const handler = createMessageHandler(wallet, testExtension, { preferencesStore, session });
+    await expect(handler(switchMessage, contentSender)).resolves.toEqual({
+      error: "origin not connected",
+    });
+  });
+
+  test("still asks when the account the site sees is on another network", async () => {
+    // The preference reads Mainnet but the page's account is on Sepolia, so
+    // the switch would still reselect an account: that keeps its approval.
+    const vault = vaultWallet({
+      accounts: [sepolia, account],
+      active: sepolia.id,
+      grant: [sepolia.id],
+    });
+    const { held } = await approveSwitch(vault.wallet);
+    await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
+    expect(vault.activeId()).toBe(account.id);
   });
 
   test("ignores a grant id the vault holds on another network", async () => {
@@ -377,7 +449,7 @@ describe("switchChain grant gate (A-M1)", () => {
     const handler = createMessageHandler(
       walletStub(() => connected, grants),
       testExtension,
-      { session },
+      { preferencesStore: await onSepolia(), session },
     );
 
     const held = handler(switchMessage, contentSender);
