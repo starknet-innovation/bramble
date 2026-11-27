@@ -4,12 +4,16 @@
  *
  * - `typedData`: the gate (`isTypedDataShape`), the chain-bound hash for the account on Mainnet
  *   and Sepolia (`typedDataHashForChain`; starknet.js hashes, so `hash` is its message hash or
- *   the sentence that refused), and the card's summary (`describeTypedData`).
+ *   the sentence that refused), and the card's summary (`describeTypedData`). For a document the
+ *   gate accepts, the side panel's card: `decodeSignRequest` with each value printed by
+ *   `signValueText` (`card: { domain, message, classified }`, each block `{ signed, unsigned }`
+ *   as `[key, text]` pairs), and `isOutsideExecution`, whether `signRequestWarnings` warns.
  * - `outside`: a SNIP-9 outside execution, as starknet.js's `outsideExecution.getTypedData`
  *   builds it (v1 and v2) or hand-broken, reviewed by `reviewOutsideExecution` at queue time (with
  *   the allowance log) and at signing (without it, as `signTypedDataApproval` calls it): the risk
  *   flags and call summaries, a refusal's sentence, or `null` for typed data that is not one.
- *   The trusted set is the call-review fixture's (`mobile-parity-calls/shared.ts`).
+ *   The trusted set is the call-review fixture's (`mobile-parity-calls/shared.ts`). An accepted
+ *   one carries its card as `typedData` does.
  */
 
 import { isTypedDataShape, typedDataHashForChain } from "@bramble/starknet/typed-data";
@@ -18,6 +22,10 @@ import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { type Call, OutsideExecutionVersion, outsideExecution } from "starknet";
 import { reviewOutsideExecution } from "../../apps/extension/src/background/transactions/outside-execution-review";
 import { describeTypedData } from "../../apps/extension/src/background/transactions/typed-data-summary";
+import { signRequestWarnings } from "../../packages/presentation/wallet-ui/src/sidepanel/shared/sign-request";
+import { decodeSignRequest } from "../../packages/presentation/wallet-ui/src/sidepanel/shared/sign-request-decode";
+import type { SignRequestSplit } from "../../packages/presentation/wallet-ui/src/sidepanel/shared/sign-request-rows";
+import { signValueText } from "../../packages/presentation/wallet-ui/src/sidepanel/shared/sign-request-text";
 import {
   ACCOUNT,
   CONTACT,
@@ -69,6 +77,21 @@ const rev0 = (domain: Record<string, unknown> = {}) => ({
     StarkNetDomain: REV0_DOMAIN_TYPE,
   },
 });
+
+/** Five nested 64-character names: a 324-character row key, past `SIGN_KEY_MAX_LENGTH` (259). */
+function deepKey() {
+  const names = ["a", "b", "c", "d", "e"].map((letter) => letter.repeat(64));
+  const types: Record<string, unknown> = {};
+  names.slice(1).forEach((name, index) => {
+    const last = index === names.length - 2;
+    types[`T${index + 1}`] = [{ name, type: last ? "felt" : `T${index + 2}` }];
+  });
+  const message = names
+    .slice()
+    .reverse()
+    .reduce<unknown>((inner, name) => ({ [name]: inner }), "0x1") as Record<string, unknown>;
+  return rev1({}, [{ name: names[0], type: "T1" }], message, types);
+}
 
 const DOCUMENTS: readonly (readonly [string, unknown])[] = [
   ["revision 1 on Mainnet", rev1({})],
@@ -184,6 +207,18 @@ const DOCUMENTS: readonly (readonly [string, unknown])[] = [
   ["a long domain name", rev1({ name: "N".repeat(70) })],
   ["a long primary type", rev1({}, undefined, undefined, {}, `P${"q".repeat(70)}`)],
   ["no domain name", rev1({ name: "" })],
+  ["revision 0, an undeclared revision in the domain", rev0({ revision: "0" })],
+  ["revision 1, a string", rev1({}, [{ name: "note", type: "string" }], { note: "hello world" })],
+  [
+    "a merkletree of three struct leaves",
+    rev1(
+      {},
+      [{ contains: "Leaf", name: "root", type: "merkletree" }],
+      { root: [{ amount: "0x3" }, { amount: "0x1" }, { amount: "0x2" }] },
+      { Leaf: [{ name: "amount", type: "felt" }] },
+    ),
+  ],
+  ["a key past 259 characters", deepKey()],
   ["an array", [rev1({})]],
   ["a string", "hello"],
 ];
@@ -198,16 +233,36 @@ export const computeTypedData = (): readonly object[] =>
         return { refused: thrownMessage(error) };
       }
     };
+    const shape = isTypedDataShape(document);
     return {
       account: ACCOUNT,
+      ...(shape ? card(document as Record<string, unknown>) : {}),
       document,
       mainnet: hashOn(MAINNET_CHAIN_ID),
       name,
       sepolia: hashOn(SEPOLIA_CHAIN_ID),
-      shape: isTypedDataShape(document),
+      shape,
       summary: describeTypedData(document),
     };
   });
+
+const rows = (split: SignRequestSplit) => ({
+  signed: split.signed.map(([key, value]) => [key, signValueText(value)]),
+  unsigned: split.unsigned.map(([key, value]) => [key, signValueText(value)]),
+});
+
+/** The side panel's sign card for an accepted document. */
+const card = (document: Record<string, unknown>) => {
+  const { domain, message } = decodeSignRequest(document);
+  return {
+    card: {
+      classified: !domain.unclassified && !message.unclassified,
+      domain: rows(domain),
+      message: rows(message),
+    },
+    isOutsideExecution: signRequestWarnings(document).length > 0,
+  };
+};
 
 const send = (to: string) => call(STRK, "transfer", [to, ONE_AND_A_HALF, 0]);
 const grant = (entrypoint: string, spender: string, low: string, high = "0") =>
@@ -297,8 +352,10 @@ export const computeOutside = (): readonly object[] =>
       if (review === null || "error" in review) return review;
       return { flags: review.flags, summaries: review.summaries };
     };
+    const shape = isTypedDataShape(document);
     return {
       account: ACTOR,
+      ...(shape ? card(document as Record<string, unknown>) : {}),
       context: {
         addressBook: [CONTACT],
         nftContracts: [NFT],
@@ -309,7 +366,7 @@ export const computeOutside = (): readonly object[] =>
       document,
       name,
       queue: at("queue"),
-      shape: isTypedDataShape(document),
+      shape,
       sign: at("sign"),
       standing: [STANDING],
       summary: describeTypedData(document),
