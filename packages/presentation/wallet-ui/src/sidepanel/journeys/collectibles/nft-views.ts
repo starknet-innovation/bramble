@@ -30,6 +30,7 @@ import {
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
+import { shipsAnimationRenderer } from "../../shell/build-info";
 import { nftCardActions } from "./nft-card-actions";
 import { nftCoverageNote } from "./nft-coverage";
 
@@ -139,10 +140,21 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
     ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="${eager ? "eager" : "lazy"}" referrerpolicy="no-referrer" />`
     : "";
 
-// A revealed tile says when its art is missing: shown at once when the
-// background found none, or by CSS once a present image fails to load.
+/**
+ * Whether a collectible has no art this build can show: the background found
+ * none, or its only art is an animation and the build ships no renderer to play
+ * it (Firefox). The background counts an animation as art, so the second case
+ * is the view's to catch. Display-only; never gates a request.
+ */
+export const nftArtMissing = (
+  item: Pick<NftGalleryItem, "animationUrl" | "artUnavailable" | "image">,
+  renderer = shipsAnimationRenderer(),
+): boolean => item.artUnavailable || (!item.image && Boolean(item.animationUrl) && !renderer);
+
+// A revealed tile says when its art is missing: shown at once when there is
+// none to show, or by CSS once a present image fails to load.
 const nftArtNote = (item: NftGalleryItem, reveal: boolean): string =>
-  reveal && (item.image || item.artUnavailable)
+  reveal && (item.image || nftArtMissing(item))
     ? `<span class="nft-art-note"${item.image ? "" : ' data-shown="true"'}>${th("collectibles.artUnavailable")}</span>`
     : "";
 
@@ -157,7 +169,7 @@ const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
 // so it never runs on gallery paint. The host `<li>` must be positioned
 // (`.nft-card`) for the overlay to cover the art.
 const nftTilePlay = (item: NftGalleryItem): string =>
-  item.animationUrl
+  item.animationUrl && shipsAnimationRenderer()
     ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="${th("collectibles.play")}">${icon("gamepad")}<span>${th("collectibles.play")}</span></button>
       <iframe class="nft-animation nft-animation--tile" title="${th("collectibles.animationTitle")}" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
     : "";
@@ -402,7 +414,7 @@ export const selectedNftDetail = (
 // prefetching (Sherlock 236). The URI is carried on the button's data-* and
 // escaped into it here.
 const nftAnimationSection = (item: NftGalleryItem): string =>
-  item.animationUrl
+  item.animationUrl && shipsAnimationRenderer()
     ? `<section class="section">
         <h2>${th("collectibles.animation")}</h2>
         <span class="hint">${th("collectibles.animationHint")}</span>
