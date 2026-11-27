@@ -5,11 +5,10 @@
 import type { Page, Route } from "@playwright/test";
 import { expect } from "@playwright/test";
 
-export const VAULT_PASSPHRASE = "correct horse battery staple";
+import { emptyChainRpcResponse, VAULT_PASSPHRASE } from "./test-wallet";
 
-/** Valid 12-word phrase used to exercise the import-wallet path without generation. */
-export const IMPORT_MNEMONIC =
-  "habit hope tip crystal because grunt nation idea electric witness alert like";
+/** The public test wallet, defined Playwright-free so the Firefox smoke shares it. */
+export { IMPORT_MNEMONIC, VAULT_PASSPHRASE } from "./test-wallet";
 
 /**
  * How long a test waits for the first-run recovery scan to report "Search complete".
@@ -87,36 +86,6 @@ const protectAndFinishSetup = async (
   await finish.click();
 };
 
-type RecoveryRpcCall = {
-  readonly id?: string | number | null;
-  readonly method?: unknown;
-};
-
-const isRecoveryRpcCall = (value: unknown): value is RecoveryRpcCall =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-// Class hash and balance are the reads recovery needs: contract-not-found and a
-// zero uint256. Every other method, including one batched into the same HTTP
-// request, gets a JSON-RPC error. Aborting the connection would fail import on
-// an incidental method the scan does not use.
-const recoveryRpcResponse = (
-  call: RecoveryRpcCall,
-): {
-  readonly error?: { readonly code: number; readonly message: string };
-  readonly id: string | number | null;
-  readonly jsonrpc: "2.0";
-  readonly result?: readonly string[];
-} => {
-  const id = call.id ?? null;
-  if (call.method === "starknet_getClassHashAt") {
-    return { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" };
-  }
-  if (call.method === "starknet_call") {
-    return { id, jsonrpc: "2.0", result: ["0x0", "0x0"] };
-  }
-  return { error: { code: -32601, message: "Method not found" }, id, jsonrpc: "2.0" };
-};
-
 const mockEmptyRecoveryChain = async (page: Page): Promise<() => Promise<void>> => {
   const pattern = "https://*.starknet.org/**";
   const handler = async (route: Route): Promise<void> => {
@@ -129,11 +98,7 @@ const mockEmptyRecoveryChain = async (page: Page): Promise<() => Promise<void>> 
       });
       return;
     }
-    if (Array.isArray(body)) {
-      await route.fulfill({ json: body.filter(isRecoveryRpcCall).map(recoveryRpcResponse) });
-      return;
-    }
-    await route.fulfill({ json: recoveryRpcResponse(isRecoveryRpcCall(body) ? body : {}) });
+    await route.fulfill({ json: emptyChainRpcResponse(body) });
   };
   await page.context().route(pattern, handler);
   return () => page.context().unroute(pattern, handler);

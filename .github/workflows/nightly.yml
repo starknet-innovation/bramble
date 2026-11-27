@@ -3,9 +3,9 @@ name: Nightly
 # Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
 # This is the heaviest tier of the layered CI model: full E2E (Playwright),
 # the live Sepolia import-path run (issue 821), live Sepolia sends and first
-# deploys (issue 976), dependency audit and the extension build. The report job
-# sorts failures into new, still failing and fixed against the open tracking
-# issue, upserts that ONE issue for the release, and closes it once green.
+# deploys (issue 976), dependency audit, both extension builds and the Firefox
+# smoke. The report job sorts failures into new, still failing and fixed against
+# the open tracking issue, upserts that ONE issue, and closes it once green.
 #
 # Active-branch resolution order:
 #   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
@@ -105,6 +105,8 @@ jobs:
       build: ${{ steps.build.outcome }}
       audit: ${{ steps.audit.outcome }}
       properties: ${{ steps.properties.outcome }}
+      build_firefox: ${{ steps.build_firefox.outcome }}
+      firefox_smoke: ${{ steps.firefox_smoke.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
       e2e_failed: ${{ steps.e2e_results.outputs.failed }}
@@ -219,6 +221,12 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
+      - { name: Build Firefox extension, id: build_firefox, continue-on-error: true, run: bun run build:firefox }
+      - name: Firefox smoke # the only gate that runs the Gecko build (blocking); tests/firefox/smoke.ts
+        id: firefox_smoke
+        continue-on-error: true
+        timeout-minutes: 20 # a stall must not hold the job ahead of the Sepolia steps
+        run: '[ -f tests/firefox/smoke.ts ] || { echo "::error::This release branch predates the Firefox smoke test."; exit 1; }; bun run test:firefox:smoke'
       # Live Sepolia run of every in-wallet import path against the issue-821
       # test accounts (tools/vendor-dataset/verify-sepolia.ts). It sends nothing:
       # a broadcast firewall aborts every send. Its testnet-only seed file is a
@@ -319,6 +327,8 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
           PROPERTIES: ${{ steps.properties.outcome }}
+          BUILD_FIREFOX: ${{ steps.build_firefox.outcome }}
+          FIREFOX_SMOKE: ${{ steps.firefox_smoke.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
@@ -330,7 +340,7 @@ jobs:
           # Skipped because the secret is unset: not run, not failed. Any other skip fails.
           if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then SEPOLIA=success; fi
           if [ "$SEPOLIA_TXN" = "skipped" ] && [ "$SEPOLIA_TXN_CONFIGURED" = "false" ]; then SEPOLIA_TXN=success; fi
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA" "$SEPOLIA_TXN"; do
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$BUILD_FIREFOX" "$FIREFOX_SMOKE" "$E2E_INSTALL" "$E2E" "$SEPOLIA" "$SEPOLIA_TXN"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
@@ -357,6 +367,8 @@ jobs:
           BUILD: ${{ needs.nightly.outputs.build }}
           AUDIT: ${{ needs.nightly.outputs.audit }}
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
+          BUILD_FIREFOX: ${{ needs.nightly.outputs.build_firefox }}
+          FIREFOX_SMOKE: ${{ needs.nightly.outputs.firefox_smoke }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
           E2E_FAILED: ${{ needs.nightly.outputs.e2e_failed }}
@@ -375,6 +387,7 @@ jobs:
               { name: "Extension build", outcome: env.BUILD },
               { name: "Dependency audit (bun audit)", outcome: env.AUDIT },
               { name: "Security property suite", outcome: env.PROPERTIES },
+              { name: "Firefox extension build", outcome: env.BUILD_FIREFOX }, { name: "Firefox smoke", outcome: env.FIREFOX_SMOKE },
               { name: "E2E browser install", outcome: env.E2E_INSTALL },
               { name: "Full E2E (Playwright)", outcome: env.E2E },
               { name: "Sepolia import paths (live)", outcome: env.SEPOLIA,

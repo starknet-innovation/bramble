@@ -222,6 +222,9 @@ Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
 via `bun run check:audit` — also run in the PR CI `release-validation` job;
 nightly re-runs it against the live advisory database so a newly-published
 advisory is caught even without a code change), the extension **build**, the
+**Firefox smoke** (`bun run test:firefox:smoke` after `build:firefox`: installs
+the Gecko package in a pinned, SHA-256-verified headless Firefox, offline, and
+walks import, lock and unlock; blocking, like every gate here), the
 live **Sepolia import-path run** (`tools/vendor-dataset/verify-sepolia.ts`, issue
 821; its seeds come from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that one
 step; it is skipped and reported as "Not run" while that secret is unset, and it
@@ -266,6 +269,7 @@ Setup is in [docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
 | Verify Krusty package, vendor Argent/Privacy, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
 | Full E2E (Playwright) | | ✅ | | ✅ |
 | Dependency audit (`bun audit`) | | ✅ | | ✅ (live DB) |
+| Firefox build + smoke (`test:firefox:smoke`) | | | | ✅ |
 | Perf / regression | | | | ⚠️ placeholder (no suite exists yet) |
 
 ---

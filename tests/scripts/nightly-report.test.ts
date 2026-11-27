@@ -23,6 +23,8 @@ const GREEN = {
   BUILD: "success",
   AUDIT: "success",
   PROPERTIES: "success",
+  BUILD_FIREFOX: "success",
+  FIREFOX_SMOKE: "success",
   E2E_INSTALL: "success",
   E2E: "success",
   E2E_FAILED: "[]",
@@ -116,6 +118,15 @@ describe("nightly report", () => {
     expect(summary).toContain(
       "### Not run\n- Sepolia sends and deploys (live): the BRAMBLE_SEPOLIA_TXN_SEED secret is not configured",
     );
+  });
+
+  test("the Firefox smoke blocks promotion, and so does a missing result", async () => {
+    const failed = await run({ FIREFOX_SMOKE: "failure" }, []);
+    expect(failed.summary).toContain("### New failures\n- Firefox smoke (failure)");
+    expect(failed.summary).toContain("Do not promote this branch");
+    // A branch whose nightly job died before the step reports no outcome at all.
+    const missing = await run({ FIREFOX_SMOKE: "" }, []);
+    expect(missing.summary).toContain("- Firefox smoke (no result)");
   });
 
   test("a hostile test title cannot break the state line or the markdown", async () => {
