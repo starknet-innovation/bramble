@@ -36,6 +36,7 @@ import {
   SEND_COPY_KOTLIN_PATH,
   SEND_COPY_SWIFT_PATH,
 } from "../../scripts/mobile-send-copy";
+import { renderStrk20Invoke, STRK20_INVOKE_PATH } from "../../scripts/mobile-strk20-invoke";
 import { renderStrk20Jobs, STRK20_JOBS_PATH } from "../../scripts/mobile-strk20-jobs";
 import {
   computeStrk20Primitives,
@@ -240,6 +241,10 @@ describe("mobile privacy parity", () => {
     },
     120_000,
   );
+
+  test("the committed STRK20 proof-bearing invoke vectors are what the extension sends today", async () => {
+    expect(await readFile(STRK20_INVOKE_PATH, "utf8")).toBe(await renderStrk20Invoke());
+  }, 60_000);
 
   test("the privacy copy tables are rendered from the committed fixture", async () => {
     const { copy } = JSON.parse(await readFile(PRIVACY_FIXTURE_PATHS.copy, "utf8")) as {
