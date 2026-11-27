@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { validateGaslessTypedData } from "@bramble/transactions/gasless-typed-data";
-import { type Call, OutsideExecutionVersion, outsideExecution, typedData } from "starknet";
+import { type Call, hash, OutsideExecutionVersion, outsideExecution, typedData } from "starknet";
 
 const ACCOUNT = "0x5dccf9cfdcabb9e4ef45814bda1b056bb23063d0e9b64e5a845e9dfb3d23f10";
 const FORWARDER = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
@@ -166,6 +166,33 @@ describe("validateGaslessTypedData", () => {
       { calldata: [RECIPIENT, "0x3e8", "0x0"], contractAddress: USDC, entrypoint: "transfer" },
     ]);
     expect(check(swapped)).toEqual({ ok: false, reason: "calls" });
+  });
+
+  test("binds a user call given by selector felt to that selector, not to a hash of its text", () => {
+    const fee: Call = {
+      calldata: [FORWARDER, "0x3e8", "0x0"],
+      contractAddress: USDC,
+      entrypoint: "transfer",
+    };
+    const transferSelector = hash.getSelectorFromName("transfer");
+    const byFelt: Call = { ...userCall(), entrypoint: transferSelector };
+    const withSelector = (selector: string) => {
+      const body = quote([userCall(), fee]);
+      const first = (body.message as { Calls: { Selector: string }[] }).Calls[0];
+      if (first) {
+        first.Selector = selector;
+      }
+      return body;
+    };
+    expect(check(quote([userCall(), fee])).ok).toBe(true);
+    expect(check(quote([userCall(), fee]), { calls: [byFelt] }).ok).toBe(true);
+    expect(check(withSelector(hash.getSelectorFromName("approve")), { calls: [byFelt] })).toEqual({
+      ok: false,
+      reason: "calls",
+    });
+    expect(
+      check(withSelector(hash.getSelectorFromName(transferSelector)), { calls: [byFelt] }),
+    ).toEqual({ ok: false, reason: "calls" });
   });
 
   test("rejects a fee above the independent ceiling and a fee above the quoted maximum", () => {
