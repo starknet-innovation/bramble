@@ -90,7 +90,7 @@ const isPinnedRelease = (scenario: Scenario): boolean => scenario["recordClass"]
 const WIRE_PHASES = ["reviewInvoke", "reviewDeployment", "submit"] as const;
 
 // One compact JSON string per wire exchange, so a scenario stays a few lines per request.
-const compactWire = (scenario: Scenario): Scenario => ({
+export const compactWire = (scenario: Scenario): Scenario => ({
   ...scenario,
   ...Object.fromEntries(
     WIRE_PHASES.map((phase) => [

@@ -17,6 +17,7 @@
  * are captured as the text it throws.
  */
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import type { StarkHashSigner } from "@bramble/starknet/provider";
 import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import {
   estimateAccountDeploymentFee,
@@ -31,7 +32,7 @@ import {
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
   BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
-import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { hash } from "starknet";
 import {
@@ -163,8 +164,14 @@ const writeSignature = (exchange: CapturedExchange): readonly string[] => {
   return tx.signature;
 };
 
+/**
+ * A Braavos account held on a device (`mobile-ledger-speculos.ts`), in place of the phrase's
+ * account 0 and its software key: the record and the extension's hash signer for it.
+ */
+export type BraavosDevice = { readonly account: AccountRef; readonly signHash: StarkHashSigner };
+
 // The account, recorder and provider one scenario runs against.
-const setUp = async (spec: BraavosScenarioSpec) => {
+const setUp = async (spec: BraavosScenarioSpec, device?: BraavosDevice) => {
   resetRpcEndpointCooldownsForTests();
   const kms = createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
   const sender = await deriveAccount(kms, {
@@ -182,7 +189,7 @@ const setUp = async (spec: BraavosScenarioSpec) => {
       networkId: spec.networkId,
     })
   ).account.address;
-  const account = sender.account as DerivedAccountRef;
+  const account = device?.account ?? sender.account;
   if (account.accountContractType !== "braavos") throw new Error("not a Braavos record");
   const recorder: Recorder = {
     events: new Set(),
@@ -198,7 +205,9 @@ const setUp = async (spec: BraavosScenarioSpec) => {
     braavosReply(() => node.current, account.publicKeyX),
   );
   const signHash = async (messageHash: string) => {
-    const signature = await kms.signStarkHash(sender.privateKey, messageHash);
+    const signature = device
+      ? await device.signHash(messageHash)
+      : await kms.signStarkHash(sender.privateKey, messageHash);
     recorder.signatures.push({ hash: messageHash, r: signature.r, s: signature.s });
     return signature;
   };
@@ -227,9 +236,10 @@ const setUp = async (spec: BraavosScenarioSpec) => {
  */
 export const captureBraavosScenario = async (
   spec: BraavosScenarioSpec,
+  device?: BraavosDevice,
 ): Promise<CapturedBraavosScenario> => {
   const { account, call, input, makeProvider, node, recipient, recorder, take, token } =
-    await setUp(spec);
+    await setUp(spec, device);
   const reviewedFee =
     spec.flow === "transfer"
       ? await estimateInvokeFee({ ...input, calls: [call] }, makeProvider)
