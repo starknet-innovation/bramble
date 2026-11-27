@@ -7,6 +7,37 @@ import org.bramble.core.TransportFailure
 /** The phase in which the device asks the person to approve opening Starknet. */
 const val OPENING_STARKNET = "opening-starknet"
 
+/**
+ * The Ledgers that passed the OS gate this session, by device id, as iOS `LedgerOsVerified`: the
+ * extension's `readiness: "verified"`, which its onboarding and sign session both honour. The
+ * connect flow and the signer share it, so a device asks at most once a session. The signer clears
+ * it at lock; a dropped link, a wrong device or a failed connect flow forgets that one device.
+ */
+class LedgerOsVerified {
+    /** The verified device ids. */
+    val ids = mutableSetOf<String>()
+
+    /** [runOsGate] on device [id] unless it passed this session; a pass is remembered. */
+    suspend fun check(
+        id: String,
+        device: LedgerExchanging,
+        gate: () -> LedgerOsGateInterface,
+        reconnect: suspend () -> LedgerExchanging?,
+        phase: (String) -> Unit,
+    ): OsGateResult =
+        if (id in ids) {
+            OsGateResult.Passed(device)
+        } else {
+            runOsGate(gate(), device, reconnect, phase).also { if (it is OsGateResult.Passed) ids += id }
+        }
+
+    /** The app's one set. */
+    companion object {
+        /** The session's verified Ledgers, shared by the connect flow and [LedgerSigner.shared]. */
+        val session = LedgerOsVerified()
+    }
+}
+
 /** What [runOsGate] ended with. */
 sealed interface OsGateResult {
     /**

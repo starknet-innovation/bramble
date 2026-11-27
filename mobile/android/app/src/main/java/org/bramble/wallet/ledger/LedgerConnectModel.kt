@@ -168,7 +168,12 @@ class LedgerConnectModel(
     private val core: LedgerCore,
     existing: Set<String>,
     private val pageSize: UInt = PAGE_SIZE,
+    /** The Ledgers that passed the OS gate this session, shared with the signer. */
+    private val verified: LedgerOsVerified = LedgerOsVerified.session,
 ) {
+    /** The Ledger connected to, forgotten by [verified] if the flow fails. */
+    private var connectedId: String? = null
+
     private val existing = existing.map(core::canonical).toSet()
     private var device: LedgerExchanging? = null
     private var nextIndex = 0u
@@ -236,8 +241,9 @@ class LedgerConnectModel(
         }
         val checked =
             open()?.let { connected ->
+                connectedId = ledger.id
                 stage = LedgerStage.Checking("")
-                runOsGate(core.osGate(), connected, open) { phase ->
+                verified.check(ledger.id, connected, core::osGate, open) { phase ->
                     if (flow == epoch) stage = LedgerStage.Checking(phase)
                 }
             }
@@ -352,6 +358,7 @@ class LedgerConnectModel(
     }
 
     private fun fail(reason: String) {
+        connectedId?.let { verified.ids -= it }
         close()
         stage = LedgerStage.Failed(friendlyError(reason))
     }

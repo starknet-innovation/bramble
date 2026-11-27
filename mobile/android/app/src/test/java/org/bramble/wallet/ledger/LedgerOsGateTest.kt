@@ -1,6 +1,9 @@
 package org.bramble.wallet.ledger
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.bramble.core.AccountFamily
 import org.bramble.core.LedgerCandidate
 import org.bramble.core.LedgerKey
@@ -9,6 +12,7 @@ import org.bramble.core.LedgerOsGateInterface
 import org.bramble.core.LedgerOsStep
 import org.bramble.core.LedgerReadStep
 import org.bramble.core.LedgerScheme
+import org.bramble.core.StepReply
 import org.bramble.core.TransportFailure
 import org.bramble.wallet.errors.FriendlyErrorRules
 import org.junit.Assert.assertEquals
@@ -83,15 +87,65 @@ class LedgerOsGateTest {
             assertTrue(sim.allClosed)
         }
 
+    /**
+     * The connect flow and the signer share the session's verified Ledgers: one gate covers both,
+     * until the wallet locks.
+     */
+    @Test
+    fun oneGateUntilLock() =
+        runBlocking {
+            val verified = LedgerOsVerified()
+            val sim = SimLedger()
+            val gate = ScriptedGate(sequence(LedgerOsStep.Supported("nano-x", "2.6.1")))
+            val model = model(sim, gate, verified = verified)
+            model.choose(ledger)
+            assertEquals(EXPECTED_CALLS, gate.calls)
+            model.close()
+
+            var signerGates = 0
+            val signer =
+                LedgerSigner(Scanner(ledger), osGate = {
+                    signerGates += 1
+                    ScriptedGate(sequence(LedgerOsStep.Supported("nano-x", "2.6.1")))
+                }, verified = verified) { sim.connect() }
+            sign(signer)
+            assertEquals("the connect flow's gate covers signing", 0, signerGates)
+            assertEquals(4, sim.connections)
+            signer.finish()
+
+            signer.close()
+            assertTrue("the lock forgets every verified Ledger", verified.ids.isEmpty())
+            sign(signer)
+            assertEquals("after the lock the gate runs again", 1, signerGates)
+            signer.finish()
+        }
+
+    /** One device step on [signer], picking [ledger] from the list. */
+    private suspend fun sign(signer: LedgerSigner) =
+        coroutineScope {
+            val reply = async { signer.exchange(hex("5a00000000"), null) }
+            while (signer.stage != LedgerSignStage.Scanning) yield()
+            signer.choose(ledger)
+            assertTrue(reply.await() is StepReply.Device)
+        }
+
     private fun model(
         sim: SimLedger,
         gate: ScriptedGate,
         core: PassCore = PassCore(gate),
-    ) = LedgerConnectModel(LedgerRoute.BRAMBLE, Scanner(ledger), { sim.connect() }, core, emptySet())
+        verified: LedgerOsVerified = LedgerOsVerified(),
+    ) = LedgerConnectModel(
+        LedgerRoute.BRAMBLE,
+        Scanner(ledger),
+        { sim.connect() },
+        core,
+        emptySet(),
+        verified = verified,
+    )
 
     private fun message(code: String) = FriendlyErrorRules.ledgerMessages.getValue(code)
 
-    /** Readers are counted and refuse at once: these tests stop where the keys would be read. */
+    /** Readers are counted and read no keys: these tests stop where the keys would be read. */
     private class PassCore(
         private val gate: LedgerOsGateInterface,
     ) : LedgerCore {
@@ -104,7 +158,7 @@ class LedgerOsGateTest {
         ): LedgerKeyReaderInterface {
             readers += Unit
             return object : LedgerKeyReaderInterface {
-                override fun start() = LedgerReadStep.Refused("unexpected-device-error")
+                override fun start() = LedgerReadStep.Keys(emptyList())
 
                 override fun reply(reply: ByteArray) = start()
 
@@ -238,10 +292,15 @@ class LedgerOsGateTest {
                     LedgerExchange.Reply(byteArrayOf(0x55, 0x01))
                 }
 
-                else -> {
+                apdu.contentEquals(QUIT_APP) || apdu.contentEquals(OPEN_STARKNET) -> {
                     ledger.app = if (apdu.contentEquals(QUIT_APP)) "BOLOS" else "Starknet"
                     closed = true
                     LedgerExchange.Failure(TransportFailure.DISCONNECTED)
+                }
+
+                // Any Starknet app request (the signer's version read) is answered OK.
+                else -> {
+                    LedgerExchange.Reply(byteArrayOf(0x90.toByte(), 0))
                 }
             }
         }

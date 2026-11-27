@@ -107,6 +107,8 @@ class LedgerSigner(
     private val scanner: LedgerScanning,
     /** A new device OS gate; null skips it (JVM tests, where the core does not load). */
     private val osGate: (() -> LedgerOsGateInterface)? = ::LedgerOsGate,
+    /** The Ledgers that passed the OS gate this session, shared with the connect flow. */
+    private val verified: LedgerOsVerified = LedgerOsVerified.session,
     private val connector: suspend (LedgerDevice) -> LedgerExchanging,
 ) : DeviceSigning {
     /** Where the signature is; [LedgerSignStage.Idle] hides the sheet. */
@@ -123,9 +125,6 @@ class LedgerSigner(
 
     private var device: LedgerExchanging? = null
     private var known: LedgerDevice? = null
-
-    /** The Ledger that passed the OS gate this session (the extension's `readiness: verified`). */
-    private var verified: LedgerDevice? = null
 
     /** The gate's refusal code, shown in place of the plan's own when the connection it ended fails. */
     private var gateRefusal: String? = null
@@ -148,6 +147,7 @@ class LedgerSigner(
             }
         // A failed exchange closed its link: the next attempt connects again.
         if (outcome is LedgerExchange.Failure) {
+            known?.let { verified.ids -= it.id }
             device?.close()
             device = null
         }
@@ -167,6 +167,7 @@ class LedgerSigner(
         this.account = account
         if (reason == WRONG_DEVICE) {
             // Another Ledger is needed: the next attempt lists them again.
+            known?.let { verified.ids -= it.id }
             device?.close()
             device = null
             known = null
@@ -202,7 +203,7 @@ class LedgerSigner(
     fun close() {
         if (stage != LedgerSignStage.Idle) cancelled = true
         known = null
-        verified = null
+        verified.ids.clear()
         finish()
     }
 
@@ -260,7 +261,7 @@ class LedgerSigner(
             connected?.takeUnless { cancelled }?.also { device = it }
         }
         val connected = reopen() ?: return null
-        val gate = osGate?.takeIf { verified != ledger }
+        val gate = osGate?.takeIf { ledger.id !in verified.ids }
         val link =
             if (gate == null) {
                 connected
@@ -274,7 +275,7 @@ class LedgerSigner(
                 when {
                     checked is OsGateResult.Passed && cancelled -> checked.link.close()
                     checked is OsGateResult.Refused && !cancelled -> gateRefusal = checked.reason
-                    checked is OsGateResult.Passed -> verified = ledger
+                    checked is OsGateResult.Passed -> verified.ids += ledger.id
                 }
                 (checked as? OsGateResult.Passed)?.link?.takeUnless { cancelled }
             }
