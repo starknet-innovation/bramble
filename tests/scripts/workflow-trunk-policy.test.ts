@@ -69,6 +69,13 @@ const cases = [
     failure: "CI must run on pull requests into main and on pushes to main only",
   },
   {
+    name: "rejects cancelling post-merge runs on main",
+    workflow: "ci.yml",
+    search: `  cancel-in-progress: ${GITHUB_EXPRESSION} github.event_name == 'pull_request' }}\n`,
+    replacement: "  cancel-in-progress: true\n",
+    failure: "CI must run on pull requests into main and on pushes to main only",
+  },
+  {
     name: "rejects a blocking PR guard",
     workflow: "ci.yml",
     search: "            await s.write();\n",

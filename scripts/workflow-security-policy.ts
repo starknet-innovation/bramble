@@ -145,7 +145,7 @@ const ciFailures = (source: string): string[] => {
   requireText(
     failures,
     source,
-    "types: [opened, synchronize, reopened]\n    branches: [main]\n  push:\n    branches: [main]\n",
+    `types: [opened, synchronize, reopened]\n    branches: [main]\n  push:\n    branches: [main]\n\n# A new push to a PR cancels its superseded run, so the self-hosted pipeline\n# does not queue stale work. Pushes to \`main\` group by commit and are never\n# cancelled: each one is the post-merge validation of what actually landed.\nconcurrency:\n  group: ci-${GITHUB_EXPRESSION} github.event.pull_request.number || github.sha }}\n  cancel-in-progress: ${GITHUB_EXPRESSION} github.event_name == 'pull_request' }}\n`,
     "CI must run on pull requests into main and on pushes to main only",
   );
   forbidText(

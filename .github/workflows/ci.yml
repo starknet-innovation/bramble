@@ -35,6 +35,13 @@ on:
   push:
     branches: [main]
 
+# A new push to a PR cancels its superseded run, so the self-hosted pipeline
+# does not queue stale work. Pushes to `main` group by commit and are never
+# cancelled: each one is the post-merge validation of what actually landed.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

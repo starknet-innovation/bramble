@@ -280,6 +280,17 @@ There is no hotfix branch. Fix the bug on `main` through a normal PR
 Always fix forward: never re-tag, re-publish or roll back to an older version
 (RELEASING.md, section 8).
 
+### Moving off a release branch
+
+A `release/*` branch still open when this model lands is wound down once:
+
+1. Retarget its open PRs to `main`. CI runs only on PRs into `main`, so a PR
+   left on the release branch gets no checks.
+2. Merge the release branch into `main` through one PR (squash or merge
+   commit), then cut its version from `main` as above: bump PR if needed,
+   then tag. Nothing releases automatically on that merge any more.
+3. Delete the branch and the `release/*` ruleset.
+
 ---
 
 ## Branch protection & repository security settings
