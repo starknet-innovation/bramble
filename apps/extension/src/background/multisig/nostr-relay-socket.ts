@@ -1,8 +1,10 @@
 /** Shared, bounded WebSocket connections for Nostr relay operations. */
 import { isNostrEvent, MAX_NOSTR_BATCH_ITEMS, type NostrEvent } from "@bramble/wallet-model/nostr";
 
-const RELAY_TIMEOUT_MS = 8_000;
-const MAX_RELAY_FRAME_BYTES = 140_000;
+/** Connect, sync, and acknowledgement timeout for one relay; mirrored by the mobile core. */
+export const RELAY_TIMEOUT_MS = 8_000;
+/** Largest relay frame read; a larger frame is ignored. Mirrored by the mobile core. */
+export const MAX_RELAY_FRAME_BYTES = 140_000;
 
 /** Minimal native socket surface required by the relay pool. */
 type RelaySocket = Pick<

@@ -59,9 +59,11 @@ const USES_KEY_PATTERN = /(?:^|[-{[,\s])["']?uses["']?[ \t]*:/g;
 // (a trailing `# v1.2.3` comment) or a flow-collection delimiter.
 const REFERENCE_VALUE_PATTERN = /^[ \t]*([^\s,}\]]*)/;
 const SURROUNDING_QUOTE_PATTERN = /^["']|["']$/g;
-// `owner/repo@<40-hex commit>`; a tag or branch ref is mutable, so a compromised
+// `owner/repo[/path]@<40-hex commit>` (a path names an action inside the repo, such as
+// `actions/cache/restore`); a tag or branch ref is mutable, so a compromised
 // upstream can change what runs under a reference that was reviewed once.
-const PINNED_ACTION_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
+const PINNED_ACTION_PATTERN =
+  /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$/;
 // A reusable workflow stored in this repository: it has no external publisher to
 // pin, travels with the commit that calls it, and is covered by review.
 const LOCAL_WORKFLOW_PATTERN = /^\.\/\.github\/workflows\/[A-Za-z0-9_-]+\.ya?ml$/;

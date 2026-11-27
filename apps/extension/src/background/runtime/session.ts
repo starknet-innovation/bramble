@@ -23,7 +23,13 @@ import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
-const DEFAULT_TTL_MS = 30 * 60 * 1000;
+/**
+ * Rolling inactivity window of an unlock session: 30 minutes, renewed only by
+ * user-initiated operations. Exported so the mobile core generates its idle
+ * lock from this value (`mobile/core/generated/policy.json`) instead of
+ * restating it; changing it changes both wallets.
+ */
+export const DEFAULT_TTL_MS = 30 * 60 * 1000;
 const MAX_TTL_MS = 8 * 60 * 60 * 1000;
 const PERSIST_SLACK_MS = 60 * 1000;
 

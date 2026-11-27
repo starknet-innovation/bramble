@@ -42,7 +42,11 @@ export type LedgerRejectionCode =
   | "starknet-reopen-failed"
   | "unexpected-device-error";
 
-const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
+/**
+ * The device catalog's sentence per rejection code (`ledgerMessage`); exported
+ * for the mobile apps' generated lookup.
+ */
+export const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "app-below-minimum":
     "Your Ledger's Starknet app needs an update. Update it in Ledger Live, then reconnect and open Starknet.",
   // The Starknet app (2.4.0 to 2.4.3) answers a sign-hash refusal with the same

@@ -5,6 +5,9 @@
  * `readVault` and `getGrantedAccounts` from it through the real
  * `grantedAccountIdsFor` policy, so a suite cannot end up with two disagreeing
  * notions of what the origin may see.
+ *
+ * The mobile dapp parity fixture (`scripts/mobile-parity-dapp/`) runs on this stub: editing
+ * it can change `mobile/core/tests/fixtures/extension-dapp.jsonl`; run `bun run mobile:parity`.
  */
 
 import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";

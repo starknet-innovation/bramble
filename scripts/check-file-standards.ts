@@ -16,6 +16,7 @@ const EXCLUDED = new Set([
   ".playwright-cli",
   "artifacts",
   "bun.lock",
+  "Cargo.lock",
   "dist",
   "dist-firefox",
   "node_modules",
@@ -33,7 +34,21 @@ const EXCLUDED = new Set([
  * disable every `apps/extension/src` rule below, including the secret-material
  * and browser-global boundaries. Skipping by path keeps the extension scanned.
  */
-const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
+// Mobile build outputs, all git-ignored: the XcodeGen project, UniFFI bindings and XCFramework,
+// Gradle state, and the Android native libraries. `target` (Cargo) is excluded by name above.
+const EXCLUDED_PATHS = new Set([
+  "apps/terminal",
+  "apps/ui-lab",
+  // Pinned lint tools (SwiftLint, ktlint, detekt jars), downloaded by mobile/scripts/lint-tools.sh.
+  "mobile/.tools",
+  "mobile/android/.gradle",
+  "mobile/android/app/build",
+  "mobile/android/app/src/main/jniLibs",
+  "mobile/android/build",
+  "mobile/ios/Bramble.xcodeproj",
+  "mobile/ios/Generated",
+  "mobile/ios/build",
+]);
 const BINARY_EXTENSIONS = [".jpg", ".otf", ".png", ".wasm", ".webp", ".woff2", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
@@ -42,6 +57,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/ledger-grant/dom.ts",
   "apps/extension/src/ledger-grant/index.ts",
   "apps/extension/src/provider/inpage.ts",
+  "apps/extension/src/provider/mobile-bridge.ts",
   "apps/extension/src/sandbox/render.ts",
   "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",

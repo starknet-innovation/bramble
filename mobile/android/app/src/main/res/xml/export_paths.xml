@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder the export FileProvider serves: the Activity CSV, written to the cache. -->
+<paths>
+    <cache-path name="exports" path="exports/" />
+</paths>

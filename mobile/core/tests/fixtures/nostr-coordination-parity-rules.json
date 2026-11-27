@@ -1,0 +1,287 @@
+{
+  "recipients": {
+    "contacts": [
+      {
+        "address": "0x673",
+        "id": "signer",
+        "label": "signer",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "publicKeyX": "0x111"
+      },
+      {
+        "address": "0xd6f",
+        "id": "other network",
+        "label": "other network",
+        "networkId": "SN_MAIN",
+        "nostrPublicKey": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "publicKeyX": "0x111"
+      },
+      {
+        "address": "0x76f",
+        "id": "own key",
+        "label": "own key",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+        "publicKeyX": "0x222"
+      },
+      {
+        "address": "0xc6e",
+        "id": "no nostr key",
+        "label": "no nostr key",
+        "networkId": "SN_SEPOLIA",
+        "publicKeyX": "0x222"
+      },
+      {
+        "address": "0xc6e",
+        "id": "no stark key",
+        "label": "no stark key",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3"
+      },
+      {
+        "address": "0xc6e",
+        "id": "not a signer",
+        "label": "not a signer",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+        "publicKeyX": "0x333"
+      },
+      {
+        "address": "0x1473",
+        "id": "same nostr key again",
+        "label": "same nostr key again",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "publicKeyX": "0x444"
+      },
+      {
+        "address": "0xd73",
+        "id": "second signer",
+        "label": "second signer",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+        "publicKeyX": "0x444"
+      },
+      {
+        "address": "0x1c6e",
+        "id": "not a signer, same nostr key",
+        "label": "not a signer, same nostr key",
+        "networkId": "SN_SEPOLIA",
+        "nostrPublicKey": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+        "publicKeyX": "0x333"
+      }
+    ],
+    "networkId": "SN_SEPOLIA",
+    "ownPublicKey": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+    "recipients": ["same nostr key again", "second signer"],
+    "senders": [
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "signer": true
+      },
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "signer": false
+      },
+      {
+        "networkId": "SN_MAIN",
+        "senderPublicKey": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+        "signer": true
+      },
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+        "signer": false
+      },
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+        "signer": false
+      },
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+        "signer": true
+      },
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+        "signer": true
+      },
+      {
+        "networkId": "SN_SEPOLIA",
+        "senderPublicKey": "a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6",
+        "signer": false
+      },
+      {
+        "networkId": "SN_MAIN",
+        "senderPublicKey": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+        "signer": false
+      }
+    ],
+    "signerGuids": [
+      "0x17837c34a4eefc2f5faf1991af37bc01a68d2a4c129abd4e4bd243c9fdc94b1",
+      "0x388531aee19a0257fce3f2d641cdddc728f3d4ad250da914a2a97fd97a690c7",
+      "0x5febad5ba96a4dce0b186cda1ca3b1ea7caf1f2c014268da4ee584f89a0a839"
+    ],
+    "signers": [
+      {
+        "guid": "0x5febad5ba96a4dce0b186cda1ca3b1ea7caf1f2c014268da4ee584f89a0a839",
+        "publicKeyX": "0x111"
+      },
+      {
+        "guid": "0x17837c34a4eefc2f5faf1991af37bc01a68d2a4c129abd4e4bd243c9fdc94b1",
+        "publicKeyX": "0x222"
+      },
+      {
+        "guid": "0x388531aee19a0257fce3f2d641cdddc728f3d4ad250da914a2a97fd97a690c7",
+        "publicKeyX": "0x444"
+      }
+    ]
+  },
+  "relayPolicy": {
+    "defaults": ["wss://relay.primal.net", "wss://nos.lol"],
+    "cases": [
+      {
+        "input": null,
+        "name": "defaults",
+        "relayUrls": ["wss://relay.primal.net", "wss://nos.lol"],
+        "stored": null
+      },
+      {
+        "input": null,
+        "name": "a stored custom relay",
+        "relayUrls": ["wss://relay.team.example"],
+        "stored": "wss://relay.team.example"
+      },
+      {
+        "input": "wss://relay.team.example",
+        "name": "a custom relay replaces the defaults",
+        "relayUrls": ["wss://relay.team.example"],
+        "stored": null
+      },
+      {
+        "input": "  wss://relay.team.example/x \n",
+        "name": "the input is trimmed",
+        "relayUrls": ["wss://relay.team.example/x"],
+        "stored": null
+      },
+      {
+        "input": "wss://nos.lol",
+        "name": "a default relay alone",
+        "relayUrls": ["wss://nos.lol"],
+        "stored": null
+      },
+      {
+        "input": "",
+        "name": "empty restores the defaults",
+        "relayUrls": ["wss://relay.primal.net", "wss://nos.lol"],
+        "stored": "wss://relay.team.example"
+      },
+      {
+        "input": " \t ",
+        "name": "blank restores the defaults",
+        "relayUrls": ["wss://relay.primal.net", "wss://nos.lol"],
+        "stored": "wss://relay.team.example"
+      },
+      {
+        "error": "Invalid Nostr relay endpoint",
+        "input": "ws://relay.example",
+        "name": "an insecure relay is refused",
+        "stored": null
+      },
+      {
+        "error": "Invalid Nostr relay endpoint",
+        "input": "WSS://relay.example",
+        "name": "a non-canonical relay is refused",
+        "stored": null
+      },
+      {
+        "input": "ws://localhost:7000",
+        "name": "a loopback relay",
+        "relayUrls": ["ws://localhost:7000"],
+        "stored": null
+      }
+    ]
+  },
+  "relayUrls": [
+    { "accepted": true, "value": "wss://relay.primal.net" },
+    { "accepted": true, "value": "wss://nos.lol" },
+    { "accepted": true, "value": "wss://relay.example/" },
+    { "accepted": true, "value": "wss://relay.example/path?x=1" },
+    { "accepted": false, "value": "wss://relay.example?x=1" },
+    { "accepted": true, "value": "wss://relay.example:7447" },
+    { "accepted": false, "value": "wss://relay.example:443" },
+    { "accepted": true, "value": "wss://relay.example:0" },
+    { "accepted": false, "value": "wss://relay.example:07447" },
+    { "accepted": false, "value": "wss://relay.example:70000" },
+    { "accepted": true, "value": "wss://relay.example." },
+    { "accepted": true, "value": "wss://127.0.0.1:7000" },
+    { "accepted": true, "value": "wss://[::1]:7000/nostr" },
+    { "accepted": false, "value": "wss://[0:0:0:0:0:0:0:1]" },
+    { "accepted": false, "value": "wss://010.0.0.1" },
+    { "accepted": false, "value": "WSS://relay.example" },
+    { "accepted": false, "value": "wss://Relay.Example" },
+    { "accepted": false, "value": " wss://relay.example" },
+    { "accepted": false, "value": "wss://relay.example " },
+    { "accepted": false, "value": "" },
+    { "accepted": true, "value": "ws://localhost:7000" },
+    { "accepted": true, "value": "ws://127.0.0.1:7000" },
+    { "accepted": false, "value": "ws://[::1]:7000" },
+    { "accepted": false, "value": "ws://relay.example" },
+    { "accepted": false, "value": "https://relay.example" },
+    { "accepted": false, "value": "wss://user:pw@relay.example" },
+    { "accepted": false, "value": "wss://@relay.example" },
+    { "accepted": false, "value": "wss://relay.example/#frag" },
+    { "accepted": false, "value": "wss://relay.example#" },
+    { "accepted": false, "value": "wss://" },
+    { "accepted": false, "value": "wss:relay.example" },
+    { "accepted": false, "value": "wss:\\\\relay.example" },
+    { "accepted": false, "value": "not a url" },
+    { "accepted": false, "value": "wss://réseau.example" },
+    { "accepted": true, "value": "wss://xn--rseau-bsa.example" },
+    { "accepted": false, "value": "wss://relay.example/a/../b" },
+    { "accepted": false, "value": "wss://relay.example/%2e/b" },
+    { "accepted": false, "value": "wss://relay.example/a b" },
+    { "accepted": false, "value": "wss://relay.example/?q=it's" },
+    {
+      "accepted": true,
+      "value": "wss://relay.example/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "accepted": false,
+      "value": "wss://relay.example/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "syncWindow": {
+    "incrementalLookbackSeconds": 259200,
+    "lookbackSeconds": 2592000,
+    "since": [
+      { "now": 1750000000, "since": 1747408000, "syncedAt": null },
+      { "now": 1750000000, "since": 1749740800, "syncedAt": 1750000000 },
+      { "now": 1750000000, "since": 1748876800, "syncedAt": 1749136000 },
+      { "now": 1750000000, "since": 1746284800, "syncedAt": 1746544000 },
+      { "now": 1750000000, "since": 1747408000, "syncedAt": 1750000001 },
+      { "now": 1750000000, "since": 0, "syncedAt": 0 },
+      { "now": 1000, "since": 0, "syncedAt": null },
+      { "now": 0, "since": 0, "syncedAt": 0 }
+    ],
+    "syncedAt": [
+      { "now": 1750000000, "oldestRetryableAt": null, "syncedAt": 1750000000 },
+      { "now": 1750000000, "oldestRetryableAt": 1749913600, "syncedAt": 1750000000 },
+      { "now": 1750000000, "oldestRetryableAt": 1749740800, "syncedAt": 1750000000 },
+      { "now": 1750000000, "oldestRetryableAt": 1748272000, "syncedAt": 1748531200 },
+      { "now": 1750000000, "oldestRetryableAt": 1750086400, "syncedAt": 1750000000 }
+    ],
+    "pastRetry": [
+      { "createdAt": 1750000000, "now": 1750000000, "pastRetry": false },
+      { "createdAt": 1747408000, "now": 1750000000, "pastRetry": false },
+      { "createdAt": 1747407999, "now": 1750000000, "pastRetry": true },
+      { "createdAt": 1747408000, "now": 1750000000.5, "pastRetry": true },
+      { "createdAt": 0, "now": 1000, "pastRetry": false }
+    ]
+  }
+}

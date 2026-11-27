@@ -1,0 +1,415 @@
+name: mobile
+
+# Mobile wallet CI: the Rust core, the pinned strict linters, the iOS unit tests, and the Android
+# JVM unit and instrumented tests. Path-scoped so extension-only PRs do not pay for macOS runners.
+#
+# Trust boundary (scripts/mobile-workflow-policy.ts): hosted runners only, no privileged
+# triggers, no write scope, no secrets, and checkouts never persist the token, because every job
+# runs pull-request code through Cargo, Gradle or xcodebuild. Tools come from pins: actions by
+# commit SHA, SwiftLint/ktlint/detekt/XcodeGen by SHA-256 (mobile/scripts/lint-tools.sh), the
+# Rust toolchain by exact version, cargo-ndk by exact version with --locked, and Gradle through
+# its committed, checksum-verified wrapper.
+#
+# The UI test suite (BrambleUITests) stays local: it drives mainnet and Face ID enrolment and
+# takes too long for every PR. See mobile/README.md.
+#
+# Speed: draft pull requests run only the Linux core job; the macOS jobs start on ready for
+# review. A change confined to mobile/ios or mobile/android skips the other platform. The built
+# core (bindings plus native libraries) is cached by its exact inputs, so a run whose core did
+# not change skips the Rust build. SwiftLint's analyzer rules run on pushes only.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "mobile/**"
+      - "apps/extension/public/brand/onboarding-landscape.webp"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/mobile.yml"
+  push:
+    branches: [main, feature/mobile-wallet]
+    paths:
+      - "mobile/**"
+      - "apps/extension/public/brand/onboarding-landscape.webp"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/mobile.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Exact toolchain so clippy's lint set cannot change under an unchanged commit.
+  RUST_TOOLCHAIN: 1.97.1
+  XCODE_APP: /Applications/Xcode_16.4.app
+  ANDROID_NDK_VERSION: 27.2.12479018
+  # CI tests on the simulator and the x86_64 emulator, so it builds only those slices.
+  BRAMBLE_IOS_TARGETS: aarch64-apple-ios-sim
+  BRAMBLE_ANDROID_ABIS: x86_64
+
+jobs:
+  # Decides which macOS jobs this run needs. A draft runs neither. Otherwise a file under
+  # mobile/ios or mobile/android selects that platform, and any other trigger path (the core,
+  # the scripts, the workflow, the lockfiles) selects both. Anything it cannot diff runs both.
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ios: ${{ steps.scope.outputs.ios }}
+      android: ${{ steps.scope.outputs.android }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          ios=false
+          android=false
+          if [ "$DRAFT" = "true" ]; then
+            echo "Draft pull request: the macOS jobs run once it is ready for review."
+          else
+            # A pull request checks out its merge commit, whose first parent is the base.
+            base=""
+            if [ "$EVENT" = "pull_request" ]; then
+              base=HEAD^1
+            elif git fetch --quiet --depth=1 origin "$BEFORE"; then
+              base="$BEFORE"
+            fi
+            if [ -z "$base" ] || ! files=$(git diff --name-only "$base" HEAD); then
+              ios=true
+              android=true
+            else
+              while IFS= read -r file; do
+                case "$file" in
+                  mobile/ios/*) ios=true ;;
+                  mobile/android/*) android=true ;;
+                  mobile/* | package.json | bun.lock | .github/workflows/mobile.yml | apps/extension/public/brand/onboarding-landscape.webp)
+                    ios=true
+                    android=true
+                    ;;
+                esac
+              done <<< "$files"
+            fi
+          fi
+          echo "ios=$ios android=$android"
+          echo "ios=$ios" >> "$GITHUB_OUTPUT"
+          echo "android=$android" >> "$GITHUB_OUTPUT"
+
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile/core
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup default "$RUST_TOOLCHAIN"
+      # Restores the compiled dependencies (bramble-core at opt-level 3 dominates); only pushes to
+      # main and feature/mobile-wallet save, so pull-request code never writes a cache another ref reads.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: mobile/core -> target
+          save-if: ${{ github.event_name == 'push' }}
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked --no-fail-fast
+
+  lint:
+    needs: scope
+    if: needs.scope.outputs.ios == 'true' || needs.scope.outputs.android == 'true'
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      # ktlint and detekt run on the JDK named by JAVA_HOME, which setup-java exports.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - run: bun run mobile:lint
+
+  ios:
+    needs: scope
+    if: needs.scope.outputs.ios == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: sudo xcode-select --switch "$XCODE_APP"
+      # CoreSimulator rebuilds its device caches on first contact and, on the hosted image, often
+      # cannot finish before the first query: xcodebuild then sees no iOS Simulator destination at
+      # all, and `-downloadPlatform` dies with "Unable to connect to simulator." (runner-images
+      # #12862, the maintainers' workaround). Xcode 16.4 is the image default with its iOS
+      # simulator preinstalled, so nothing is downloaded: wake the service, then pick a device by
+      # id rather than a model name that changes with the Xcode release.
+      - name: Pick a simulator
+        run: |
+          xcrun simctl list > /dev/null
+          for attempt in 1 2 3 4 5 6; do
+            SIM_ID=$(xcrun simctl list devices available | grep -m1 -E '^\s+iPhone' | grep -oE '[0-9A-F-]{36}' || true)
+            [ -n "$SIM_ID" ] && break
+            sleep 15
+          done
+          test -n "$SIM_ID"
+          xcrun simctl list devices available | grep -m1 -E '^\s+iPhone'
+          echo "SIM_ID=$SIM_ID" >> "$GITHUB_ENV"
+      # The built core (XCFramework and Swift bindings), keyed by everything that shapes it. A
+      # pull request's save is readable only by that pull request's own later runs (GitHub scopes
+      # caches by ref), so it never reaches another ref; pushes save for the branches below them.
+      - id: core-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: mobile/ios/Generated
+          key: mobile-core-ios-${{ env.RUST_TOOLCHAIN }}-${{ env.XCODE_APP }}-${{ env.BRAMBLE_IOS_TARGETS }}-${{ hashFiles('mobile/core/Cargo.toml', 'mobile/core/Cargo.lock', 'mobile/core/src/**', 'mobile/scripts/build-core-ios.sh') }}
+      - name: Install Rust toolchain
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target $BRAMBLE_IOS_TARGETS
+          rustup default "$RUST_TOOLCHAIN"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        with:
+          workspaces: mobile/core -> target
+          save-if: ${{ github.event_name == 'push' }}
+      - if: steps.core-cache.outputs.cache-hit != 'true'
+        run: bash mobile/scripts/build-core-ios.sh debug
+      - if: steps.core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: mobile/ios/Generated
+          key: ${{ steps.core-cache.outputs.cache-primary-key }}
+      - name: Generate Xcode project
+        run: |
+          bash mobile/scripts/lint-tools.sh xcodegen
+          cd mobile/ios && ../.tools/xcodegen-2.44.1/xcodegen/bin/xcodegen generate
+      # A clean build whose log also feeds SwiftLint's analyzer rules below (pushes only).
+      - name: Build for testing
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild -project Bramble.xcodeproj -scheme Bramble \
+            -destination "id=$SIM_ID" \
+            -derivedDataPath build/DerivedData clean build-for-testing | tee build/xcodebuild.log
+      - name: Unit tests
+        working-directory: mobile/ios
+        run: |
+          xcodebuild -project Bramble.xcodeproj -scheme Bramble \
+            -destination "id=$SIM_ID" \
+            -derivedDataPath build/DerivedData -only-testing:BrambleTests test-without-building
+      # 6-11 minutes on a hosted runner, so pull requests skip it; the push that lands a change
+      # runs it. Run it locally before pushing Swift changes (mobile/README.md).
+      - name: SwiftLint analyzer rules
+        if: github.event_name == 'push'
+        run: bash mobile/scripts/lint.sh swift-analyze mobile/ios/build/xcodebuild.log
+
+  # Builds the core and runs the JVM unit tests. It uses macOS because build-core-android.sh reads
+  # the host core as a .dylib for UniFFI's bindgen; the core it builds (the x86_64 library and the
+  # Kotlin bindings, neither committed) is handed to android-device below.
+  android:
+    needs: scope
+    if: needs.scope.outputs.android == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Gradle's caches restore everywhere but save only on pushes: each pull request saving its
+      # own ~400 MB copy filled the repository's 10 GB cache and evicted the branch caches.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/**/gradle-wrapper.properties', 'mobile/android/**/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-${{ runner.arch }}-
+      # The runner image ships the Android SDK. Its sdkmanager adds the exact packages, since
+      # third-party setup actions are not on the organisation's allowlist.
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;$ANDROID_NDK_VERSION"
+      # The built core (native libraries and Kotlin bindings); see the iOS job's cache.
+      - id: core-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            mobile/android/app/src/main/jniLibs/
+            mobile/android/app/build/generated/uniffi/
+          key: mobile-core-android-${{ env.RUST_TOOLCHAIN }}-${{ env.ANDROID_NDK_VERSION }}-${{ env.BRAMBLE_ANDROID_ABIS }}-${{ hashFiles('mobile/core/Cargo.toml', 'mobile/core/Cargo.lock', 'mobile/core/src/**', 'mobile/scripts/build-core-android.sh') }}
+      - name: Install Rust toolchain
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal \
+            --target aarch64-linux-android --target x86_64-linux-android
+          rustup default "$RUST_TOOLCHAIN"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        with:
+          workspaces: mobile/core -> target
+          save-if: ${{ github.event_name == 'push' }}
+      # A restored ~/.cargo/bin already holds it, and install then exits early.
+      - if: steps.core-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+      - name: Build core
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+          bash mobile/scripts/build-core-android.sh debug
+      - if: steps.core-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            mobile/android/app/src/main/jniLibs/
+            mobile/android/app/build/generated/uniffi/
+          key: ${{ steps.core-cache.outputs.cache-primary-key }}
+      - name: JVM unit tests
+        working-directory: mobile/android
+        run: ./gradlew :app:testDebugUnitTest
+      - if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/**/gradle-wrapper.properties', 'mobile/android/**/libs.versions.toml') }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-core
+          path: |
+            mobile/android/app/src/main/jniLibs/x86_64/
+            mobile/android/app/build/generated/uniffi/
+          if-no-files-found: error
+          retention-days: 1
+
+  # The instrumented suite (flows, security, core bridge) on an API 35 x86_64 emulator. Linux,
+  # because hosted macOS runners cannot hardware-accelerate an Android emulator; the core comes
+  # prebuilt from the android job. The send, deploy, token, accounts, multisig and portfolio tests
+  # answer from the offline FixtureNode, which refuses every write; the onboarding and Home tests
+  # read public mainnet data, as the iOS UI suite does (mobile/README.md).
+  android-device:
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Gradle's caches restore everywhere but save only on pushes: each pull request saving its
+      # own ~400 MB copy filled the repository's 10 GB cache and evicted the branch caches.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/**/gradle-wrapper.properties', 'mobile/android/**/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-${{ runner.arch }}-
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-core
+          path: mobile/android/app
+      # The artifact keeps paths relative to their common root (src/main/jniLibs, build/generated).
+      - name: Place the prebuilt core
+        run: |
+          test -f mobile/android/app/src/main/jniLibs/x86_64/libbramble_core.so
+          test -f mobile/android/app/build/generated/uniffi/org/bramble/core/bramble_core.kt
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+      # One AVD directory for avdmanager and the emulator: newer cmdline-tools can otherwise write
+      # the AVD under the XDG config home, where the emulator never looks. Every wait is bounded,
+      # and the emulator's own log is printed here, so a boot failure is visible in the step.
+      - name: Boot the emulator
+        timeout-minutes: 15
+        run: |
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force \
+            -n ci -k "system-images;android-35;google_apis;x86_64" -d pixel_6
+          "$ANDROID_HOME/emulator/emulator" -list-avds
+          "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-snapshot -no-metrics \
+            -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+          booted=""
+          for attempt in $(seq 1 120); do
+            if ! kill -0 "$emulator_pid" 2> /dev/null; then
+              echo "::error::the emulator exited before booting"
+              break
+            fi
+            booted=$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2> /dev/null | tr -d '\r' || true)
+            [ "$booted" = "1" ] && break
+            sleep 5
+          done
+          if [ "$booted" != "1" ]; then
+            cat "$RUNNER_TEMP/emulator.log"
+            exit 1
+          fi
+          # The package manager answers a little after boot completes.
+          for attempt in $(seq 1 30); do
+            "$ANDROID_HOME/platform-tools/adb" shell pm path android > /dev/null 2>&1 && break
+            sleep 2
+          done
+      - name: Instrumented tests
+        working-directory: mobile/android
+        run: ./gradlew :app:connectedDebugAndroidTest
+      - if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/**/gradle-wrapper.properties', 'mobile/android/**/libs.versions.toml') }}
+      # Also on a timeout, which GitHub reports as cancelled rather than failed.
+      - if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-device-reports
+          path: |
+            mobile/android/app/build/reports/androidTests/
+            mobile/android/app/build/outputs/androidTest-results/
+            ${{ runner.temp }}/emulator.log
+          retention-days: 7

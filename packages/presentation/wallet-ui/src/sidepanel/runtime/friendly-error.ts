@@ -140,6 +140,29 @@ const rawServiceDiagnostic = (value: string): boolean =>
   /^\s*[[{][\s\S]*[\]}]\s*$/.test(value);
 
 /**
+ * The classifier's patterns and tables, exported only so the mobile apps'
+ * generated lookup (`scripts/mobile-assets/friendly-errors.ts`) matches exactly
+ * what `friendlyError` matches. Not an API for other screens.
+ */
+export const FRIENDLY_ERROR_RULES = {
+  developerVoice: DEVELOPER_VOICE,
+  rateLimit: RATE_LIMIT,
+  rawHttp: RAW_HTTP,
+  rawRpc: RAW_RPC,
+  rawRpcResponse: RAW_RPC_RESPONSE,
+  strk20: STRK20,
+  strk20OutageCause: STRK20_OUTAGE_CAUSE,
+  strk20PrivacyLeak: STRK20_PRIVACY_LEAK,
+  strk20Protocol: STRK20_PROTOCOL,
+  strk20RateLimited: STRK20_RATE_LIMITED,
+  strk20ServiceDown: STRK20_SERVICE_DOWN,
+  strk20ServicesDown: STRK20_SERVICES_DOWN,
+  strk20Stage: STRK20_STAGE,
+  strk20StageCopy: STRK20_STAGE_COPY,
+  validationRequest: VALIDATION_REQUEST,
+} as const;
+
+/**
  * Classifies a raw error string into user-facing copy.
  *
  * The default is to show a message as written. It is replaced only when it is

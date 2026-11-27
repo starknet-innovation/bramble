@@ -1,0 +1,364 @@
+{
+  "verification": [
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_MAIN",
+      "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "summary": "Send 1.5 ETH to 1799483765854582917422300227409978222387653464187799873170968284580736549283",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_MAIN",
+      "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "summary": "Send 1.5 STRK to 1799483765854582917422300227409978222387653464187799873170968284580736549283",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "self-transfer",
+          "message": "The recipient is this wallet's own address.",
+          "text": {
+            "key": "review.flag.selfTransfer",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "summary": "Send 1.5 ETH to 919133982795966367421223978446056826033738534632092130897918458409212156121",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "self-transfer",
+          "message": "The recipient is this wallet's own address.",
+          "text": {
+            "key": "review.flag.selfTransfer",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "summary": "Send 1.5 STRK to 919133982795966367421223978446056826033738534632092130897918458409212156121",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+      "summary": "Send 1.5 ETH to 919133599346633216238072891875121979918814764454129819746373698638011472089",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+      "summary": "Send 1.5 STRK to 919133599346633216238072891875121979918814764454129819746373698638011472089",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_MAIN",
+      "recipient": "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc",
+      "summary": "Send 1.5 ETH to 2412922790730695306872316329181351013434331235819282206402963687780630838220",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_MAIN",
+      "recipient": "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc",
+      "summary": "Send 1.5 STRK to 2412922790730695306872316329181351013434331235819282206402963687780630838220",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x555af000000000000000000000000000000000000000000000000000000bbcc",
+      "summary": "Send 1.5 ETH to 2412954049033182958544002170789982253558694463305349695483145906503590919116",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x555af000000000000000000000000000000000000000000000000000000bbcc",
+      "summary": "Send 1.5 STRK to 2412954049033182958544002170789982253558694463305349695483145906503590919116",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "token-contract-recipient",
+          "message": "This is a token contract, not a wallet. Tokens sent here are usually lost.",
+          "text": {
+            "key": "review.flag.tokenContractRecipient",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "summary": "Send 1.5 ETH to 2087021424722619777119509474943472645767659996348769578120564519014510906823",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "token-contract-recipient",
+          "message": "This is a token contract, not a wallet. Tokens sent here are usually lost.",
+          "text": {
+            "key": "review.flag.tokenContractRecipient",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_MAIN",
+      "recipient": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "summary": "Send 1.5 STRK to 2087021424722619777119509474943472645767659996348769578120564519014510906823",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "summary": "Send 1.5 ETH to 1799483765854582917422300227409978222387653464187799873170968284580736549283",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "summary": "Send 1.5 STRK to 1799483765854582917422300227409978222387653464187799873170968284580736549283",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "self-transfer",
+          "message": "The recipient is this wallet's own address.",
+          "text": {
+            "key": "review.flag.selfTransfer",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "summary": "Send 1.5 ETH to 919133982795966367421223978446056826033738534632092130897918458409212156121",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "self-transfer",
+          "message": "The recipient is this wallet's own address.",
+          "text": {
+            "key": "review.flag.selfTransfer",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "summary": "Send 1.5 STRK to 919133982795966367421223978446056826033738534632092130897918458409212156121",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+      "summary": "Send 1.5 ETH to 919133599346633216238072891875121979918814764454129819746373698638011472089",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x2083610000000000000000000000000000000000000000000000000000098d9",
+      "summary": "Send 1.5 STRK to 919133599346633216238072891875121979918814764454129819746373698638011472089",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc",
+      "summary": "Send 1.5 ETH to 2412922790730695306872316329181351013434331235819282206402963687780630838220",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc",
+      "summary": "Send 1.5 STRK to 2412922790730695306872316329181351013434331235819282206402963687780630838220",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x555af000000000000000000000000000000000000000000000000000000bbcc",
+      "summary": "Send 1.5 ETH to 2412954049033182958544002170789982253558694463305349695483145906503590919116",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "address-poisoning",
+          "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+          "text": {
+            "key": "review.flag.addressPoisoning",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x555af000000000000000000000000000000000000000000000000000000bbcc",
+      "summary": "Send 1.5 STRK to 2412954049033182958544002170789982253558694463305349695483145906503590919116",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "token-contract-recipient",
+          "message": "This is a token contract, not a wallet. Tokens sent here are usually lost.",
+          "text": {
+            "key": "review.flag.tokenContractRecipient",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "summary": "Send 1.5 ETH to 2087021424722619777119509474943472645767659996348769578120564519014510906823",
+      "token": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    },
+    {
+      "account": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "flags": [
+        {
+          "code": "token-contract-recipient",
+          "message": "This is a token contract, not a wallet. Tokens sent here are usually lost.",
+          "text": {
+            "key": "review.flag.tokenContractRecipient",
+            "facts": {}
+          }
+        }
+      ],
+      "networkId": "SN_SEPOLIA",
+      "recipient": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+      "summary": "Send 1.5 STRK to 2087021424722619777119509474943472645767659996348769578120564519014510906823",
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "trusted": ["0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc"]
+    }
+  ]
+}

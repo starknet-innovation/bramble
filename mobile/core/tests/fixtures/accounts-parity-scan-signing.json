@@ -1,0 +1,386 @@
+{
+  "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+  "networkId": "SN_SEPOLIA",
+  "argent": {
+    "address": "0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1",
+    "cases": [
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "no restriction",
+        "reads": {
+          "get_owner": ["0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": ["0x0"]
+        },
+        "restriction": null,
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "owner padded",
+        "reads": {
+          "get_owner": ["0x0426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": ["0x0"]
+        },
+        "restriction": null,
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "guardian",
+        "reads": {
+          "get_owner": ["0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": ["0x7601"]
+        },
+        "restriction": "guardian",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "guardian empty",
+        "reads": {
+          "get_owner": ["0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": []
+        },
+        "restriction": "guardian",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "owner changed",
+        "reads": {
+          "get_owner": ["0xdead"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": ["0x0"]
+        },
+        "restriction": "owner-changed",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "owner two felts",
+        "reads": {
+          "get_owner": ["0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e", "0x1"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": ["0x0"]
+        },
+        "restriction": "owner-changed",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "owner type",
+        "reads": {
+          "get_owner": ["0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"],
+          "get_owner_type": ["0x2"],
+          "get_guardian": ["0x0"]
+        },
+        "restriction": "owner-type",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "owner changed before guardian",
+        "reads": {
+          "get_owner": ["0xdead"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": ["0x7601"]
+        },
+        "restriction": "owner-changed",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+        "name": "release 0.3.0",
+        "reads": {},
+        "restriction": "release",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x9999",
+        "name": "release unknown",
+        "reads": {},
+        "restriction": "release",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+        "name": "release of another family",
+        "reads": {},
+        "restriction": "release",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "guardian read fails",
+        "reads": {
+          "get_owner": ["0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": "fails"
+        },
+        "restriction": null,
+        "threw": true
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        "name": "owner changed, guardian read fails",
+        "reads": {
+          "get_owner": ["0xdead"],
+          "get_owner_type": ["0x0"],
+          "get_guardian": "fails"
+        },
+        "restriction": null,
+        "threw": true
+      }
+    ],
+    "publicKey": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"
+  },
+  "braavos": {
+    "address": "0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475",
+    "cases": [
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "no restriction",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x0",
+            "0x0"
+          ]
+        },
+        "restriction": null,
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "owner changed",
+        "reads": {
+          "get_signers": ["0x1", "0xdead", "0x0", "0x0"]
+        },
+        "restriction": "owner-changed",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "key is second stark signer",
+        "reads": {
+          "get_signers": [
+            "0x2",
+            "0xdead",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x0",
+            "0x0"
+          ]
+        },
+        "restriction": "owner-changed",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "no stark",
+        "reads": {
+          "get_signers": ["0x0", "0x0", "0x0"]
+        },
+        "restriction": "owner-changed",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "strong signer secp256r1",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": ["0x0"]
+        },
+        "restriction": "strong-signer",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "strong signer webauthn",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x0",
+            "0x1",
+            "0xbb"
+          ],
+          "get_deferred_remove_signers": ["0x0"]
+        },
+        "restriction": "strong-signer",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "strong signer, empty removal read",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": []
+        },
+        "restriction": "strong-signer",
+        "threw": false
+      },
+      {
+        "blockTimestamp": 3,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "2FA removal before expire_at",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": ["0x5"]
+        },
+        "restriction": "strong-signer",
+        "threw": false
+      },
+      {
+        "blockTimestamp": 5,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "2FA removal at expire_at",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": ["0x5"]
+        },
+        "restriction": "strong-signer",
+        "threw": false
+      },
+      {
+        "blockTimestamp": 6,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "2FA removal after expire_at",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": ["0x5"]
+        },
+        "restriction": null,
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x9999",
+        "name": "release unknown",
+        "reads": {},
+        "restriction": "release",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+        "name": "release base class",
+        "reads": {},
+        "restriction": "release",
+        "threw": false
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "malformed signers",
+        "reads": {
+          "get_signers": [
+            "0x3",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"
+          ]
+        },
+        "restriction": null,
+        "threw": true
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "signers read fails",
+        "reads": {
+          "get_signers": "fails"
+        },
+        "restriction": null,
+        "threw": true
+      },
+      {
+        "blockTimestamp": null,
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "removal read fails",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": "fails"
+        },
+        "restriction": null,
+        "threw": true
+      },
+      {
+        "blockTimestamp": "fails",
+        "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+        "name": "block read fails",
+        "reads": {
+          "get_signers": [
+            "0x1",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x1",
+            "0xaa",
+            "0x0"
+          ],
+          "get_deferred_remove_signers": ["0x5"]
+        },
+        "restriction": null,
+        "threw": true
+      }
+    ],
+    "publicKey": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"
+  }
+}

@@ -112,6 +112,13 @@ describe("workflow action pinning", () => {
     expect(actionReferences(workflow)).toEqual([]);
   });
 
+  test("pins an action in a repository sub-path by commit, never by tag", () => {
+    const sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+    expect(isPinnedActionReference(`actions/cache/restore@${sha}`)).toBe(true);
+    expect(isPinnedActionReference("actions/cache/restore@v6")).toBe(false);
+    expect(isPinnedActionReference(`actions/cache/@${sha}`)).toBe(false);
+  });
+
   test("allows a local reusable workflow written with the .yaml extension", () => {
     expect(isPinnedActionReference("./.github/workflows/release-build.yaml")).toBe(true);
   });

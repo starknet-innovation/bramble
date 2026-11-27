@@ -45,6 +45,13 @@ const TOKEN_LOGOS_SVG: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The canonical (64-hex, zero-padded) addresses that ship a bundled logo, read
+ * from the logo map itself so a generator mirroring the set onto another
+ * platform (the mobile apps) can never keep a second list that drifts.
+ */
+export const bundledTokenLogoAddresses = (): readonly string[] => Object.keys(TOKEN_LOGOS_SVG);
+
+/**
  * Returns the inline SVG logo for a token address, or null when the token is
  * not one of the bundled common tokens (callers fall back to a letter badge).
  * The returned string is a trusted static constant safe to embed as HTML.
