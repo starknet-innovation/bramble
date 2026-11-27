@@ -9,3 +9,7 @@ rules:
     paths: ["**/.claude/**"]
     nested: inherit
     verdict: { claude: comments, seats: 2 }
+  - purpose: "A change to a dependency or toolchain file always takes two people."
+    paths: ["**/*.lock", "**/bun.lockb", "**/gradle.lockfile", "**/{package,package-lock,npm-shrinkwrap}.json", "**/pnpm-lock.yaml", "**/.npmrc", "**/{requirements,constraints}*.txt", "**/requirements/*.txt", "**/pyproject.toml", "**/go.{mod,sum}", "**/Cargo.toml", "**/Gemfile", "**/pom.xml", "**/*.gradle*", "**/gradle/libs.versions.toml", "**/bunfig.toml", "**/Scarb.toml", "**/.tool-versions"]
+    nested: inherit
+    verdict: { claude: comments, seats: 2 }
