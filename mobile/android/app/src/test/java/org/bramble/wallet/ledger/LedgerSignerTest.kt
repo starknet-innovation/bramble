@@ -167,7 +167,7 @@ class LedgerSignerTest {
             val gate = CompletableDeferred<Unit>()
             var connects = 0
             val signer =
-                LedgerSigner(scanner) {
+                LedgerSigner(scanner, osGate = null) {
                     connects += 1
                     // The second connect (the session's Ledger again) waits, then fails.
                     if (connects > 1) {
@@ -193,7 +193,8 @@ class LedgerSignerTest {
     @Test
     fun refusedPermissionIsNoDevice() =
         runBlocking {
-            val signer = LedgerSigner(Scanner(listOf(ledger))) { throw SecurityException("BLUETOOTH_CONNECT") }
+            val signer =
+                LedgerSigner(Scanner(listOf(ledger)), osGate = null) { throw SecurityException("BLUETOOTH_CONNECT") }
             val answer = async(Dispatchers.Default) { signer.exchange(VERSION_APDU, null) }
             until { signer.stage == LedgerSignStage.Scanning }
             signer.choose(ledger)
@@ -217,7 +218,7 @@ class LedgerSignerTest {
         val made = mutableListOf<ReplayDevice>()
         val scanner = Scanner(listOf(ledger))
         val signer =
-            LedgerSigner(scanner) {
+            LedgerSigner(scanner, osGate = null) {
                 ReplayDevice(recordedExchanges()).also(configure).also { made += it }
             }
         val plan = ScriptedPlan(key)

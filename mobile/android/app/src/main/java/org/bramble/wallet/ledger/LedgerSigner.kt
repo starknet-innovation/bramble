@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import org.bramble.core.AccountRecord
+import org.bramble.core.LedgerOsGate
+import org.bramble.core.LedgerOsGateInterface
 import org.bramble.core.StepReply
 import org.bramble.core.TransportFailure
 import org.bramble.wallet.errors.friendlyError
@@ -58,6 +60,15 @@ sealed interface LedgerSignStage {
         val device: LedgerDevice,
     ) : LedgerSignStage
 
+    /**
+     * The device OS gate, once per Ledger per session: Starknet closes and reopens.
+     *
+     * @property phase the core's phase name, empty before the first step.
+     */
+    data class DeviceCheck(
+        val phase: String,
+    ) : LedgerSignStage
+
     /** The core checks the app and the key, before the person is asked. */
     data object Checking : LedgerSignStage
 
@@ -94,6 +105,10 @@ sealed interface LedgerSignStage {
  */
 class LedgerSigner(
     private val scanner: LedgerScanning,
+    /** A new device OS gate; null skips it (JVM tests, where the core does not load). */
+    private val osGate: (() -> LedgerOsGateInterface)? = ::LedgerOsGate,
+    /** The Ledgers that passed the OS gate this session, shared with the connect flow. */
+    private val verified: LedgerOsVerified = LedgerOsVerified.session,
     private val connector: suspend (LedgerDevice) -> LedgerExchanging,
 ) : DeviceSigning {
     /** Where the signature is; [LedgerSignStage.Idle] hides the sheet. */
@@ -110,6 +125,9 @@ class LedgerSigner(
 
     private var device: LedgerExchanging? = null
     private var known: LedgerDevice? = null
+
+    /** The gate's refusal code, shown in place of the plan's own when the connection it ended fails. */
+    private var gateRefusal: String? = null
     private var picking: CompletableDeferred<LedgerDevice?>? = null
     private var deciding: CompletableDeferred<Boolean>? = null
     private var cancelled = false
@@ -129,6 +147,7 @@ class LedgerSigner(
             }
         // A failed exchange closed its link: the next attempt connects again.
         if (outcome is LedgerExchange.Failure) {
+            known?.let { verified.ids -= it.id }
             device?.close()
             device = null
         }
@@ -148,11 +167,13 @@ class LedgerSigner(
         this.account = account
         if (reason == WRONG_DEVICE) {
             // Another Ledger is needed: the next attempt lists them again.
+            known?.let { verified.ids -= it.id }
             device?.close()
             device = null
             known = null
         }
-        stage = LedgerSignStage.Refused(friendlyError(reason))
+        stage = LedgerSignStage.Refused(friendlyError(gateRefusal ?: reason))
+        gateRefusal = null
         return CompletableDeferred<Boolean>().also { deciding = it }.await()
     }
 
@@ -182,6 +203,7 @@ class LedgerSigner(
     fun close() {
         if (stage != LedgerSignStage.Idle) cancelled = true
         known = null
+        verified.ids.clear()
         finish()
     }
 
@@ -232,17 +254,35 @@ class LedgerSigner(
 
     private suspend fun open(ledger: LedgerDevice): LedgerExchanging? {
         stage = LedgerSignStage.Connecting(ledger)
-        val connected =
-            try {
-                connector(ledger)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (ignored: Exception) {
-                // A failed link, or a refused Bluetooth permission (SecurityException): no device.
-                null
+        // One connection, held as `device` so a cancel closes it; null once cancelled.
+        val reopen: suspend () -> LedgerExchanging? = {
+            val connected = if (cancelled) null else connectOrNull(connector, ledger)
+            if (cancelled) connected?.close()
+            connected?.takeUnless { cancelled }?.also { device = it }
+        }
+        val connected = reopen() ?: return null
+        val gate = osGate?.takeIf { ledger.id !in verified.ids }
+        val link =
+            if (gate == null) {
+                connected
+            } else {
+                stage = LedgerSignStage.DeviceCheck("")
+                val checked =
+                    runOsGate(gate(), connected, reopen) { phase ->
+                        if (!cancelled) stage = LedgerSignStage.DeviceCheck(phase)
+                    }
+                device = null
+                when {
+                    checked is OsGateResult.Passed && cancelled -> checked.link.close()
+                    checked is OsGateResult.Refused && !cancelled -> gateRefusal = checked.reason
+                    checked is OsGateResult.Passed -> verified.ids += ledger.id
+                }
+                (checked as? OsGateResult.Passed)?.link?.takeUnless { cancelled }
             }
-        if (cancelled) connected?.close()
-        return connected?.takeUnless { cancelled }?.also { known = ledger }
+        return link?.also {
+            device = it
+            known = ledger
+        }
     }
 
     /** The shared signer and the sign APDU's shape. */
@@ -269,3 +309,17 @@ class LedgerSigner(
                 }
     }
 }
+
+/** One connection through [connector], or null for a failed link or a refused Bluetooth permission. */
+private suspend fun connectOrNull(
+    connector: suspend (LedgerDevice) -> LedgerExchanging,
+    ledger: LedgerDevice,
+): LedgerExchanging? =
+    try {
+        connector(ledger)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        // A SecurityException for a refused permission, or a link that failed: no device.
+        null
+    }

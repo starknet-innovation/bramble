@@ -7,6 +7,7 @@ import org.bramble.core.LedgerAccountRequest
 import org.bramble.core.LedgerCandidate
 import org.bramble.core.LedgerKey
 import org.bramble.core.LedgerKeyReaderInterface
+import org.bramble.core.LedgerOsStep
 import org.bramble.core.LedgerReadStep
 import org.bramble.core.LedgerScheme
 import org.bramble.core.NetworkId
@@ -269,6 +270,9 @@ class LedgerConnectModelTest {
 
         /** The core's minimal form: lowercase, no leading zeros. */
         override fun canonical(address: String) = "0x" + address.lowercase().removePrefix("0x").trimStart('0')
+
+        /** A gate that passes at once; `LedgerOsGateTest` covers the gate itself. */
+        override fun osGate() = ScriptedGate(listOf("start" to LedgerOsStep.Supported("nano-x", "2.6.1")))
     }
 
     /** The core's steps for one key at a scheme: the version, then the key, or [refusal] after it. */

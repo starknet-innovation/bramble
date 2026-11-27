@@ -19,6 +19,8 @@ import org.bramble.core.WalletCore
 import org.bramble.wallet.RpcClient
 import org.bramble.wallet.RpcPost
 import org.bramble.wallet.endpointNetwork
+import org.bramble.wallet.ledger.DeviceSigning
+import org.bramble.wallet.ledger.LedgerSigner
 import org.bramble.wallet.portfolio.BoundedHttp
 import org.bramble.wallet.portfolio.PortfolioTransport
 import org.bramble.wallet.send.RpcEndpoint
@@ -39,6 +41,8 @@ class DappRequestSink(
     private val core: WalletCore,
     tokens: TokenPreferences = TokenPreferences(null),
     private val rpc: RpcPost = RpcClient.https,
+    /** The Ledger a Ledger account signs on; null is the app's Bluetooth one ([LedgerSigner.shared]). */
+    private val signer: DeviceSigning? = null,
     private val http: PortfolioTransport = BoundedHttp,
     private val now: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
@@ -103,6 +107,15 @@ class DappRequestSink(
     private val deniedAt = mutableMapOf<String, Double>()
     private var lastRequestId: ULong = 0u
 
+    /**
+     * The card being signed: the core no longer lists it, but it stays first (and its sheet up,
+     * under the Ledger's) until the signature settles, and a second Sign does nothing.
+     */
+    private var signing: Card? = null
+
+    /** The device the card being signed is on, once it asked for one. */
+    private var ledger: DeviceSigning? = null
+
     /** The cards waiting, oldest first. */
     var cards by mutableStateOf(emptyList<Card>())
         private set
@@ -164,11 +177,19 @@ class DappRequestSink(
      * The person approved signing [card] with the account it was reviewed for. A Ready or Braavos
      * account's live state is read first, each read posted to one endpoint that proved the card's
      * chain (a failed post is passed on empty, which the core refuses); the core then signs or
-     * refuses. A Ledger account's device step is cancelled, so its request ends refused.
+     * refuses. A Ledger account signs on its device through the same sheet a send uses, with the
+     * account the card was reviewed for as the signer; the person's cancel there refuses the page.
+     * Every APDU comes from the core and goes back to it unread.
      */
     suspend fun sign(card: Card): List<Settled> {
-        val sign = card.sign ?: return emptyList()
+        val sign = card.sign?.takeIf { signing == null } ?: return emptyList()
+        signing = card
+        val account = runCatching { core.allAccountRecords() }.getOrNull()?.firstOrNull { it.id == sign.accountId }
         var endpoint: RpcEndpoint? = null
+        // The signer is chosen once, at the first device step, and kept for the whole signature.
+        val device = {
+            ledger ?: (signer ?: checkNotNull(LedgerSigner.shared) { "no Ledger signer" }).also { ledger = it }
+        }
         var step = session.approveSignTypedData(card.id, sign.accountId, now())
         while (true) {
             step =
@@ -181,12 +202,22 @@ class DappRequestSink(
                         session.answerSignRead(card.id, step.id, (reply as? StepReply.Rpc)?.body.orEmpty())
                     }
 
-                    // No Ledger signer on mobile yet: refuse rather than hang. P8 wires the device here.
-                    is DappSignStep.Device, is DappSignStep.DeviceRetry -> {
-                        session.cancelSignDevice(card.id)
+                    is DappSignStep.Device -> {
+                        session.answerDevice(card.id, device().exchange(step.apdu, account))
+                    }
+
+                    is DappSignStep.DeviceRetry -> {
+                        if (device().refused(step.reason, account)) {
+                            session.retrySignDevice(card.id)
+                        } else {
+                            session.cancelSignDevice(card.id)
+                        }
                     }
 
                     is DappSignStep.Settled -> {
+                        ledger?.finish()
+                        ledger = null
+                        signing = null
                         return finish(step.settled)
                     }
                 }
@@ -218,6 +249,9 @@ class DappRequestSink(
      */
     fun pageGone() {
         session.withdraw(heldCards.keys.toList())
+        // A signature in progress is dropped by the core; its Ledger sheet closes with the page.
+        signing = null
+        ledger?.finish()
         heldCards.clear()
         pageIds.clear()
         reload()
@@ -232,8 +266,9 @@ class DappRequestSink(
     }
 
     private fun reload() {
-        cards =
-            session.pendingApprovals(now()).filter { hasScreen(it.card) }.map {
+        val held = signing
+        cards = listOfNotNull(held) +
+            session.pendingApprovals(now()).filter { hasScreen(it.card) && it.approvalId != held?.id }.map {
                 Card(it.approvalId, it.origin, it.blocked, it.warnings.map(::warningCopy), signRequest(it.card))
             }
     }
@@ -309,6 +344,20 @@ class DappRequestSink(
         }
     }
 }
+
+/**
+ * The device's [reply] to [approvalId]'s last APDU; null (the person cancelled on the sheet, or the
+ * wallet locked) cancels, which refuses the page.
+ */
+private fun DappSession.answerDevice(
+    approvalId: String,
+    reply: StepReply?,
+): DappSignStep =
+    when (reply) {
+        is StepReply.Device -> answerSignDevice(approvalId, reply.reply)
+        is StepReply.DeviceFailure -> signDeviceTransportFailure(approvalId, reply.failure)
+        else -> cancelSignDevice(approvalId)
+    }
 
 /** Whether [card] is a kind this app shows: a connection or a signature. */
 private fun hasScreen(card: DappCard): Boolean =

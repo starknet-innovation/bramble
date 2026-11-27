@@ -19,7 +19,8 @@ extension LedgerBleDriver: LedgerExchanging {
 }
 
 /// Connect a Ledger and pick its accounts (the extension's `onboard-session.ts`): wait for
-/// Bluetooth, list Ledgers, connect to the one chosen, read a page of keys at each of the route's
+/// Bluetooth, list Ledgers, connect to the one chosen, run the device OS gate (`LedgerOsCheck`),
+/// read a page of keys at each of the route's
 /// schemes (`LedgerKeyReader`), place them per family (`ledgerAccountCandidates`), check each
 /// address on chain and preselect the active ones, and keep the person's picks, one more page at
 /// a time.
@@ -36,6 +37,8 @@ final class LedgerConnectModel {
         case bluetooth(LedgerBluetooth)
         case scanning
         case connecting(LedgerDevice)
+        /// The device OS gate, at its `phase`: Starknet closes and reopens.
+        case checking(phase: String)
         case reading
         case picking
         case failed(String)
@@ -56,6 +59,11 @@ final class LedgerConnectModel {
     private let place: ([LedgerKey], AccountFamily) throws -> [LedgerCandidate]
     private let describe: @Sendable (String) async -> LedgerActivity
     private let existing: Set<String>
+    private let osGate: LedgerOsCheck.Run
+    /// The Ledgers that passed the OS gate this session, shared with the signer.
+    private let verified: LedgerOsVerified
+    /// The Ledger connected to, forgotten by `verified` if the flow fails.
+    private var connectedId: UUID?
     let route: LedgerRoute
     private let pageSize: UInt32
     private var device: (any LedgerExchanging)?
@@ -73,7 +81,9 @@ final class LedgerConnectModel {
         place: @escaping ([LedgerKey], AccountFamily) throws -> [LedgerCandidate],
         describe: @escaping @Sendable (String) async -> LedgerActivity,
         existing: Set<String>,
-        pageSize: UInt32 = LedgerConnectModel.pageSize
+        pageSize: UInt32 = LedgerConnectModel.pageSize,
+        osGate: @escaping LedgerOsCheck.Run = LedgerOsCheck.run,
+        verified: LedgerOsVerified = .session
     ) {
         self.route = route
         self.scanner = scanner
@@ -82,6 +92,8 @@ final class LedgerConnectModel {
         self.describe = describe
         self.existing = Set(existing.map(Self.canonical))
         self.pageSize = pageSize
+        self.osGate = osGate
+        self.verified = verified
         scanner.changed = { [weak self] in self?.bluetoothChanged() }
         bluetoothChanged()
     }
@@ -120,9 +132,42 @@ final class LedgerConnectModel {
             return
         }
         self.device = connected
-        // The device OS gate (`LEDGER_OS_MIN`) belongs here once the core exports it: wallet-core #191.
+        connectedId = device.id
+        guard !verified.ids.contains(device.id) else {
+            stage = .reading
+            await readPage()
+            return
+        }
+        stage = .checking(phase: "")
+        let reconnect: @MainActor () async -> (any LedgerExchanging)? = { [weak self] in
+            await self?.reconnect(device.id, flow: flow)
+        }
+        let checked = await osGate(connected, reconnect) { [weak self] phase in
+            if self?.epoch == flow { self?.stage = .checking(phase: phase) }
+        }
+        guard flow == epoch else { return }
+        switch checked {
+        case let .success(link):
+            self.device = link
+            verified.ids.insert(device.id)
+
+        case let .failure(refusal):
+            fail(refusal.reason)
+            return
+        }
         stage = .reading
         await readPage()
+    }
+
+    /// The same Ledger again, after the OS gate's app change dropped the link; nil once the flow ended.
+    private func reconnect(_ id: UUID, flow: Int) async -> (any LedgerExchanging)? {
+        guard flow == epoch, let link = try? await connector(id) else { return nil }
+        guard flow == epoch else {
+            link.close()
+            return nil
+        }
+        device = link
+        return link
     }
 
     /// Reads the next page into the list.
@@ -163,7 +208,7 @@ final class LedgerConnectModel {
                 stage = .bluetooth(scanner.bluetooth)
             }
 
-        case .connecting, .reading, .picking, .failed:
+        case .connecting, .checking, .reading, .picking, .failed:
             // The connection reports a lost Bluetooth itself, as a disconnect.
             break
         }
@@ -231,6 +276,7 @@ final class LedgerConnectModel {
     }
 
     private func fail(_ reason: String) {
+        if let connectedId { verified.ids.remove(connectedId) }
         close()
         stage = .failed(FriendlyError.message(reason))
     }

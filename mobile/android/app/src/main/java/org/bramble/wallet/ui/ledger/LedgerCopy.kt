@@ -6,6 +6,7 @@ import org.bramble.wallet.ledger.LedgerConnectModel
 import org.bramble.wallet.ledger.LedgerRoute
 import org.bramble.wallet.ledger.LedgerSignStage
 import org.bramble.wallet.ledger.LedgerStage
+import org.bramble.wallet.ledger.OPENING_STARKNET
 
 /** The words of the Ledger connect and pick screens, as iOS `LedgerCopy`. */
 object LedgerCopy {
@@ -60,6 +61,17 @@ object LedgerCopy {
             LedgerBluetooth.LOCATION_OFF -> "Turn on Location to find your Ledger."
             LedgerBluetooth.READY -> null
         }
+
+    /**
+     * The device OS gate's line, as iOS `LedgerCopy.checking`: the extension's
+     * `ledgerGrant.progress.*` words, the device prompt only while it asks to reopen Starknet.
+     */
+    fun checking(phase: String): String =
+        if (phase == OPENING_STARKNET) {
+            "Approve opening Starknet on your Ledger. No transaction is signed."
+        } else {
+            "Checking your Ledger. The Starknet app closes and reopens."
+        }
 }
 
 /**
@@ -109,6 +121,7 @@ object LedgerSignCopy {
         when (stage) {
             LedgerSignStage.Idle, is LedgerSignStage.Bluetooth, LedgerSignStage.Scanning -> "Ledger connection needed"
             is LedgerSignStage.Connecting -> "Connecting securely"
+            is LedgerSignStage.DeviceCheck -> "Checking your Ledger"
             LedgerSignStage.Checking -> "Verifying the right account"
             is LedgerSignStage.Confirming -> "Approve on your Ledger"
             is LedgerSignStage.Refused -> "Ledger needs attention"

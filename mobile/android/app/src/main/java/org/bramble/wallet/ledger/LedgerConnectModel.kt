@@ -12,6 +12,7 @@ import org.bramble.core.LedgerAccountRequest
 import org.bramble.core.LedgerCandidate
 import org.bramble.core.LedgerKey
 import org.bramble.core.LedgerKeyReaderInterface
+import org.bramble.core.LedgerOsGateInterface
 import org.bramble.core.LedgerReadStep
 import org.bramble.core.LedgerScheme
 import org.bramble.wallet.errors.friendlyError
@@ -98,6 +99,15 @@ sealed interface LedgerStage {
         val device: LedgerDevice,
     ) : LedgerStage
 
+    /**
+     * The device OS gate: Starknet closes and reopens.
+     *
+     * @property phase the core's phase name, empty before the first step.
+     */
+    data class Checking(
+        val phase: String,
+    ) : LedgerStage
+
     /** Reading the first page of keys. */
     data object Reading : LedgerStage
 
@@ -134,11 +144,15 @@ interface LedgerCore {
 
     /** [address] in the core's canonical felt form (`validateRecipient`), so spellings match. */
     fun canonical(address: String): String
+
+    /** A new device OS gate (the core's `LedgerOsGate`). */
+    fun osGate(): LedgerOsGateInterface
 }
 
 /**
  * Connect a Ledger and pick its accounts, as iOS `LedgerConnectModel` (the extension's
- * `onboard-session.ts`): wait for Bluetooth, list Ledgers, connect to the one chosen, read a page
+ * `onboard-session.ts`): wait for Bluetooth, list Ledgers, connect to the one chosen, run the device
+ * OS gate ([runOsGate]), read a page
  * of keys at each of [route]'s schemes, place them per family, check each address on chain and
  * preselect the active ones, and keep the person's picks.
  *
@@ -154,7 +168,12 @@ class LedgerConnectModel(
     private val core: LedgerCore,
     existing: Set<String>,
     private val pageSize: UInt = PAGE_SIZE,
+    /** The Ledgers that passed the OS gate this session, shared with the signer. */
+    private val verified: LedgerOsVerified = LedgerOsVerified.session,
 ) {
+    /** The Ledger connected to, forgotten by [verified] if the flow fails. */
+    private var connectedId: String? = null
+
     private val existing = existing.map(core::canonical).toSet()
     private var device: LedgerExchanging? = null
     private var nextIndex = 0u
@@ -200,33 +219,46 @@ class LedgerConnectModel(
         selected = if (row.id in selected) selected - row.id else selected + row.id
     }
 
-    /** Connects to [ledger] and reads the first page. */
+    /** Connects to [ledger], runs the device OS gate ([runOsGate]), then reads the first page. */
     suspend fun choose(ledger: LedgerDevice) {
         if (stage != LedgerStage.Scanning) return
         scanner.stopScan()
         stage = LedgerStage.Connecting(ledger)
         val flow = epoch
-        val connected =
-            try {
-                connect(ledger)
-            } catch (cancelled: CancellationException) {
-                // Backing out mid-connect is not a failed connection.
-                throw cancelled
-            } catch (ignored: Exception) {
-                null
+        // One connection to the Ledger, kept as `device`; the gate reconnects through it after an
+        // app change. Null when it fails or the flow ended (backing out is not a failed connection).
+        val open: suspend () -> LedgerExchanging? = {
+            val link =
+                try {
+                    connect(ledger)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (ignored: Exception) {
+                    null
+                }
+            if (flow != epoch) link?.close()
+            link?.takeIf { flow == epoch }?.also { device = it }
+        }
+        val checked =
+            open()?.let { connected ->
+                connectedId = ledger.id
+                stage = LedgerStage.Checking("")
+                verified.check(ledger.id, connected, core::osGate, open) { phase ->
+                    if (flow == epoch) stage = LedgerStage.Checking(phase)
+                }
             }
-        when {
-            flow != epoch -> {
-                connected?.close()
-            }
-
-            connected == null -> {
+        if (flow != epoch) return
+        when (checked) {
+            null -> {
                 fail("replug")
             }
 
-            else -> {
-                device = connected
-                // The device OS gate (`LEDGER_OS_MIN`) belongs here once the core exports it: wallet-core #191.
+            is OsGateResult.Refused -> {
+                fail(checked.reason)
+            }
+
+            is OsGateResult.Passed -> {
+                device = checked.link
                 stage = LedgerStage.Reading
                 readPage()
             }
@@ -326,6 +358,7 @@ class LedgerConnectModel(
     }
 
     private fun fail(reason: String) {
+        connectedId?.let { verified.ids -= it }
         close()
         stage = LedgerStage.Failed(friendlyError(reason))
     }

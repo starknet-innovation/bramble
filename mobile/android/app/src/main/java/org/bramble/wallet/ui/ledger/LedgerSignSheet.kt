@@ -149,6 +149,10 @@ private fun SignContent(
             StatusLine("If asked, confirm the pairing code on both devices.")
         }
 
+        is LedgerSignStage.DeviceCheck -> {
+            StatusLine(LedgerCopy.checking(stage.phase))
+        }
+
         LedgerSignStage.Checking -> {
             StatusLine(LedgerSignCopy.VERIFYING_BODY)
         }

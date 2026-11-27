@@ -203,7 +203,8 @@ final class LedgerConnectModelTests: XCTestCase {
             place: Self.place,
             describe: { describe($0) },
             existing: existing,
-            pageSize: 1
+            pageSize: 1,
+            osGate: LedgerOsCheck.skipped
         )
         return Picker(model: model, scanner: scanner, device: device)
     }
@@ -218,5 +219,271 @@ final class LedgerConnectModelTests: XCTestCase {
 
     private static func message(_ code: String) throws -> String {
         try XCTUnwrap(FriendlyErrorRules.ledgerMessages[code])
+    }
+}
+
+/// The device OS gate at the start of the connect flow (wallet-core #199), through the real core's
+/// `LedgerOsGate` against a simulated Ledger: Starknet open, closed for the dashboard's OS read,
+/// then reopened, each app change dropping the link.
+@MainActor
+extension LedgerConnectModelTests {
+    private func gated(_ configure: (GatedLedger) -> Void = { _ in /* A supported Nano X. */ }) throws
+        -> (LedgerConnectModel, GatedLedger) {
+        let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
+        let ledger = GatedLedger(replay: ReplayLedgerDevice(script: script))
+        configure(ledger)
+        let model = LedgerConnectModel(
+            route: .bramble,
+            scanner: FakeLedgerScanner(bluetooth: .ready, devices: [self.ledger]),
+            connect: { _ in try ledger.connect() },
+            place: { keys, family in try ledgerAccountCandidates(network: .mainnet, family: family, keys: keys) },
+            describe: { _ in LedgerActivity(deployed: .absent, funded: .absent) },
+            existing: [],
+            pageSize: 1
+        )
+        return (model, ledger)
+    }
+
+    func testASupportedLedgerPassesTheGateAndIsRead() async throws {
+        let (model, ledger) = try gated()
+        var phases: [String] = []
+        ledger.onSend = { _ in if case let .checking(phase) = model.stage { phases.append(phase) } }
+        await model.choose(self.ledger)
+        XCTAssertEqual(model.stage, .picking)
+        XCTAssertEqual(ledger.connections, 3, "the first link, then after closing and after reopening Starknet")
+        XCTAssertEqual(ledger.app, "Starknet")
+        XCTAssertTrue(phases.contains(LedgerOsCheck.openingStarknet))
+        XCTAssertEqual(
+            LedgerCopy.checking(LedgerOsCheck.openingStarknet),
+            "Approve opening Starknet on your Ledger. No transaction is signed."
+        )
+        XCTAssertFalse(model.rows.isEmpty)
+    }
+
+    func testAnOsBelowTheMinimumIsRefused() async throws {
+        let (model, ledger) = try gated { $0.osVersion = "2.2.3" }
+        await model.choose(self.ledger)
+        XCTAssertEqual(model.stage, .failed(try XCTUnwrap(FriendlyErrorRules.ledgerMessages["firmware-below-minimum"])))
+        XCTAssertTrue(model.rows.isEmpty)
+        XCTAssertTrue(ledger.allClosed)
+    }
+
+    func testDecliningTheAppChangeIsRejectedOnDevice() async throws {
+        let (model, ledger) = try gated { $0.declineOpen = true }
+        await model.choose(self.ledger)
+        XCTAssertEqual(model.stage, .failed(try XCTUnwrap(FriendlyErrorRules.ledgerMessages["rejected-on-device"])))
+        XCTAssertTrue(ledger.allClosed)
+    }
+
+    func testADisconnectMidGateFailsAndReadsNothing() async throws {
+        // The Ledger never comes back after Starknet closes.
+        let (model, ledger) = try gated { $0.connectionsAllowed = 1 }
+        await model.choose(self.ledger)
+        guard case .failed = model.stage else {
+            XCTFail("a lost Ledger ends the gate: \(model.stage)")
+            return
+        }
+        XCTAssertTrue(model.rows.isEmpty)
+        XCTAssertEqual(ledger.replay.requests, [], "no key is read before the gate passes")
+    }
+}
+
+/// The signer runs the same gate once per Ledger per session, as the extension's sign session does
+/// unless the live session was already verified.
+@MainActor
+extension LedgerConnectModelTests {
+    private static let versionRequest = Data([0x5a, 0, 0, 0, 0])
+
+    private func gatedSigner(_ configure: (GatedLedger) -> Void = { _ in /* Supported. */ }) throws
+        -> (LedgerSigner, GatedLedger) {
+        let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
+        let gated = GatedLedger(replay: ReplayLedgerDevice(script: script))
+        configure(gated)
+        let signer = LedgerSigner(scanner: FakeLedgerScanner(bluetooth: .ready, devices: [ledger])) { _ in
+            try gated.connect()
+        }
+        return (signer, gated)
+    }
+
+    func testTheSignerGatesALedgerOnceASession() async throws {
+        let (signer, gated) = try gatedSigner()
+        let first = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        guard case .device = await first.value else {
+            XCTFail("the gate passes, then the version is read")
+            return
+        }
+        XCTAssertEqual(gated.connections, 3)
+        signer.finish()
+        let again = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        guard case .device = await again.value else {
+            XCTFail("the same Ledger is not gated again")
+            return
+        }
+        XCTAssertEqual(gated.connections, 4, "one plain reconnect, no app change")
+        signer.finish()
+    }
+
+    /// The connect flow and the signer share the session's verified Ledgers: one gate covers both,
+    /// until the wallet locks.
+    func testOneGateCoversConnectAndSignUntilLock() async throws {
+        let verified = LedgerOsVerified()
+        let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
+        let gated = GatedLedger(replay: ReplayLedgerDevice(script: script))
+        let model = LedgerConnectModel(
+            route: .bramble,
+            scanner: FakeLedgerScanner(bluetooth: .ready, devices: [ledger]),
+            connect: { _ in try gated.connect() },
+            place: { keys, family in try ledgerAccountCandidates(network: .mainnet, family: family, keys: keys) },
+            describe: { _ in LedgerActivity(deployed: .absent, funded: .absent) },
+            existing: [],
+            pageSize: 1,
+            verified: verified
+        )
+        await model.choose(ledger)
+        XCTAssertEqual(model.stage, .picking)
+        XCTAssertEqual(gated.connections, 3, "gated once: two app changes")
+        model.close()
+
+        let scanner = FakeLedgerScanner(bluetooth: .ready, devices: [ledger])
+        let signer = LedgerSigner(scanner: scanner, verified: verified) { _ in try gated.connect() }
+        let first = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        guard case .device = await first.value else {
+            XCTFail("the version is read without a second gate")
+            return
+        }
+        XCTAssertEqual(gated.connections, 4, "one plain connection: no app change")
+        signer.finish()
+
+        signer.close()
+        XCTAssertTrue(verified.ids.isEmpty, "the lock forgets every verified Ledger")
+        let again = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        guard case .device = await again.value else {
+            XCTFail("after the lock the gate runs again, then the version is read")
+            return
+        }
+        XCTAssertEqual(gated.connections, 7, "gated again: two more app changes")
+        signer.finish()
+    }
+
+    func testTheSignerShowsTheGatesRefusal() async throws {
+        let (signer, _) = try gatedSigner { $0.osVersion = "2.2.3" }
+        let first = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        guard case .deviceFailure = await first.value else {
+            XCTFail("a refused gate connects nothing")
+            return
+        }
+        let decision = Task { await signer.refused("disconnected-mid-sign", for: nil) }
+        try await until { if case .refused = signer.stage { true } else { false } }
+        let message = try XCTUnwrap(FriendlyErrorRules.ledgerMessages["firmware-below-minimum"])
+        XCTAssertEqual(signer.stage, .refused(message: message))
+        signer.cancel()
+        let retried = await decision.value
+        XCTAssertFalse(retried)
+    }
+}
+
+/// A Ledger as the OS gate sees it: `app` open (Starknet first); closing or opening an app drops
+/// the link; the dashboard reports `os` for a Nano X. Every other request is the recorded device's.
+@MainActor
+final class GatedLedger {
+    let replay: ReplayLedgerDevice
+    var app = "Starknet"
+    var osVersion = "2.6.1"
+    var declineOpen = false
+    /// Links that may be opened; past it a connect fails, as a Ledger that never came back.
+    var connectionsAllowed = Int.max
+    var onSend: ((Data) -> Void)?
+    private(set) var connections = 0
+    private var links: [GatedLink] = []
+
+    init(replay: ReplayLedgerDevice) {
+        self.replay = replay
+    }
+
+    var allClosed: Bool { links.allSatisfy(\.closed) }
+
+    func connect() throws -> any LedgerExchanging {
+        guard connections < connectionsAllowed else { throw LedgerLinkError.disconnected }
+        connections += 1
+        let link = GatedLink(ledger: self)
+        links.append(link)
+        return link
+    }
+
+    /// `GetAppAndVersion`'s reply naming `name`, as wallet-core's gate tests build it.
+    static func appReply(_ name: String) -> Data {
+        bytes("01" + counted(name) + counted("2.4.3") + "009000")
+    }
+
+    /// `GetOsVersion`'s reply: a Nano X (`0x33000004`) on `version`.
+    static func osReply(_ version: String) -> Data {
+        bytes("33000004" + counted(version) + "04e6000000" + counted("2.30") + "9000")
+    }
+
+    static let appState = bytes("b001000000")
+    static let quitApp = bytes("b0a7000000")
+    static let osVersionRequest = bytes("e001000000")
+    static let openStarknet = bytes("e0d8000008" + hex("Starknet"))
+    static let declined = bytes("5501")
+
+    private static func hex(_ text: String) -> String {
+        text.utf8.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// `text`'s length byte, then its bytes.
+    private static func counted(_ text: String) -> String {
+        String(format: "%02x", text.utf8.count) + hex(text)
+    }
+
+    private static func bytes(_ digits: String) -> Data {
+        (try? hexBytes(digits)) ?? Data()
+    }
+}
+
+@MainActor
+final class GatedLink: LedgerExchanging {
+    private let ledger: GatedLedger
+    private(set) var closed = false
+
+    init(ledger: GatedLedger) {
+        self.ledger = ledger
+    }
+
+    func send(_ apdu: Data) -> LedgerExchange {
+        guard !closed else { return .failure(.disconnected) }
+        ledger.onSend?(apdu)
+        switch apdu {
+        case GatedLedger.appState:
+            return .reply(GatedLedger.appReply(ledger.app))
+
+        case GatedLedger.quitApp:
+            ledger.app = "BOLOS"
+            closed = true
+            return .failure(.disconnected)
+
+        case GatedLedger.osVersionRequest:
+            return .reply(GatedLedger.osReply(ledger.osVersion))
+
+        case GatedLedger.openStarknet:
+            if ledger.declineOpen { return .reply(GatedLedger.declined) }
+            ledger.app = "Starknet"
+            closed = true
+            return .failure(.disconnected)
+
+        default:
+            return ledger.replay.send(apdu)
+        }
+    }
+
+    func close() {
+        closed = true
     }
 }
