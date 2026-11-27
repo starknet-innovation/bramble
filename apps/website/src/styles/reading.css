@@ -59,6 +59,19 @@
   max-width: 640px;
   margin-top: 24px;
 }
+.docs-command {
+  max-width: 640px;
+  margin: 24px 0;
+  padding: 16px 18px;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre;
+}
 .docs-content ol,
 .docs-content ul {
   display: grid;

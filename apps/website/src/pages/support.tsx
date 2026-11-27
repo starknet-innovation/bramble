@@ -17,6 +17,10 @@ const questions = [
     "Check that Bramble is enabled in Chrome’s extensions page. Pin it to the toolbar and select its icon to open the side panel. Avoid reinstalling or clearing extension data unless you have backed up your recovery phrase.",
   ],
   [
+    "Can I install one exact version?",
+    "The Chrome Web Store installs the latest Bramble and updates it. A pinned build is a GitHub release zip you check and load unpacked. It does not update itself, and it does not share its wallet with the store install. The steps are on the documentation page.",
+  ],
+  [
     "I installed an older version and my wallet won’t open",
     "Upgrades are one-way, so an older build can’t open a wallet a newer one has unlocked. Install the newer version again over the old one, without removing Bramble first: removing it deletes the wallet from this browser. Otherwise, restore from your recovery phrase and add again anything not derived from it, such as imported keys, Ledger accounts and site connections.",
   ],

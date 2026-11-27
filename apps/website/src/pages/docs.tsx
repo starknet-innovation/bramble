@@ -4,8 +4,15 @@ import { Button } from "../components/ui/button";
 import { REPOSITORY_URL } from "../lib/site-links";
 import { chromeStoreUrl } from "../site";
 
+const RELEASES_URL = `${REPOSITORY_URL}/releases`;
+const VERIFY_CHROME = `sha256sum -c bramble-X.Y.Z.zip.sha256
+gh release verify vX.Y.Z --repo starknet-innovation/bramble
+gh release verify-asset vX.Y.Z bramble-X.Y.Z.zip --repo starknet-innovation/bramble
+gh attestation verify bramble-X.Y.Z.zip --repo starknet-innovation/bramble --signer-workflow starknet-innovation/bramble/.github/workflows/release-build.yml`;
+
 const sections = [
   { href: "#getting-started", label: "Getting started" },
+  { href: "#pinned-build", label: "Pinned install" },
   { href: "#accounts", label: "Accounts" },
   { href: "#transactions", label: "Transactions and dApps" },
   { href: "#multisig", label: "Multisig" },
@@ -65,6 +72,45 @@ export const DocsPage = () => (
               Bramble starts on Starknet Mainnet. Mainnet moves real funds; switch to Sepolia when
               you are testing.
             </div>
+          </section>
+
+          <section id="pinned-build">
+            <h2>Install one release</h2>
+            <p>
+              The Chrome Web Store installs the latest Bramble and updates it later. To keep one
+              release, download <code>bramble-X.Y.Z.zip</code> and{" "}
+              <code>bramble-X.Y.Z.zip.sha256</code> from the <a href={RELEASES_URL}>release</a>{" "}
+              tagged <code>vX.Y.Z</code>. Replace <code>X.Y.Z</code> with that version.
+            </p>
+            <pre className="docs-command">
+              <code>{VERIFY_CHROME}</code>
+            </pre>
+            <p>
+              On macOS the checksum command is{" "}
+              <code>shasum -a 256 -c bramble-X.Y.Z.zip.sha256</code>. <code>sha256sum</code> checks
+              the file against the published checksum. <code>gh release verify</code> and{" "}
+              <code>gh release verify-asset</code> check GitHub’s signature that this file is the
+              published release. That signature is on releases published after releases are kept
+              immutable. <code>gh attestation verify</code> checks the signature that the Bramble
+              release workflow built the zip. The <code>gh</code> commands need GitHub CLI 2.81 or
+              newer.
+            </p>
+            <p>
+              Unzip the archive. At <code>chrome://extensions</code>, turn on Developer mode, choose
+              Load unpacked, and select the folder. This copy does not update itself. It is a
+              separate extension from the store install, with its own wallet. Unzip a later release
+              into that same folder and reload it. A different folder is a different extension.
+              Removing the extension deletes that wallet.
+            </p>
+            <p>
+              Firefox uses <code>bramble-firefox-X.Y.Z.zip</code> and the same checks. At{" "}
+              <code>about:debugging</code>, choose Load Temporary Add-on and pick the zip. Firefox
+              removes it when the browser quits. Its id is <code>bramble@starknet.org</code>, the
+              same id as a signed Firefox install, so use a separate profile if that add-on is
+              installed. The signed add-on stays installed and updates itself. Keeping the zip
+              loaded across restarts takes a Firefox that allows unsigned add-ons, which turns
+              signature checking off.
+            </p>
           </section>
 
           <section id="accounts">

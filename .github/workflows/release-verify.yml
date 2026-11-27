@@ -1,0 +1,126 @@
+name: Release rebuild
+
+# Independent rebuild of a release tag. release-build.yml calls this after its
+# own build and before anything is published. The commands are the BUILDING.md
+# recipe, on a hosted runner, from a fresh checkout of the tag. The job fails
+# when those bytes differ from the release artifact. If a release is already
+# published, it also fails when they differ from the published assets.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The vX.Y.Z release tag to rebuild."
+        type: string
+        required: true
+      commit_sha:
+        description: "Immutable 40-character commit SHA that the release tag resolves to."
+        type: string
+        required: true
+      create_release:
+        description: "True when this run may publish. False for a store rebuild of an existing release."
+        type: boolean
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Check out immutable release commit
+        env:
+          RELEASE_COMMIT: ${{ inputs.commit_sha }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vX.Y.Z exactly."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release commit must be a full lowercase SHA-1."
+            exit 1
+          fi
+          tag_commit="$(git rev-list -n1 "${RELEASE_TAG}^{commit}" 2>/dev/null || true)"
+          if [ "$tag_commit" != "$RELEASE_COMMIT" ]; then
+            echo "::error::Release tag ${RELEASE_TAG} resolves to ${tag_commit:-nothing}, not ${RELEASE_COMMIT}."
+            exit 1
+          fi
+          git checkout --detach "$RELEASE_COMMIT"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun run vendor:argent
+      - run: bun run vendor:privacy
+      - run: bun run package:extension
+      - run: bun run package:extension:firefox
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bramble-release
+          path: built-release
+      - name: Compare the rebuild with the release bytes
+        env:
+          CREATE_RELEASE: ${{ inputs.create_release }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vX.Y.Z exactly."
+            exit 1
+          fi
+          compare() {
+            local expected="$1" actual="$2" file name count=0
+            local chromium=("$expected"/bramble-[0-9]*.zip)
+            local firefox=("$expected"/bramble-firefox-*.zip)
+            if [ "${#chromium[@]}" -ne 1 ] || [ "${#firefox[@]}" -ne 1 ]; then
+              echo "::error::Expected one Chromium zip and one Firefox zip in ${expected}."
+              exit 1
+            fi
+            for file in "$expected"/bramble-*.zip "$expected"/bramble-*.zip.sha256; do
+              name="$(basename "$file")"
+              if [ ! -f "$actual/$name" ] || ! cmp -s "$file" "$actual/$name"; then
+                echo "::error::${name} from ${expected} does not match ${actual}."
+                exit 1
+              fi
+              count=$((count + 1))
+            done
+            if [ "$count" -ne 4 ]; then
+              echo "::error::Expected both zips and both checksums in ${expected}, compared ${count}."
+              exit 1
+            fi
+            (cd "$actual" && sha256sum -c ./*.zip.sha256)
+          }
+          compare built-release artifacts
+          if draft="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$draft" = "false" ]; then
+              rm -rf published-assets
+              mkdir -p published-assets
+              gh release download "$TAG" --dir published-assets --pattern 'bramble-*.zip' --pattern 'bramble-*.zip.sha256'
+              compare artifacts published-assets
+              echo "Published assets match the independent rebuild."
+              exit 0
+            fi
+          fi
+          if [ "$CREATE_RELEASE" = "true" ]; then
+            echo "No published release is visible yet. The publish job compares the uploaded assets before it publishes."
+            exit 0
+          fi
+          echo "::error::Store publication requires the published GitHub Release assets for ${TAG}."
+          exit 1

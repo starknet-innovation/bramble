@@ -1,17 +1,17 @@
 name: Release build
 
-# Reusable release build (issue #58/#59/#60). Called by BOTH release paths so
-# the heavy pipeline is defined once, never duplicated:
+# Reusable release build (issue #58/#59/#60). Called by both release paths so
+# the heavy pipeline is defined once:
 #   - release.yml       — a human `vX.Y.Z` tag push, or a manual Chrome Web
 #                         Store dispatch (create_release=false, build only).
 #   - auto-release.yml  — a release/hotfix branch merged into `main`, which
 #                         computes the version, creates the tag, then calls this.
 #
-# It builds and packages the extension exactly as CI does, ASSERTS the tag
-# matches the single-source version (the gate that was missing when v0.4.0
-# shipped as mc-wallet-0.3.0.zip), derives release notes from CHANGELOG.md
-# (falling back to the commit range), and idempotently creates the GitHub
-# Release with the reproducible zip + SHA-256 attached.
+# It builds and packages the extension exactly as CI does, asserts the tag
+# matches the single-source version, and derives release notes from
+# CHANGELOG.md. A second hosted job rebuilds the tag. A third signs build
+# provenance for the zips. Publication creates a draft, uploads assets, and
+# only then publishes, which is what GitHub immutable releases require.
 on:
   workflow_call:
     inputs:
@@ -37,6 +37,8 @@ jobs:
       contents: read
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    env:
+      TZ: UTC
     steps:
       # fetch-depth: 0 so the notes step can diff against the previous tag and
       # fall back to the commit range. Checkout starts from the trusted caller
@@ -99,9 +101,8 @@ jobs:
       # Firefox zip AMO would reject fails here, before anything is published.
       - run: bun run check:firefox
       # Self-consistency only: the .sha256 was written by package:extension in
-      # this job, so this confirms the pair attached to the Release agree. It
-      # does not compare against the CI artifact or prove a reproducible build
-      # (supply audit F2); release.yml re-checks the pair after download.
+      # this job. release-verify.yml is the rebuild that compares another
+      # machine. release.yml re-checks the pair after download.
       - name: Verify checksum file
         working-directory: artifacts
         run: sha256sum -c ./*.zip.sha256
@@ -141,51 +142,324 @@ jobs:
             artifacts/release-notes.md
           if-no-files-found: error
 
-  # Publish from a fresh hosted runner that never checks out or executes wallet
-  # source. The self-hosted build above receives only read permission; this job
-  # receives the narrow write capability after consuming its inert artifacts.
-  publish-release:
+  # Fresh checkout, fresh install, hosted runner. Fails the release when the
+  # rebuild differs from the artifact or, once a release is published, from
+  # the published assets.
+  verify-rebuild:
     needs: build-release
-    if: ${{ inputs.create_release }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-verify.yml
+    with:
+      tag: ${{ inputs.tag }}
+      commit_sha: ${{ inputs.commit_sha }}
+      create_release: ${{ inputs.create_release }}
+
+  # Signs the zips after the rebuild matches. This job does not check out
+  # source and does not run the build, so the self-hosted builder never
+  # receives the OIDC token.
+  attest-release:
+    needs: [build-release, verify-rebuild]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: bramble-release
           path: artifacts
-      # Create the GitHub Release. Idempotent (create-or-upload): a release for
-      # the tag can already exist (e.g. cut via the GitHub UI, a documented path
-      # in RELEASING.md). When it exists we only attach/replace the built assets
-      # and leave the human's title/notes untouched; otherwise we create it with
-      # the derived notes.
-      #
-      # The check-then-create is a TOCTOU: two builds for the same tag (a manual
-      # tag-push racing an auto-release cut) could both see "no release" and both
-      # try to create it, and `gh release create` fails if the Release appears in
-      # between. We treat that as a lost race, not a failure — fall back to
-      # attaching our assets to the now-existing Release. If create failed for
-      # any OTHER reason the Release still will not exist and the upload fails
-      # too, so a real error is never masked.
-      - name: Create GitHub Release
+      - name: Attest release zips
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: artifacts/bramble-*.zip
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(artifacts/bramble-[0-9]*.zip artifacts/bramble-firefox-*.zip)
+          if [ "${#files[@]}" -ne 2 ]; then
+            echo "::error::Expected the Chromium and Firefox zips, found ${#files[@]}."
+            exit 1
+          fi
+          verify_one() {
+            local file="$1" attempt
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              if gh attestation verify "$file" \
+                --repo "$GITHUB_REPOSITORY" \
+                --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-build.yml"; then
+                return 0
+              fi
+              echo "Build provenance for $(basename "$file") is not visible yet (attempt ${attempt})."
+              sleep 10
+            done
+            echo "::error::No signed build provenance for $(basename "$file")."
+            return 1
+          }
+          for file in "${files[@]}"; do
+            verify_one "$file"
+          done
+
+  # Draft, upload, compare, then publish. The script is scripts/github-release-publish.sh
+  # copied here so this job does not check out the release. It never replaces an asset.
+  publish-release:
+    needs: [build-release, verify-rebuild, attest-release]
+    if: ${{ inputs.create_release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      published_now: ${{ steps.publish.outputs.published_now }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bramble-release
+          path: artifacts
+      - name: Publish immutable GitHub Release
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          #!/usr/bin/env bash
+          # Publish one Bramble release without replacing assets.
+          #
+          # The release workflow inlines this file into a job that does not check out
+          # the tag. A test fails if the two copies drift. The job creates a draft,
+          # uploads only assets that are not already there, compares those bytes with
+          # the build, and publishes. GitHub's immutable-release rules then freeze the
+          # assets and the tag. If this run published the release and `gh release verify`
+          # does not succeed, the release is deleted when GitHub still allows it and the
+          # tag is left in place. An already published release is left untouched.
+          set -euo pipefail
+          shopt -s nullglob
+
+          if [[ ! "${TAG:-}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vX.Y.Z exactly."
+            exit 1
+          fi
+
+          ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts}"
+
+          note() {
+            if [ -n "${GITHUB_OUTPUT:-}" ]; then
+              printf 'published_now=%s\n' "$1" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          refresh_state() {
+            local draft
+            if draft="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+              if [ "$draft" = "true" ]; then
+                state=draft
+              else
+                state=published
+              fi
+            else
+              state=missing
+            fi
+          }
+
+          asset_present() {
+            # A pipe into `grep -q` closes early and, with pipefail, looks like a miss.
+            local names
+            names="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+            [[ $'\n'"${names}"$'\n' == *$'\n'"$1"$'\n'* ]]
+          }
+
+          upload_missing() {
+            local file name
+            local missing=()
+            for file in "$ARTIFACT_DIR"/*.zip "$ARTIFACT_DIR"/*.zip.sha256; do
+              name="$(basename "$file")"
+              if asset_present "$name"; then
+                echo "Leaving existing asset ${name} in place."
+              else
+                missing+=("$file")
+              fi
+            done
+            if [ "${#missing[@]}" -gt 0 ]; then
+              gh release upload "$TAG" "${missing[@]}"
+            fi
+          }
+
+          download_assets() {
+            rm -rf "$1"
+            mkdir -p "$1"
+            gh release download "$TAG" --dir "$1" --pattern 'bramble-*.zip' --pattern 'bramble-*.zip.sha256'
+          }
+
+          compare_assets() {
+            local actual="$1"
+            local file name count=0
+            local chromium=("$ARTIFACT_DIR"/bramble-[0-9]*.zip)
+            local firefox=("$ARTIFACT_DIR"/bramble-firefox-*.zip)
+            if [ "${#chromium[@]}" -ne 1 ] || [ "${#firefox[@]}" -ne 1 ]; then
+              echo "::error::Expected one Chromium zip and one Firefox zip."
+              exit 1
+            fi
+            for file in "$ARTIFACT_DIR"/*.zip "$ARTIFACT_DIR"/*.zip.sha256; do
+              name="$(basename "$file")"
+              if [ ! -f "$actual/$name" ] || ! cmp -s "$file" "$actual/$name"; then
+                echo "::error::Release asset ${name} does not match the built bytes. Refusing to replace it."
+                exit 1
+              fi
+              count=$((count + 1))
+            done
+            if [ "$count" -ne 4 ]; then
+              echo "::error::Expected both zips and both checksums, compared ${count} files."
+              exit 1
+            fi
+            (
+              cd "$actual"
+              sha256sum -c ./*.zip.sha256
+            )
+          }
+
+          verify_published() {
+            local attempt
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              if gh release verify "$TAG" \
+                && gh release verify-asset "$TAG" "$1" \
+                && gh release verify-asset "$TAG" "$2"; then
+                return 0
+              fi
+              echo "Release attestation for ${TAG} is not ready (attempt ${attempt})."
+              sleep "${VERIFY_RETRY_SECONDS:-10}"
+            done
+            return 1
+          }
+
+          checksums=("$ARTIFACT_DIR"/*.zip.sha256)
+          if [ "${#checksums[@]}" -ne 2 ]; then
+            echo "::error::Expected Chromium and Firefox checksums in ${ARTIFACT_DIR}."
+            exit 1
+          fi
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum -c ./*.zip.sha256
+          )
+
+          chromium=("$ARTIFACT_DIR"/bramble-[0-9]*.zip)
+          firefox=("$ARTIFACT_DIR"/bramble-firefox-*.zip)
+          if [ "${#chromium[@]}" -ne 1 ] || [ "${#firefox[@]}" -ne 1 ]; then
+            echo "::error::Expected one Chromium zip and one Firefox zip."
+            exit 1
+          fi
+
+          state=missing
+          refresh_state
+          if [ "$state" = "missing" ]; then
+            if ! gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --notes-file "$ARTIFACT_DIR/release-notes.md" \
+              --verify-tag; then
+              echo "gh release create did not create ${TAG}; continuing if a release now exists."
+            fi
+            refresh_state
+          fi
+
+          if [ "$state" = "missing" ]; then
+            echo "::error::Release ${TAG} does not exist."
+            exit 1
+          fi
+
+          if [ "$state" = "published" ]; then
+            download_assets published-assets
+            compare_assets published-assets
+            note false
+            echo "Release ${TAG} is already published and its assets match. Leaving it unchanged."
+            exit 0
+          fi
+
+          upload_missing
+          download_assets draft-assets
+          compare_assets draft-assets
+          gh release edit "$TAG" --draft=false
+          download_assets published-assets
+          compare_assets published-assets
+
+          if ! verify_published "${chromium[0]}" "${firefox[0]}"; then
+            echo "::error::Release ${TAG} was published but its attestation did not verify. Deleting it when GitHub still allows deletion. Enable immutable releases under Settings, General, Releases, then re-run. The tag is left in place."
+            gh release delete "$TAG" --yes || echo "Could not delete ${TAG}."
+            exit 1
+          fi
+
+          note true
+          echo "Published ${TAG}."
+
+  # Read-only check that the bytes now on the release match the attested
+  # artifact and that GitHub's release attestation covers them.
+  confirm-release:
+    needs: [build-release, publish-release]
+    if: ${{ success() && inputs.create_release && needs.publish-release.outputs.published_now == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bramble-release
+          path: artifacts
+      - name: Confirm published assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          upload() {
-            gh release upload "$TAG" \
-              artifacts/*.zip artifacts/*.zip.sha256 \
-              --clobber
-          }
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            upload
-          elif ! gh release create "$TAG" \
-              --title "$TAG" \
-              --notes-file artifacts/release-notes.md \
-              artifacts/*.zip artifacts/*.zip.sha256; then
-            echo "gh release create failed for ${TAG}; if it now exists a concurrent build won the race, so attaching assets to it instead."
-            upload
+          shopt -s nullglob
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vX.Y.Z exactly."
+            exit 1
           fi
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "false" ]; then
+            echo "::error::Release ${TAG} is not published."
+            exit 1
+          fi
+          rm -rf published-assets
+          mkdir -p published-assets
+          gh release download "$TAG" --dir published-assets --pattern 'bramble-*.zip' --pattern 'bramble-*.zip.sha256'
+          files=(artifacts/bramble-[0-9]*.zip artifacts/bramble-firefox-*.zip)
+          if [ "${#files[@]}" -ne 2 ]; then
+            echo "::error::Expected the Chromium and Firefox zips, found ${#files[@]}."
+            exit 1
+          fi
+          count=0
+          for file in artifacts/bramble-*.zip artifacts/bramble-*.zip.sha256; do
+            name="$(basename "$file")"
+            if [ ! -f "published-assets/$name" ] || ! cmp -s "$file" "published-assets/$name"; then
+              echo "::error::Published ${name} does not match the attested build."
+              exit 1
+            fi
+            count=$((count + 1))
+          done
+          if [ "$count" -ne 4 ]; then
+            echo "::error::Expected both zips and both checksums, compared ${count}."
+            exit 1
+          fi
+          (cd published-assets && sha256sum -c ./*.zip.sha256)
+          attempt=1
+          while [ "$attempt" -le 12 ]; do
+            if gh release verify "$TAG"; then
+              break
+            fi
+            echo "Release attestation for ${TAG} is not ready (attempt ${attempt})."
+            if [ "$attempt" -eq 12 ]; then
+              echo "::error::Release ${TAG} has no release attestation."
+              exit 1
+            fi
+            sleep 10
+            attempt=$((attempt + 1))
+          done
+          for file in "${files[@]}"; do
+            gh release verify-asset "$TAG" "$file"
+            gh attestation verify "$file" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-build.yml"
+          done

@@ -133,6 +133,46 @@ remaining outputs with `bun run vendor:argent` (network) and `bun run vendor:pri
 npm). `build`, packaging, and browser E2E also require the Argent and Privacy outputs; Playwright
 needs its Chromium install once per machine.
 
+## Install a pinned build
+
+The Chrome Web Store and addons.mozilla.org install the latest Bramble and
+update it later. A GitHub Release is one version. Its zip stays at that tag.
+
+Download `bramble-X.Y.Z.zip` and `bramble-X.Y.Z.zip.sha256` from the
+[release](https://github.com/starknet-innovation/bramble/releases) whose tag is
+`vX.Y.Z`. Replace `X.Y.Z` with that version. In the download directory:
+
+```sh
+sha256sum -c bramble-X.Y.Z.zip.sha256
+gh release verify vX.Y.Z --repo starknet-innovation/bramble
+gh release verify-asset vX.Y.Z bramble-X.Y.Z.zip --repo starknet-innovation/bramble
+gh attestation verify bramble-X.Y.Z.zip \
+  --repo starknet-innovation/bramble \
+  --signer-workflow starknet-innovation/bramble/.github/workflows/release-build.yml
+unzip bramble-X.Y.Z.zip -d bramble-X.Y.Z
+```
+
+On macOS the checksum command is `shasum -a 256 -c bramble-X.Y.Z.zip.sha256`.
+`sha256sum` checks the file against the published checksum. `gh release verify`
+and `gh release verify-asset` check GitHub's signature that this file is the
+published release. That signature exists for releases published after immutable
+releases are enabled; older tags still check with `sha256sum`. `gh attestation verify` checks the signature that this repository's release workflow built the zip. The release commands need [GitHub CLI](https://cli.github.com/) 2.81 or newer.
+
+Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**,
+and select `bramble-X.Y.Z`. This copy does not update itself. It is a separate
+extension from the store install, with its own wallet. Unzip a later release
+into that same folder and reload the extension. A different folder is a
+different extension. Removing the extension deletes that wallet.
+
+Firefox uses `bramble-firefox-X.Y.Z.zip` and the same checks. At
+`about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on** and
+pick the zip. Firefox removes it when the browser quits. The add-on id is
+`bramble@starknet.org`, the same id as a signed Firefox install, so load the
+zip in a separate profile if that add-on is installed. A Firefox that stays
+installed is the signed add-on, and that one updates itself. Keeping this zip
+loaded across restarts takes a Firefox that allows unsigned add-ons, which
+turns signature checking off.
+
 ## Upgrading
 
 Upgrades are one-way. Once you unlock a newer version, an older build can't open your wallet: it
