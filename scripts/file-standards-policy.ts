@@ -95,6 +95,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // the session only to read grants, then forwards that credential to the
   // existing signer. Nothing here is logged, persisted, or returned.
   "apps/extension/src/background/transactions/sign-grant.ts",
+  // Split from chain-ops.ts: peeks the session passphrase only to re-read the
+  // origin's grant before an approved switch. Nothing is logged or returned.
+  "apps/extension/src/background/transactions/switch-chain-approval.ts",
   "apps/extension/src/background/settings/origins-ops.ts",
   "apps/extension/src/background/privacy/strk20-account-context.ts",
   // Approved-request execution split out of strk20-ops.ts: it re-resolves the
