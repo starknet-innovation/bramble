@@ -7,7 +7,9 @@
  * from a schema (for example `null` against an absent field, as PR 850 found),
  * so a verbatim capture must join them before the preview leaves preview.
  * Every required key is present.
- * Addresses are stand-ins, not real contracts.
+ * Addresses are stand-ins, not real contracts. The mobile NFT parity fixture
+ * (`scripts/mobile-parity-nfts/`) is built from these pages: editing them changes
+ * `mobile/core/tests/fixtures/extension-nfts.jsonl`; run `bun run mobile:parity`.
  */
 
 /** The owner every page below answers for. */
