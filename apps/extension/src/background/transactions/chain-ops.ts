@@ -15,12 +15,7 @@ import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
-import type { Vault } from "@bramble/vault/schema";
-import {
-  networkIdForChainId,
-  STARKNET_NETWORKS,
-  type StarknetNetworkId,
-} from "@bramble/wallet-model/networks";
+import { networkIdForChainId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
@@ -49,16 +44,10 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
   networkRpcUrls,
-  runActiveStateMutation,
-  switchActiveNetwork,
   vaultAccountAddresses,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import {
-  captureSessionAuthorization,
-  type PassiveUnlockSession,
-  type UnlockSession,
-} from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import { reviewOutsideExecution } from "./outside-execution-review";
 import { recordRelaySignature } from "./relay-record";
 import { resolveSignGrant } from "./sign-grant";
@@ -347,12 +336,23 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   const granted = passphrase ? await grantedDappAccounts(deps, input.origin, passphrase) : [];
+  const preferences = await deps.preferencesStore.read();
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
   // an explicit user approval. A locked or unconnected site is refused, and a
-  // lock that lands during the grant read counts as locked (Sherlock 166).
+  // lock that lands during either read counts as locked (Sherlock 166).
   if (granted.length === 0 || !authorized.isCurrent()) {
     return { error: "origin not connected" };
+  }
+  // Already there: nothing would change, so there is nothing to approve. Dapps
+  // that switch before every transaction otherwise cost the user two prompts
+  // (mc-wallet 1041). Only the active vault account on that network qualifies:
+  // a presented multisig can hide a vault account the switch would reselect.
+  if (
+    preferences.activeNetworkId === networkId &&
+    granted.every((account) => !isGrantedMultisig(account) && account.networkId === networkId)
+  ) {
+    return { chainId: STARKNET_NETWORKS[networkId].chainId, ok: true };
   }
   const approval = approvals.requestSwitchChain({
     chainId: STARKNET_NETWORKS[networkId].chainId,
@@ -388,112 +388,4 @@ export const handleChainOps = async (
     ? CHAIN_OPS_HANDLERS[messageType]
     : undefined;
   return handler ? handler(deps, message, sender) : null;
-};
-
-// The id of a vault account on `networkId` that `origin`'s stored grant
-// covers, or undefined when the grant holds none there.
-const heldAccountOn = (
-  vault: Pick<Vault, "accounts" | "originGrants">,
-  origin: string,
-  networkId: StarknetNetworkId,
-): string | undefined => {
-  const grantIds = vault.originGrants.find((grant) => grant.origin === origin)?.accountIds ?? [];
-  return vault.accounts.find(
-    (account) => account.networkId === networkId && grantIds.includes(account.id),
-  )?.id;
-};
-
-// A partial approval stub omits the preferences store. Production always has
-// one, so a multisig grant is visible; the stub still rechecks the vault grant.
-const grantedForSwitch = (
-  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet">,
-  origin: string,
-  passphrase: string,
-) =>
-  deps.preferencesStore
-    ? grantedDappAccounts(deps, origin, passphrase)
-    : deps.wallet.getGrantedAccounts(origin, passphrase);
-
-// Queues the reconnect prompt only when the account the switch landed on is
-// really outside the origin's grant, never for a dapp still connected after it.
-const promptWhenLandedOutsideGrant = async (
-  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"> & {
-    readonly approvals?: Pick<ApprovalQueue, "request">;
-  },
-  origin: string,
-  passphrase: string,
-  connected: readonly unknown[],
-): Promise<void> => {
-  if (!deps.approvals) {
-    return;
-  }
-  const landed = await grantedForSwitch(deps, origin, passphrase);
-  if (landed.length === 0) {
-    promptReconnectForStaleGrant(deps.approvals, connected, origin);
-  }
-};
-
-/**
- * Applies a user-approved chain switch: sets the active network and returns the
- * new chain id for the dapp. Refuses with `origin not connected` when the origin
- * is not connected at approval time, so an approved card can never reconnect a
- * disconnected site. The switch never grants an account: the card names none,
- * so the origin keeps exactly the accounts it was granted. When it holds one on
- * the target network the switch lands there; when it holds none, the standard
- * reconnect (connect) prompt is queued instead, which names the account to share.
- */
-export const executeSwitchChainApproval = async (
-  deps: Pick<
-    ChainOpsDeps,
-    "activeStateCoordinator" | "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"
-  > & {
-    /** Queue for the reconnect prompt; unset (partial test stubs) queues nothing. */
-    readonly approvals?: Pick<ApprovalQueue, "request">;
-    /**
-     * The full session: applying the approval switches the active network, and
-     * that cross-store mutation locks its own generation when it cannot be
-     * completed. The grant re-check below still only observes the session.
-     */
-    readonly session: UnlockSession;
-  },
-  input: { readonly networkId: StarknetNetworkId; readonly origin: string },
-): Promise<RuntimeResponse> => {
-  const { preferencesStore, session, wallet } = deps;
-  return runActiveStateMutation(deps.activeStateCoordinator, async () => {
-    const passphrase = session.peekPassphrase();
-    const authorized = captureSessionAuthorization(session);
-    if (!passphrase || !authorized.isCurrent()) {
-      return { error: "wallet locked" };
-    }
-    // A switch-chain approval carries no account context, so the shared claim
-    // validator skips it and this is the only place the grant is re-checked.
-    // Read it BEFORE switching: a revoked or disconnected origin is refused
-    // rather than having the approved card switch the network on its behalf.
-    const connected = await grantedForSwitch(deps, input.origin, passphrase);
-    if (connected.length === 0) {
-      return { error: "origin not connected" };
-    }
-    // `connected` is at most the active account (the page-visible view), so the
-    // account the origin holds on the target network comes from its stored
-    // grant, which keeps every account the user ever approved for it.
-    const held = heldAccountOn(await wallet.readVault(passphrase), input.origin, input.networkId);
-    if (!authorized.isCurrent()) {
-      return { error: "wallet locked" };
-    }
-    await switchActiveNetwork(
-      wallet,
-      session,
-      preferencesStore,
-      input.networkId,
-      undefined,
-      held ? { preferredAccountId: held } : {},
-    );
-    if (!authorized.isCurrent()) {
-      return { error: "wallet locked" };
-    }
-    // Exposure only narrows (audit 124): an account the user never connected
-    // is not shared because they approved a network change.
-    await promptWhenLandedOutsideGrant(deps, input.origin, passphrase, connected);
-    return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
-  });
 };
