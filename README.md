@@ -12,7 +12,7 @@ network access, because it downloads pinned dependencies: npm packages from `bun
 pinned Argent contract release, and the Starknet Privacy SDK from GitHub at a pinned commit.
 
 Please do not install Bun yourself or run `bun run ...` commands directly. The packaged bytes
-depend on the exact Bun release, 1.3.3 (`packageManager` in `package.json`). The script installs
+depend on the exact Bun release named by `packageManager` in `package.json`. The script installs
 that release into a temporary directory with npm, then runs every step in order:
 `bun install --frozen-lockfile`, `bun run vendor:argent`, `bun run vendor:privacy` and
 `bun run package:extension:firefox`. Skipping any of them fails the build.
