@@ -92,13 +92,33 @@ export {
 export const canonical = (value: string): string => canonicalFelt(value) ?? value;
 
 /**
- * Reads the string felt at `index`, or "" when the slot is absent or not a
- * string. Keeps calldata-shape guards in one place so every decoder and every
- * flag rule reads positions the same way.
+ * The short label for the contract a call targets. The background accepts a
+ * call's contract address in any felt spelling (decimal included), so it is
+ * canonicalized before the shared shortener sees it, as calldata felts are in
+ * {@link readAddressAt}.
+ */
+export const contractLabel = (call: Call): string => addressLabel(canonical(call.contractAddress));
+
+/**
+ * Reads the string felt at `index` in canonical `0x` hex, or "" when the slot is
+ * absent or not a string. Keeps calldata-shape guards in one place so every
+ * decoder and every flag rule reads positions the same way.
+ *
+ * Calldata felts are numbers in whatever spelling the builder emitted —
+ * starknet.js `CallData.compile` writes decimal — so a felt is canonicalized
+ * here, once, before any label or comparison sees it. Without this the review
+ * named a recipient as a 76-digit decimal, because the shared address shortener
+ * deliberately leaves non-hex text uncut. An unparseable value passes through
+ * unchanged so a summary still shows exactly what the call carried.
  */
 export const readAddressAt = (calldata: readonly unknown[], index: number): string => {
   const value = calldata[index];
-  return typeof value === "string" ? value : "";
+  if (typeof value !== "string") {
+    return "";
+  }
+  // Not `canonical(value)` alone: BigInt("") is 0n, so an empty slot would read
+  // as address 0x0 instead of no address.
+  return asFelt(value) === null ? value : canonical(value);
 };
 
 /**
@@ -266,7 +286,7 @@ const decodeErc1155BatchTransferCall: CallDecoder = (call, calldata) => {
     return null;
   }
   const facts = {
-    collection: addressLabel(call.contractAddress),
+    collection: contractLabel(call),
     count: String(count),
     to: addressLabel(recipient),
   };
@@ -292,7 +312,7 @@ const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
     return null;
   }
   const facts = {
-    collection: addressLabel(call.contractAddress),
+    collection: contractLabel(call),
     party: addressLabel(operator),
   };
   return decoded(
@@ -326,7 +346,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
       reviewText("review.call.send", { amount: amountLabel(amount, token), to: party }),
     );
   }
-  const contract = addressLabel(call.contractAddress);
+  const contract = contractLabel(call);
   if (isWatchedNftContract(context, call.contractAddress)) {
     return decoded(
       call,
@@ -393,7 +413,7 @@ const decodeUnknownCall = (call: Call): DecodedCall =>
     call,
     "unknown",
     reviewText("review.call.unknown", {
-      contract: addressLabel(call.contractAddress),
+      contract: contractLabel(call),
       entrypoint: call.entrypoint,
     }),
   );

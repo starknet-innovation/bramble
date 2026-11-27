@@ -20,6 +20,7 @@ import type { Call } from "starknet";
 import { type ReviewText, reviewEnglish, reviewText, withReviewText } from "./review-messages";
 import {
   canonical,
+  contractLabel,
   type DecodedCall,
   decodeCall,
   readAddressAt,
@@ -170,9 +171,7 @@ const unknownContractFlag = (call: Call, known: boolean): RiskFlag | null =>
     ? null
     : riskFlag(
         "unknown-contract",
-        reviewText("review.flag.unknownContract", {
-          contract: addressLabel(call.contractAddress),
-        }),
+        reviewText("review.flag.unknownContract", { contract: contractLabel(call) }),
       );
 
 const UNLIMITED_APPROVAL_FLAG: RiskFlag = riskFlag(
