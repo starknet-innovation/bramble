@@ -55,7 +55,10 @@ const actionLine = (
 /**
  * One CallSet as the signer should read it. Returns null unless it is exactly
  * one `compile_actions` call on the configured pool, for this account and
- * this scalar, whose actions all decode against tracked tokens.
+ * this scalar, whose actions all decode against tracked tokens. Display only:
+ * the calldata is restored with `scalar` before decoding, so the key check can
+ * fail only on calldata that was never redacted. What binds the calls to this
+ * device's key is the digest recomputed by `multisigStrk20CallSetHash`.
  */
 export const reviewMultisigStrk20Calls = (
   calls: readonly {
