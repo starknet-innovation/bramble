@@ -62,3 +62,13 @@ enum LedgerOsCheck {
     /// Passes every device untouched: for tests of the flows around the gate.
     static let skipped: Run = { device, _, _ in .success(device) }
 }
+
+/// The Ledgers that passed the OS gate this session, by device id: the extension's
+/// `readiness: "verified"`, which its onboarding and sign session both honour. The connect flow and
+/// the signer share it, so a device asks at most once a session. The signer clears it at lock; a
+/// dropped link, a wrong device or a failed connect flow forgets that one device.
+@MainActor
+final class LedgerOsVerified {
+    static let session = LedgerOsVerified()
+    var ids: Set<UUID> = []
+}

@@ -60,6 +60,10 @@ final class LedgerConnectModel {
     private let describe: @Sendable (String) async -> LedgerActivity
     private let existing: Set<String>
     private let osGate: LedgerOsCheck.Run
+    /// The Ledgers that passed the OS gate this session, shared with the signer.
+    private let verified: LedgerOsVerified
+    /// The Ledger connected to, forgotten by `verified` if the flow fails.
+    private var connectedId: UUID?
     let route: LedgerRoute
     private let pageSize: UInt32
     private var device: (any LedgerExchanging)?
@@ -78,7 +82,8 @@ final class LedgerConnectModel {
         describe: @escaping @Sendable (String) async -> LedgerActivity,
         existing: Set<String>,
         pageSize: UInt32 = LedgerConnectModel.pageSize,
-        osGate: @escaping LedgerOsCheck.Run = LedgerOsCheck.run
+        osGate: @escaping LedgerOsCheck.Run = LedgerOsCheck.run,
+        verified: LedgerOsVerified = .session
     ) {
         self.route = route
         self.scanner = scanner
@@ -88,6 +93,7 @@ final class LedgerConnectModel {
         self.existing = Set(existing.map(Self.canonical))
         self.pageSize = pageSize
         self.osGate = osGate
+        self.verified = verified
         scanner.changed = { [weak self] in self?.bluetoothChanged() }
         bluetoothChanged()
     }
@@ -126,6 +132,12 @@ final class LedgerConnectModel {
             return
         }
         self.device = connected
+        connectedId = device.id
+        guard !verified.ids.contains(device.id) else {
+            stage = .reading
+            await readPage()
+            return
+        }
         stage = .checking(phase: "")
         let reconnect: @MainActor () async -> (any LedgerExchanging)? = { [weak self] in
             await self?.reconnect(device.id, flow: flow)
@@ -137,6 +149,7 @@ final class LedgerConnectModel {
         switch checked {
         case let .success(link):
             self.device = link
+            verified.ids.insert(device.id)
 
         case let .failure(refusal):
             fail(refusal.reason)
@@ -263,6 +276,7 @@ final class LedgerConnectModel {
     }
 
     private func fail(_ reason: String) {
+        if let connectedId { verified.ids.remove(connectedId) }
         close()
         stage = .failed(FriendlyError.message(reason))
     }

@@ -325,6 +325,52 @@ extension LedgerConnectModelTests {
         signer.finish()
     }
 
+    /// The connect flow and the signer share the session's verified Ledgers: one gate covers both,
+    /// until the wallet locks.
+    func testOneGateCoversConnectAndSignUntilLock() async throws {
+        let verified = LedgerOsVerified()
+        let script = try recordedLedgerExchanges(bundle: Bundle(for: Self.self))
+        let gated = GatedLedger(replay: ReplayLedgerDevice(script: script))
+        let model = LedgerConnectModel(
+            route: .bramble,
+            scanner: FakeLedgerScanner(bluetooth: .ready, devices: [ledger]),
+            connect: { _ in try gated.connect() },
+            place: { keys, family in try ledgerAccountCandidates(network: .mainnet, family: family, keys: keys) },
+            describe: { _ in LedgerActivity(deployed: .absent, funded: .absent) },
+            existing: [],
+            pageSize: 1,
+            verified: verified
+        )
+        await model.choose(ledger)
+        XCTAssertEqual(model.stage, .picking)
+        XCTAssertEqual(gated.connections, 3, "gated once: two app changes")
+        model.close()
+
+        let scanner = FakeLedgerScanner(bluetooth: .ready, devices: [ledger])
+        let signer = LedgerSigner(scanner: scanner, verified: verified) { _ in try gated.connect() }
+        let first = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        guard case .device = await first.value else {
+            XCTFail("the version is read without a second gate")
+            return
+        }
+        XCTAssertEqual(gated.connections, 4, "one plain connection: no app change")
+        signer.finish()
+
+        signer.close()
+        XCTAssertTrue(verified.ids.isEmpty, "the lock forgets every verified Ledger")
+        let again = Task { await signer.exchange(Self.versionRequest, for: nil) }
+        try await until { signer.stage == .scanning }
+        signer.choose(ledger)
+        guard case .device = await again.value else {
+            XCTFail("after the lock the gate runs again, then the version is read")
+            return
+        }
+        XCTAssertEqual(gated.connections, 7, "gated again: two more app changes")
+        signer.finish()
+    }
+
     func testTheSignerShowsTheGatesRefusal() async throws {
         let (signer, _) = try gatedSigner { $0.osVersion = "2.2.3" }
         let first = Task { await signer.exchange(Self.versionRequest, for: nil) }

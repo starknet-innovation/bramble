@@ -68,9 +68,8 @@ final class LedgerSigner: DeviceSigning {
     private let connector: (UUID) async throws -> any LedgerExchanging
     private let osGate: LedgerOsCheck.Run
     private var device: (any LedgerExchanging)?
-    /// The Ledger that passed the OS gate this session, as the extension's `readiness: verified`;
-    /// forgotten at lock.
-    private var verified: UUID?
+    /// The Ledgers that passed the OS gate this session, shared with the connect flow.
+    private let verified: LedgerOsVerified
     /// The gate's refusal code, shown in place of the plan's own when the connection it ended fails.
     private var gateRefusal: String?
     /// The Ledger connected earlier in this session, tried first; forgotten at lock.
@@ -82,10 +81,12 @@ final class LedgerSigner: DeviceSigning {
     init(
         scanner: any LedgerScanning,
         osGate: @escaping LedgerOsCheck.Run = LedgerOsCheck.run,
+        verified: LedgerOsVerified = .session,
         connect: @escaping (UUID) async throws -> any LedgerExchanging
     ) {
         self.scanner = scanner
         self.osGate = osGate
+        self.verified = verified
         connector = connect
     }
 
@@ -106,7 +107,8 @@ final class LedgerSigner: DeviceSigning {
             return .device(reply: reply)
 
         case let .failure(failure):
-            // The driver closed its link: the next attempt connects again.
+            // The driver closed its link: the next attempt connects again, through the gate.
+            if let known { verified.ids.remove(known.id) }
             self.device?.close()
             self.device = nil
             return .deviceFailure(failure: failure)
@@ -118,6 +120,7 @@ final class LedgerSigner: DeviceSigning {
         self.account = account
         if reason == Self.wrongDevice {
             // Another Ledger is needed: the next attempt lists them again.
+            if let known { verified.ids.remove(known.id) }
             device?.close()
             device = nil
             known = nil
@@ -154,7 +157,7 @@ final class LedgerSigner: DeviceSigning {
     func close() {
         cancelled = active || cancelled
         known = nil
-        verified = nil
+        verified.ids = []
         end()
     }
 
@@ -192,7 +195,7 @@ final class LedgerSigner: DeviceSigning {
     private func open(_ ledger: LedgerDevice) async -> (any LedgerExchanging)? {
         stage = .connecting(ledger)
         guard let connected = await reopen(ledger) else { return nil }
-        if verified != ledger.id {
+        if !verified.ids.contains(ledger.id) {
             stage = .deviceCheck(phase: "")
             let checked = await osGate(connected, { [weak self] in await self?.reopen(ledger) }, { [weak self] phase in
                 if self?.cancelled == false { self?.stage = .deviceCheck(phase: phase) }
@@ -200,7 +203,7 @@ final class LedgerSigner: DeviceSigning {
             device = nil
             switch checked {
             case let .success(link) where !cancelled:
-                verified = ledger.id
+                verified.ids.insert(ledger.id)
                 device = link
 
             case let .success(link):
