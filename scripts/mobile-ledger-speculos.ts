@@ -16,6 +16,13 @@
  * `verifyStarkSignature` gate. The device OS gate (`assertLedgerFirmwareReady`, a dashboard round
  * trip Speculos does not emulate) is left out, as wallet-core leaves it to the host.
  *
+ * The `braavosDeploy` line is a Braavos account at Ready's scheme deployed through the
+ * extension's real send path (`mobile-transactions-braavos.ts`'s standalone Sepolia deployment
+ * over its canned node), each hash signed by the background's `ledgerStarkHashSigner` over that
+ * same sign flow: `braavosDeploySignature`'s parameters' hash then the transaction's, for the
+ * review's estimate, the confirmed re-estimate and the write. Its `exchanges` are every
+ * signature's APDUs, in order.
+ *
  * MANUAL ONLY: it needs Docker and the vendored app (`bun run vendor:ledger-app nanosp`), whose
  * hash must match `scripts/ledger-app-pins.ts`, so neither `bun run check` nor `mobile:parity`
  * runs it, and nothing checks it for drift. Speculos is seeded with the published parity phrase
@@ -24,6 +31,7 @@
  */
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import {
@@ -39,6 +47,8 @@ import { deriveLedgerAccountRefs } from "@bramble/vault/accounts";
 import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import type { DeviceSignature } from "@bramble/wallet-model/signing";
+import { ledgerStarkHashSigner } from "../apps/extension/src/background/ledger/ledger-signer";
 import { newStarknetClient } from "../packages/platform/ledger-browser/src/webhid-impl.js";
 import { enumerateLedgerPubKeys } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-enumerate";
 import {
@@ -55,13 +65,20 @@ import {
   SPECULOS_IMAGE,
 } from "./ledger-app-pins";
 import { PARITY_MESSAGE_HASH, PARITY_MNEMONIC } from "./mobile-parity";
+import { BRAAVOS_SCENARIOS, captureBraavosScenario } from "./mobile-transactions-braavos";
+import { compactWire } from "./mobile-transactions-fixture";
 
 /** Repository-relative path of the fixture the Rust tests read. */
 export const LEDGER_PARITY_FIXTURE_PATH = "mobile/core/tests/fixtures/extension-ledger.jsonl";
 
 const MODEL = "nanosp";
-/** The pinned library's own version, so the header cannot drift from the lockfile. */
-const STARKNET_LIBRARY_VERSION: string = require("@ledgerhq/hw-app-starknet/package.json").version;
+/**
+ * The pinned library's own version, so the header cannot drift from the lockfile. Read from the
+ * workspace that declares it (`ledger-browser`): the isolated install hoists nothing to the root.
+ */
+const STARKNET_LIBRARY_VERSION: string = createRequire(
+  resolve("packages/platform/ledger-browser/package.json"),
+)("@ledgerhq/hw-app-starknet/package.json").version;
 const API_PORT = 5000;
 const APDU_PORT = 9999;
 
@@ -256,6 +273,26 @@ const main = async (): Promise<void> => {
       }
     }
 
+    /** The side panel's `signWith`, step by step, approved or rejected on the device. */
+    const signOnDevice = async (
+      client: LedgerDeviceClient,
+      path: string,
+      hash: string,
+      storedPublicKeyX: string,
+      device: "approve" | "reject" | "none",
+    ): Promise<DeviceSignature> => {
+      await assertLedgerAppReady(client);
+      if (!sameFelt(await ledgerPublicKeyX(client, path), storedPublicKeyX)) {
+        throw new LedgerRejection("wrong-device");
+      }
+      const signing = ledgerSignHashOnDevice(client, path, hash);
+      // Handled here so a screen-driver failure surfaces instead of a stray rejection.
+      signing.catch(() => {});
+      if (device === "approve") await approveHashReview(screen, MODEL);
+      if (device === "reject") await rejectHashReview(screen, MODEL);
+      return signing;
+    };
+
     const sign = async (
       name: string,
       scheme: LedgerEip2645Application,
@@ -269,16 +306,7 @@ const main = async (): Promise<void> => {
       const storedPublicKeyX = keys.get(storedAt);
       if (storedPublicKeyX === undefined) throw new Error(`no public key read for ${storedAt}`);
       const flow = async (client: LedgerDeviceClient) => {
-        await assertLedgerAppReady(client);
-        if (!sameFelt(await ledgerPublicKeyX(client, path), storedPublicKeyX)) {
-          throw new LedgerRejection("wrong-device");
-        }
-        const signing = ledgerSignHashOnDevice(client, path, hash);
-        // Handled here so a screen-driver failure surfaces instead of a stray rejection.
-        signing.catch(() => {});
-        if (device === "approve") await approveHashReview(screen, MODEL);
-        if (device === "reject") await rejectHashReview(screen, MODEL);
-        const signature = await signing;
+        const signature = await signOnDevice(client, path, hash, storedPublicKeyX, device);
         const verified = verifyStarkSignature({ hash, publicKeyX: storedPublicKeyX, signature });
         if (!verified) throw new Error(`${name}: the device's signature does not verify`);
         return { ...signature, verified };
@@ -311,6 +339,34 @@ const main = async (): Promise<void> => {
     await sign("plan transfer", "LedgerW", 0, PLAN_INVOKE_HASH, "approve", "ok");
 
     const kms = createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
+
+    // A Braavos account at Ready's scheme, deployed through the extension's send path with every
+    // hash the background's Ledger signer asks for signed on the device.
+    const braavosKey = keys.get("argentx/0");
+    if (braavosKey === undefined) throw new Error("no public key read for argentx/0");
+    const [braavosAccount] = await deriveLedgerAccountRefs(kms, {
+      accountContractType: "braavos",
+      eip2645application: "argentx",
+      entries: [{ accountIndex: 0, publicKeyX: braavosKey }],
+      networkId: "SN_SEPOLIA",
+    });
+    const deployment = BRAAVOS_SCENARIOS.find(
+      (spec) => spec.name === "braavos-standalone-deployment-SN_SEPOLIA",
+    );
+    if (braavosAccount === undefined || deployment === undefined) {
+      throw new Error("no Braavos Ledger deployment to record");
+    }
+    const braavos = await record(async (client) => {
+      const signHash = ledgerStarkHashSigner(braavosAccount, (request) =>
+        signOnDevice(client, request.path, request.messageHash, request.publicKeyX, "approve"),
+      );
+      const scenario = await captureBraavosScenario(
+        { ...deployment, name: "braavos-ledger-deployment-SN_SEPOLIA" },
+        { account: braavosAccount, signHash },
+      );
+      return { scenario: compactWire(scenario) };
+    }, "ok");
+
     for (const [scheme, accountContractType] of [
       ["LedgerW", "openzeppelin"],
       ["argentx", "argent"],
@@ -344,6 +400,17 @@ const main = async (): Promise<void> => {
         ...page,
       });
     }
+
+    // Last, so the lines before it keep their places.
+    lines.push({
+      accountIndex: 0,
+      block: "braavosDeploy",
+      name: "a Braavos deployment at Ready's scheme",
+      path: braavosAccount.derivation.path,
+      scheme: "argentx",
+      storedPublicKeyX: braavosKey,
+      ...braavos,
+    });
 
     await writeFile(
       LEDGER_PARITY_FIXTURE_PATH,
