@@ -105,6 +105,7 @@ jobs:
       build: ${{ steps.build.outcome }}
       audit: ${{ steps.audit.outcome }}
       properties: ${{ steps.properties.outcome }}
+      packages: ${{ steps.packages.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
       e2e_failed: ${{ steps.e2e_results.outputs.failed }}
@@ -151,8 +152,7 @@ jobs:
           node-version: 24
       - run: bun install --frozen-lockfile
 
-      # --- Gates. Each runs to completion (continue-on-error) so the summary
-      # --- can categorize every result; the job is failed explicitly at the end.
+      # Collect every gate result before failing the job explicitly.
       - name: Verify privacy and contract toolchain
         id: vendor
         continue-on-error: true
@@ -219,18 +219,16 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
-      # Live Sepolia run of every in-wallet import path against the issue-821
-      # test accounts (tools/vendor-dataset/verify-sepolia.ts). It sends nothing:
-      # a broadcast firewall aborts every send. Its testnet-only seed file is a
-      # secret only this step sees: written owner-only to the
-      # runner's temp directory and removed when the step ends. The run's own
-      # redactor keeps seeds and derived keys out of every line it prints. It
-      # records no tape and uploads nothing: this is a public repository, and
-      # a run's network traffic is not for publishing (replay is local-only).
-      # Until the secret is configured the gate is skipped: the summary lists it
-      # under "Not run" and says not to promote, and it is never shown as passed.
-      # Any other skip (an earlier hard failure) counts as failing. Only a
-      # boolean leaves this step; the secret itself reaches the live step alone.
+      # Run each package's suite without the root coverage run's shared preload.
+      - name: Per-package test suites
+        id: packages
+        continue-on-error: true
+        run: bun run --filter './packages/**' test
+      # Sepolia import paths (#821) use a firewall that aborts every broadcast.
+      # Only the live step sees the testnet seed, in an owner-only temp file it removes.
+      # The runner redacts seeds and derived keys, uploads nothing, and records no tape.
+      # Only a configuration boolean leaves the seed check. A missing secret
+      # is reported as "Not run" with a promotion warning. Other skips fail.
       - name: Sepolia seeds configured
         id: sepolia_seeds
         env:
@@ -319,6 +317,7 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
           PROPERTIES: ${{ steps.properties.outcome }}
+          PACKAGES: ${{ steps.packages.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
@@ -330,7 +329,7 @@ jobs:
           # Skipped because the secret is unset: not run, not failed. Any other skip fails.
           if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then SEPOLIA=success; fi
           if [ "$SEPOLIA_TXN" = "skipped" ] && [ "$SEPOLIA_TXN_CONFIGURED" = "false" ]; then SEPOLIA_TXN=success; fi
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA" "$SEPOLIA_TXN"; do
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$PACKAGES" "$E2E_INSTALL" "$E2E" "$SEPOLIA" "$SEPOLIA_TXN"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
@@ -357,6 +356,7 @@ jobs:
           BUILD: ${{ needs.nightly.outputs.build }}
           AUDIT: ${{ needs.nightly.outputs.audit }}
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
+          PACKAGES: ${{ needs.nightly.outputs.packages }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
           E2E_FAILED: ${{ needs.nightly.outputs.e2e_failed }}
@@ -375,6 +375,7 @@ jobs:
               { name: "Extension build", outcome: env.BUILD },
               { name: "Dependency audit (bun audit)", outcome: env.AUDIT },
               { name: "Security property suite", outcome: env.PROPERTIES },
+              { name: "Per-package test suites", outcome: env.PACKAGES },
               { name: "E2E browser install", outcome: env.E2E_INSTALL },
               { name: "Full E2E (Playwright)", outcome: env.E2E },
               { name: "Sepolia import paths (live)", outcome: env.SEPOLIA,

@@ -124,7 +124,7 @@ repository. They do not clone Argent, build the extension, or
 launch Chromium:
 
 ```bash
-bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun test ./tests && bun run check:coverage
+bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:workspaces && bun run check:coverage
 ```
 
 The full `bun run check` additionally verifies the published Krusty package, official Argent

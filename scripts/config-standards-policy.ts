@@ -173,7 +173,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
   "build-for-amo": "node scripts/build-for-amo.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run check:coverage && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
   "check:copy": "bun run scripts/check-copy.ts",
@@ -194,7 +194,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
   "check:workspaces":
-    "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @bramble/extension check && bun run --filter @bramble/terminal check && bun run --filter @bramble/ui-lab check:static && bun run --filter @bramble/website check",
+    "bun run --filter './packages/**' --filter @bramble/extension check:types && bun run --filter @bramble/terminal check && bun run --filter @bramble/ui-lab check:static && bun run --filter @bramble/website check",
   changelog: "bun run scripts/generate-changelog.ts",
   "dev:session": "bun run tests/e2e/dev-session.ts",
   format: "biome check --write .",

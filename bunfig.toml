@@ -1,8 +1,9 @@
 # Test runner configuration.
 #
 # Coverage is NOT enabled globally here: turning it on would slow every local
-# `bun test` and the offline gate. Coverage is computed only when tests run with
-# `--coverage` (the `check:coverage` script / the CI coverage step).
+# `bun test`. Coverage is computed only when tests run with `--coverage`: the
+# `check:coverage` script, which is also how `bun run check` and CI run the
+# unit tests, so each suite runs once.
 #
 # The coverage FLOOR is enforced by scripts/check-coverage.ts, which checks the
 # aggregate ("All files") percentages. Bun's `coverageThreshold` is applied per

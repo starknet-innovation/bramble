@@ -165,13 +165,17 @@ Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
   standards gate (which runs **both** file- and config-standards — there is no
   separate `check:config` script) and the extension-manifest check
   (`check:extension`), import-layer + cycle checks (`check:imports`,
-  `check:cycles`), unit + conformance tests (`bun test tests`), and the coverage
-  floor (`check:coverage`). Runs on `ubuntu-latest` — **no** crypto/contract
+  `check:cycles`), workspace typechecks and app checks (`check:workspaces`), and
+  every unit + conformance test, run once with the coverage floor
+  (`check:coverage`). These run as three parallel jobs (`fast-static`,
+  `fast-types`, `fast-tests`); `fast-checks` is the required status that passes
+  only when all three do. Runs on `ubuntu-latest` — **no** crypto/contract
   toolchain, **no** build, **no** E2E — so PR feedback is fast. It deliberately
   does **not** run the aggregate `bun run check` (which chains the vendored
   `check:argent`/`check:privacy`) or any heavy step.
 - **`release-validation`** — the **full heavy pipeline**:
-  `vendor:argent`, `vendor:privacy`, `bun run check`, coverage floor, `build`,
+  `vendor:argent`, `vendor:privacy`, `bun run check` (whose tests run once, with
+  the coverage floor), `build`,
   `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
   `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
   runner. It is **gated by a job-level `if:`** so it runs **only on same-repository

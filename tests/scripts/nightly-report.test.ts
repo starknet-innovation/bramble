@@ -23,6 +23,7 @@ const GREEN = {
   BUILD: "success",
   AUDIT: "success",
   PROPERTIES: "success",
+  PACKAGES: "success",
   E2E_INSTALL: "success",
   E2E: "success",
   E2E_FAILED: "[]",

@@ -12,6 +12,9 @@ name: CI
 #                        import-layer/cycle checks, unit + conformance tests, and
 #                        the coverage floor. Hosted runner; no crypto/contract
 #                        toolchain, no build, no E2E — so PR feedback stays fast.
+#                        The gates run as three parallel jobs (fast-static,
+#                        fast-types, fast-tests); `fast-checks` is the single
+#                        required status that passes only when all three do.
 #   - release-validation the FULL heavy pipeline (verify contracts/SDKs, build,
 #                        package, E2E, dependency audit, checksum). Gated to run
 #                        ONLY on release/** and hotfix/** PRs into `main` — the
@@ -201,28 +204,33 @@ jobs:
   # script — `check:files` already runs both file- and config-standards. The
   # aggregate `bun run check` is intentionally NOT used here because it chains
   # check:argent/check:privacy, which require the vendored artifacts.)
-  fast-checks:
-    # `edited` also fires for title and body edits, and this job checks the head
-    # commit, which no edit of any kind changes. Skipping it keeps a typo fix in
-    # a description from re-running the whole suite. `github.event.action` is
-    # absent on push, so that path is unaffected.
+  #
+  # The gates are split across three parallel jobs so the PR waits for the
+  # slowest one rather than for their sum. Each has a 15-minute timeout, well
+  # above its normal run, so a hung run cannot hold a runner for 6 hours.
+  # `bun install` and `check:files` use the name+run form on purpose: they also
+  # appear in release-validation, and the ci-order gate in
+  # scripts/check-config-standards.ts matches bare "- run: <cmd>" lines by first
+  # occurrence. Writing them as name+run keeps their lines out of that match so
+  # release-validation stays the single source of the ordered heavy pipeline the
+  # gate expects.
+  #
+  # `edited` also fires for title and body edits, and these jobs check the head
+  # commit, which no edit of any kind changes. Skipping them keeps a typo fix in
+  # a description from re-running the whole suite. `github.event.action` is
+  # absent on push, so that path is unaffected.
+  fast-static:
     if: github.event.action != 'edited'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
-      # These three steps use the name+run form on purpose: bun install,
-      # check:files, and check:coverage also appear in release-validation, and
-      # the ci-order gate in scripts/check-config-standards.ts matches bare
-      # "- run: <cmd>" lines by first occurrence. Writing them as name+run keeps
-      # their lines out of that match so release-validation stays the single
-      # source of the ordered heavy pipeline the gate expects.
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - run: bun run check:lint
-      - run: bun run check:types
       # check:files runs both file- and config-standards.
       - name: Standards (file + config)
         run: bun run check:files
@@ -230,12 +238,62 @@ jobs:
       - run: bun run check:imports
       - run: bun run check:cycles
       - run: bun run check:deadcode
-      # The leading `./` prevents Bun from matching tests inside ignored vendor checkouts.
-      - run: bun test ./tests
+
+  # Root typecheck plus check:workspaces: each package's own typecheck, so each
+  # still compiles on its own includes, and the full Terminal, UI Lab and
+  # website checks, whose configs and test runners sit outside the root
+  # tsconfig and `bun test`. Package unit tests run once, in fast-tests.
+  fast-types:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - run: bun run check:types
       - run: bun run check:workspaces
-      # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
-      - name: Coverage floor
-        run: bun run check:coverage
+
+  # One run of every repository and package test suite, with the coverage floor
+  # (scripts/check-coverage.ts runs `bun test ./tests ./packages --coverage`).
+  # It replaces the separate `bun test ./tests` step and the per-package test
+  # runs, which re-ran the same files.
+  fast-tests:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - run: bun run check:coverage
+
+  # The required status check (main-development and release-development
+  # rulesets). It must run even when a gate fails: a job skipped because a
+  # dependency failed reports "skipped", and GitHub counts a skipped required
+  # check as passing, which would let a red PR merge.
+  fast-checks:
+    if: always() && github.event.action != 'edited'
+    needs: [fast-static, fast-types, fast-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every fast gate to pass
+        env:
+          STATIC_RESULT: ${{ needs.fast-static.result }}
+          TYPES_RESULT: ${{ needs.fast-types.result }}
+          TESTS_RESULT: ${{ needs.fast-tests.result }}
+        run: |
+          echo "fast-static=$STATIC_RESULT fast-types=$TYPES_RESULT fast-tests=$TESTS_RESULT"
+          test "$STATIC_RESULT" = success
+          test "$TYPES_RESULT" = success
+          test "$TESTS_RESULT" = success
 
   # FULL release-validation suite — the complete heavy pipeline. Gated to run
   # ONLY on same-repository release/** and hotfix/** PRs into `main` (a release
@@ -272,11 +330,9 @@ jobs:
       - run: bun run check:files
       - run: bun run vendor:argent
       - run: bun run vendor:privacy
+      # `check` runs every repository and package test once, through
+      # check:coverage, so the coverage floor is enforced here too.
       - run: bun run check
-      # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
-      # Kept out of the aggregate `check` so the offline gate stays fast; a
-      # coverage regression below the floor fails the build here.
-      - run: bun run check:coverage
       - run: bun run build
       - run: bun run test:e2e
       - run: bun run package:extension

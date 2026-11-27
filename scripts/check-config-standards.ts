@@ -450,7 +450,6 @@ const ciCommands = [
   "bun run vendor:argent",
   "bun run vendor:privacy",
   "bun run check",
-  "bun run check:coverage",
   "bun run build",
   "bun run test:e2e",
   "bun run package:extension",
